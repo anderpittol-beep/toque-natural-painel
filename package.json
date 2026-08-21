@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Sincroniza a planilha Finanças Toque Natural (Google Drive) com o Supabase.",
+  "description": "Sincroniza a planilha Financas Toque Natural (Google Drive) com o Supabase.",
   "scripts": {
     "sync": "node index.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "googleapis": "^140.0.0",
-    "xlsx": "^0.18.5"
+    "@supabase/supabase-js": "2.45.0",
+    "googleapis": "140.0.0",
+    "xlsx": "0.18.5"
   }
 }
