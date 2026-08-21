@@ -26,6 +26,17 @@ export function lerWorkbook(buffer) {
 function rows(wb, sheetName) {
   const ws = wb.Sheets[sheetName];
   if (!ws) throw new Error(`Aba não encontrada: ${sheetName}`);
+  // O !ref (dimensão) do arquivo Excel pode estar truncado e cortar colunas à direita.
+  // Recalcula o range cobrindo TODAS as células, sempre começando na coluna A (índice 0),
+  // para os índices de coluna (r[6], r[11]...) baterem certo.
+  let maxR = 0, maxC = 0;
+  for (const k of Object.keys(ws)) {
+    if (k[0] === '!') continue;
+    const c = XLSX.utils.decode_cell(k);
+    if (c.r > maxR) maxR = c.r;
+    if (c.c > maxC) maxC = c.c;
+  }
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
   return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
 }
 
@@ -43,8 +54,8 @@ export function parseFinanceiro(wb, ano = 2026) {
       { loja: 'Itaipulândia', receita: num(r[13]), despesa: num(r[14]) },
     ];
     for (const b of blocos) {
-      // só meses com receita E despesa preenchidas (> 0)
-      if (b.receita && b.despesa) {
+      // inclui meses com receita; a despesa pode vir nula (completada depois pelo mês atual)
+      if (b.receita) {
         out.push({ ano, mes, loja: b.loja, receita: b.receita, despesa: b.despesa });
       }
     }
