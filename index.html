@@ -256,7 +256,7 @@ window.TN_CONFIG = {
         </select>
         <label class="hint" for="marginTarget">Margem alvo</label>
         <input type="number" id="marginTarget" value="35" min="0" max="90" style="width:60px;">%
-        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn" id="perfil-btn" style="padding:6px 10px;">Entrar como sócia</button></span>
+        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
@@ -585,7 +585,7 @@ window.TN_CONFIG = {
 
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card" id="card-feedback">
-            <h3 style="font-size:14px;margin:0 0 10px 0;">Novo feedback <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só sócias</span></h3>
+            <h3 style="font-size:14px;margin:0 0 10px 0;">Novo feedback <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
             <form class="feedback-form" id="form-feedback">
               <select id="fb-colaborador"></select>
               <select id="fb-tipo">
@@ -792,7 +792,7 @@ window.TN_CONFIG = {
       <!-- GENTE E GESTÃO (confidencial) -->
       <section class="view" id="view-gente">
         <h2 class="section-title">Gente e Gestão <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial</span></h2>
-        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita ao perfil Sócia — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
+        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita aos Sócio Proprietários — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
         <div class="grid grid-4" id="gente-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Lançar / atualizar folha do mês</h3>
@@ -821,7 +821,7 @@ window.TN_CONFIG = {
 /* ============ CONFIG / HELPERS ============ */
 const TODAY = new Date('2026-08-14T00:00:00');
 /* Atualize esta data a cada alteração do painel — aparece no canto superior direito. Formato por extenso + hora. */
-const LAST_UPDATE = "20 de agosto de 2026, 21:48";
+const LAST_UPDATE = "20 de agosto de 2026, 22:13";
 const STORES = ["Itaipulândia","Ouro Verde","Toledo"];
 const BRL = v => v==null ? "—" : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct = v => v==null ? "—" : v.toFixed(1).replace('.',',') + '%';
@@ -2061,15 +2061,15 @@ function renderGente(){
 }
 
 /* ============ PERFIL DE ACESSO (Sócia / Colaboradora) ============ */
-const PIN_GESTAO = '4732'; // >>> TROQUE este PIN. Segurança leve (client-side): esconde a folha das colaboradoras no dia a dia.
+// Acesso de Sócio Proprietários vem do login (Supabase profiles.papel='socia'); sem PIN.
 let perfil = 'colab';
 function applyPerfil(){
   document.body.setAttribute('data-perfil', perfil);
   const socia = perfil==='socia';
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócia' : 'Perfil: Colaboradora';
-  document.getElementById('perfil-btn').textContent = socia ? 'Sair' : 'Entrar como sócia';
+  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio Proprietários' : 'Perfil: Colaboradora';
+  document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
     if(atual && atual.id==='view-gente') setView('visao-geral');
@@ -2200,12 +2200,10 @@ document.getElementById('baseJanela').onchange = renderProjecao;
 document.getElementById('crmResultadoFilter').onchange = renderCRM;
 document.getElementById('patrimonioTipoFilter').onchange = renderPatrimonio;
 document.getElementById('boletoStatusFilter').onchange = renderCaixa;
-document.getElementById('perfil-btn').onclick = ()=>{
-  if(perfil==='socia'){ perfil='colab'; applyPerfil(); return; }
-  const pin = window.prompt('PIN de acesso (perfil Sócia):');
-  if(pin===null) return;
-  if(pin===PIN_GESTAO){ perfil='socia'; applyPerfil(); }
-  else window.alert('PIN incorreto.');
+document.getElementById('perfil-btn').onclick = async ()=>{
+  // Sair: encerra a sessão do Supabase e volta para a tela de login
+  try{ if(window.TN&&window.TN.sb){ await window.TN.sb.auth.signOut(); } }catch(_){}
+  location.reload();
 };
 document.getElementById('form-gente').addEventListener('submit', e=>{
   e.preventDefault();
