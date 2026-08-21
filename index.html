@@ -184,13 +184,30 @@ window.TN_CONFIG = {
 <div id="tn-login">
   <div class="box">
     <div class="brand">TOQUE NATURAL · CELEIRO</div>
-    <h2>Entrar no painel</h2>
-    <p>Acesso restrito à equipe. Use seu e-mail e senha cadastrados.</p>
+    <h2 id="tn-title">Entrar no painel</h2>
+    <p id="tn-sub">Acesso restrito à equipe. Use seu e-mail e senha cadastrados.</p>
     <form id="tn-login-form">
       <input type="email" id="tn-email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" id="tn-pass" placeholder="Senha" autocomplete="current-password" required>
       <button type="submit" id="tn-login-btn">Entrar</button>
       <div class="err" id="tn-login-err"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="#" id="tn-forgot-link" style="font-size:12.5px;color:#1f7a4d;">Esqueci / definir minha senha</a>
+      </div>
+    </form>
+    <form id="tn-forgot-form" style="display:none;">
+      <input type="email" id="tn-forgot-email" placeholder="Seu e-mail" autocomplete="username" required>
+      <button type="submit" id="tn-forgot-btn">Enviar link por e-mail</button>
+      <div class="err" id="tn-forgot-msg"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="#" id="tn-back-login" style="font-size:12.5px;color:#1f7a4d;">Voltar ao login</a>
+      </div>
+    </form>
+    <form id="tn-setpass-form" style="display:none;">
+      <input type="password" id="tn-newpass" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" autocomplete="new-password" required>
+      <input type="password" id="tn-newpass2" placeholder="Repita a nova senha" minlength="6" autocomplete="new-password" required>
+      <button type="submit" id="tn-setpass-btn">Salvar senha</button>
+      <div class="err" id="tn-setpass-msg"></div>
     </form>
   </div>
 </div>
@@ -804,7 +821,7 @@ window.TN_CONFIG = {
 /* ============ CONFIG / HELPERS ============ */
 const TODAY = new Date('2026-08-14T00:00:00');
 /* Atualize esta data a cada alteração do painel — aparece no canto superior direito. Formato por extenso + hora. */
-const LAST_UPDATE = "20 de agosto de 2026, 15:38";
+const LAST_UPDATE = "20 de agosto de 2026, 21:48";
 const STORES = ["Itaipulândia","Ouro Verde","Toledo"];
 const BRL = v => v==null ? "—" : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct = v => v==null ? "—" : v.toFixed(1).replace('.',',') + '%';
@@ -2426,9 +2443,15 @@ async function tnInitApp(){
     renderAll(); tnSetUpdate(LAST_UPDATE+' (offline)'); return;
   }
   window.TN={sb};
+  // chegou por link de convite/recuperação de senha?
+  sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ renderAll(); tnMode('setpass'); } });
+  const hash = window.location.hash || '';
+  const isSenhaLink = hash.includes('type=recovery') || hash.includes('type=invite');
   const {data:{session}}=await sb.auth.getSession();
-  if(session){ await tnAfterLogin(sb); }
-  else { renderAll(); document.getElementById('tn-login').classList.add('show'); }
+  if(isSenhaLink){ renderAll(); tnMode('setpass'); }
+  else if(session){ await tnAfterLogin(sb); }
+  else { renderAll(); tnMode('login'); }
+
   document.getElementById('tn-login-form').addEventListener('submit',async e=>{
     e.preventDefault();
     const btn=document.getElementById('tn-login-btn'), err=document.getElementById('tn-login-err');
@@ -2440,6 +2463,47 @@ async function tnInitApp(){
     document.getElementById('tn-login').classList.remove('show');
     await tnAfterLogin(sb);
   });
+  // alternar para "esqueci a senha"
+  document.getElementById('tn-forgot-link').addEventListener('click',e=>{ e.preventDefault(); tnMode('forgot'); });
+  document.getElementById('tn-back-login').addEventListener('click',e=>{ e.preventDefault(); tnMode('login'); });
+  // enviar link de redefinição
+  document.getElementById('tn-forgot-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const btn=document.getElementById('tn-forgot-btn'), msg=document.getElementById('tn-forgot-msg');
+    msg.style.color=''; msg.textContent=''; btn.disabled=true; btn.textContent='Enviando...';
+    const email=document.getElementById('tn-forgot-email').value.trim();
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+    btn.disabled=false; btn.textContent='Enviar link por e-mail';
+    if(error){ msg.textContent=error.message; }
+    else { msg.style.color='#1f7a4d'; msg.textContent='Link enviado! Verifique seu e-mail (e a caixa de spam).'; }
+  });
+  // salvar nova senha (vindo do link)
+  document.getElementById('tn-setpass-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const btn=document.getElementById('tn-setpass-btn'), msg=document.getElementById('tn-setpass-msg');
+    msg.style.color=''; msg.textContent='';
+    const p1=document.getElementById('tn-newpass').value, p2=document.getElementById('tn-newpass2').value;
+    if(p1!==p2){ msg.textContent='As senhas não conferem.'; return; }
+    btn.disabled=true; btn.textContent='Salvando...';
+    const {error}=await sb.auth.updateUser({password:p1});
+    btn.disabled=false; btn.textContent='Salvar senha';
+    if(error){ msg.textContent=error.message; return; }
+    history.replaceState(null,'',location.pathname);
+    document.getElementById('tn-login').classList.remove('show');
+    await tnAfterLogin(sb);
+  });
+}
+// alterna os formulários do cartão de login
+function tnMode(mode){
+  const ov=document.getElementById('tn-login'); ov.classList.add('show');
+  const login=document.getElementById('tn-login-form'), forgot=document.getElementById('tn-forgot-form'), setp=document.getElementById('tn-setpass-form');
+  const title=document.getElementById('tn-title'), sub=document.getElementById('tn-sub');
+  login.style.display = mode==='login' ? '' : 'none';
+  forgot.style.display = mode==='forgot' ? '' : 'none';
+  setp.style.display = mode==='setpass' ? '' : 'none';
+  if(mode==='login'){ title.textContent='Entrar no painel'; sub.textContent='Acesso restrito à equipe. Use seu e-mail e senha cadastrados.'; }
+  else if(mode==='forgot'){ title.textContent='Definir / trocar senha'; sub.textContent='Enviaremos um link ao seu e-mail para você criar uma nova senha.'; }
+  else if(mode==='setpass'){ title.textContent='Criar sua senha'; sub.textContent='Escolha a senha que você usará para entrar no painel.'; }
 }
 // grava no Supabase (fire-and-forget; não trava a UI se falhar)
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
