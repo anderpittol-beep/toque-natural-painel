@@ -41,9 +41,43 @@ function rows(wb, sheetName) {
 }
 
 // ---------- Aba "2026" -> financeiro_mensal ----------
+const MES_ABBR = { 1:'jan', 2:'fev', 3:'mar', 4:'abr', 5:'mai', 6:'jun', 7:'jul', 8:'ago', 9:'set', 10:'out', 11:'nov', 12:'dez' };
+
+// Despesa TOTAL do mês por loja (fixas + folha + compras), lida da aba "Despesas de <mês>".
+// Usada para completar a despesa quando na aba "2026" só a receita foi lançada.
+function despesaDoMesPorLoja(wb, mes) {
+  const abbr = MES_ABBR[mes];
+  if (!abbr) return null;
+  const alvo = 'despesas de ' + abbr;
+  const nome = Object.keys(wb.Sheets).find(n => n.toLowerCase().trim() === alvo);
+  if (!nome) return null;
+  const data = rows(wb, nome);
+  const acc = { 'Ouro Verde': 0, 'Toledo': 0, 'Itaipulândia': 0 };
+  let temAlgo = false;
+  for (const r of data) {
+    const desc = txt(r[1]);
+    // toda linha de despesa fixa/folha (col1 = descrição, col2/3/4 = lojas), menos a linha "Total"
+    if (desc && desc.toLowerCase() !== 'total') {
+      const v = { 'Ouro Verde': num(r[2]), 'Toledo': num(r[3]), 'Itaipulândia': num(r[4]) };
+      for (const loja of LOJAS) if (v[loja] != null) { acc[loja] += v[loja]; temAlgo = true; }
+    }
+    // compras/NF do mês (col6 = "Total", col7/8/9 = lojas)
+    if (txt(r[6]).toLowerCase() === 'total') {
+      const c = { 'Ouro Verde': num(r[7]), 'Toledo': num(r[8]), 'Itaipulândia': num(r[9]) };
+      for (const loja of LOJAS) if (c[loja] != null) { acc[loja] += c[loja]; temAlgo = true; }
+    }
+  }
+  return temAlgo ? acc : null;
+}
+
 export function parseFinanceiro(wb, ano = 2026) {
   const data = rows(wb, '2026');
   const out = [];
+  const despCache = {};
+  const getDesp = (mes, loja) => {
+    if (!(mes in despCache)) despCache[mes] = despesaDoMesPorLoja(wb, mes);
+    return despCache[mes] ? despCache[mes][loja] : null;
+  };
   for (const r of data) {
     const mesNome = txt(r[6]).toLowerCase();
     const mes = MESES[mesNome];
@@ -54,9 +88,16 @@ export function parseFinanceiro(wb, ano = 2026) {
       { loja: 'Itaipulândia', receita: num(r[13]), despesa: num(r[14]) },
     ];
     for (const b of blocos) {
-      // inclui meses com receita; a despesa pode vir nula (completada depois pelo mês atual)
-      if (b.receita) {
-        out.push({ ano, mes, loja: b.loja, receita: b.receita, despesa: b.despesa });
+      if (!b.receita) continue;
+      let despesa = b.despesa;
+      // se a despesa não foi lançada na aba 2026, calcula pela aba "Despesas de <mês>"
+      if (despesa == null || despesa === 0) {
+        const d = getDesp(mes, b.loja);
+        if (d != null && d > 0) despesa = Math.round(d * 100) / 100;
+      }
+      // só grava meses completos (receita E despesa válidas > 0)
+      if (despesa && despesa > 0) {
+        out.push({ ano, mes, loja: b.loja, receita: b.receita, despesa });
       }
     }
   }
