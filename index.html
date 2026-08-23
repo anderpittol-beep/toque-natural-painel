@@ -2409,7 +2409,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial,entradas:+r.saldo_final,saidas:+r.saidas,conta:+r.saldo_conta})); }catch(e){}
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
-  try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); }catch(e){}
+  try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
   try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
@@ -2419,7 +2419,7 @@ async function tnLoadAll(sb){
 }
 
 async function tnAfterLogin(sb){
-  try{ const {data:prof}=await sb.from('profiles').select('papel').maybeSingle(); if(prof&&prof.papel==='socia'){ perfil='socia'; applyPerfil(); } }catch(_){}
+  try{ const {data:{user}}=await sb.auth.getUser(); let q=sb.from('profiles').select('papel'); if(user&&user.id) q=q.eq('id',user.id); const {data:prof}=await q.maybeSingle(); if(prof&&prof.papel==='socia'){ perfil='socia'; applyPerfil(); } }catch(_){}
   await tnLoadAll(sb);
 }
 
@@ -2434,7 +2434,7 @@ async function tnInitApp(){
   }
   let sb;
   try{
-    const mod=await import('https://esm.sh/@supabase/supabase-js@2');
+    const mod=await import('https://esm.sh/@supabase/supabase-js@2.45.0');
     sb=mod.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
   }catch(e){
     console.warn('Falha ao carregar Supabase, modo offline:',e);
