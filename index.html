@@ -318,7 +318,7 @@ window.TN_CONFIG = {
             <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
             <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
             <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
-            <input type="number" id="cx-entradas" placeholder="Saldo final do caixa" step="0.01">
+            <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
             <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
             <input type="number" id="cx-conta" placeholder="Saldo em conta" step="0.01">
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
@@ -1976,7 +1976,7 @@ function renderCaixa(){
   });
   document.getElementById('caixa-kpis').innerHTML = `
     ${socia?`<div class="card stat-tile accent-good"><div class="label">Saldo em conta (último dia)</div><div class="value">${BRL(saldoConta)}</div></div>`:''}
-    <div class="card stat-tile"><div class="label">Saldo final registrado</div><div class="value">${BRL(entradasMes)}</div></div>
+    <div class="card stat-tile"><div class="label">Entradas registradas (mês)</div><div class="value">${BRL(entradasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
     ${socia?`<div class="card stat-tile accent-warning"><div class="label">Despesas fixas / mês</div><div class="value">${BRL(totFixas)}</div></div>`:''}
   `;
@@ -1989,7 +1989,7 @@ function renderCaixa(){
   const cxSorted = caixa.slice().sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || a.loja.localeCompare(b.loja));
   const ncols = socia ? 8 : 7;
   document.getElementById('tbl-caixa').innerHTML = `
-    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Saldo inicial</th><th>Saldo final do caixa</th><th>Saídas</th><th>Fechamento do dia</th>${socia?'<th>Saldo em conta</th>':''}</tr></thead>
+    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th>${socia?'<th>Saldo em conta</th>':''}</tr></thead>
     <tbody>${cxSorted.map(c=>{
       const f=fech(c);
       return `<tr>
