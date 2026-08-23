@@ -237,7 +237,7 @@ window.TN_CONFIG = {
       <button data-view="estoque"><span class="navicon">▣</span>Estoque &amp; pedidos</button>
       <button data-view="validade"><span class="navicon">⏱</span>Validade</button>
       <button data-view="pedidos"><span class="navicon">▤</span>Pedidos &amp; entregas</button>
-      <button data-view="equipe"><span class="navicon">◎</span>Equipe: feedback &amp; tarefas</button>
+      <button data-view="equipe"><span class="navicon">◎</span>Equipe: tarefas</button>
     </nav>
   </aside>
   <main>
@@ -581,25 +581,10 @@ window.TN_CONFIG = {
 
       <!-- EQUIPE -->
       <section class="view" id="view-equipe">
-        <h2 class="section-title">Feedback e tarefas para a equipe</h2>
-        <p class="section-desc">Registre feedback e delegue tarefas por colaborador e por loja. Fica salvo apenas durante esta sessão do painel — exporte periodicamente se quiser manter histórico.</p>
+        <h2 class="section-title">Tarefas da equipe</h2>
+        <p class="section-desc">Delegue tarefas por colaborador e por loja. Fica salvo apenas durante esta sessão do painel — exporte periodicamente se quiser manter histórico. <span class="hint">(O feedback da equipe fica em <strong>Gente e Gestão</strong>, restrito aos Sócio Proprietários.)</span></p>
 
-        <div class="grid grid-2" style="align-items:flex-start;">
-          <div class="card" id="card-feedback">
-            <h3 style="font-size:14px;margin:0 0 10px 0;">Novo feedback <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
-            <form class="feedback-form" id="form-feedback">
-              <select id="fb-colaborador"></select>
-              <select id="fb-tipo">
-                <option value="Reconhecimento">Reconhecimento</option>
-                <option value="Ponto de atenção">Ponto de atenção</option>
-                <option value="Desenvolvimento">Desenvolvimento</option>
-              </select>
-              <textarea id="fb-texto" placeholder="Descreva o feedback..." required></textarea>
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar feedback</button>
-            </form>
-            <div id="feedback-list"></div>
-          </div>
-
+        <div>
           <div class="card">
             <h3 style="font-size:14px;margin:0 0 10px 0;">Nova tarefa</h3>
             <form class="feedback-form" id="form-tarefa">
@@ -809,6 +794,22 @@ window.TN_CONFIG = {
           <p class="hint" style="margin:8px 0 0 0;">Dica: para atualizar a comissão de alguém, lance novamente com o mesmo nome, papel e loja — o registro é substituído.</p>
         </div>
         <div class="card"><div style="overflow-x:auto;"><table id="tbl-gente"></table></div></div>
+
+        <div class="card" id="card-feedback" style="margin-top:20px;">
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio Proprietários</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos Sócio Proprietários.</p>
+          <form class="feedback-form" id="form-feedback">
+            <select id="fb-colaborador"></select>
+            <select id="fb-tipo">
+              <option value="Reconhecimento">Reconhecimento</option>
+              <option value="Ponto de atenção">Ponto de atenção</option>
+              <option value="Desenvolvimento">Desenvolvimento</option>
+            </select>
+            <textarea id="fb-texto" placeholder="Descreva o feedback..." required></textarea>
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar feedback</button>
+          </form>
+          <div id="feedback-list"></div>
+        </div>
       </section>
 
       <div class="footer-note">
@@ -2154,7 +2155,7 @@ const VIEW_TITLES = {
   'estoque':['Estoque & pedidos','Prioridade #2: o que comprar e quando'],
   'validade':['Validade','Prioridade #3: evitar perda por vencimento'],
   'clientes':['Clientes & CRM','Reativação e histórico de contatos'],
-  'equipe':['Equipe: feedback & tarefas','Gestão de pessoas do dia a dia'],
+  'equipe':['Equipe: tarefas','Delegue e acompanhe as tarefas do dia a dia'],
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
   'parcerias':['Parcerias & bônus','Academias, pilates, cross e nutricionistas'],
   'pedidos':['Pedidos & entregas','Do WhatsApp à separação e coleta do entregador'],
