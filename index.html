@@ -584,6 +584,18 @@ window.TN_CONFIG = {
         <h2 class="section-title">Tarefas da equipe</h2>
         <p class="section-desc">Delegue tarefas por colaborador e por loja. Fica salvo apenas durante esta sessão do painel — exporte periodicamente se quiser manter histórico. <span class="hint">(O feedback da equipe fica em <strong>Gente e Gestão</strong>, restrito aos Sócio Proprietários.)</span></p>
 
+        <div class="card" id="card-equipe-cad" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
+          <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
+            <input type="text" id="eq-nome" placeholder="Nome" required>
+            <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
+            <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+            <button class="btn primary" type="submit">Adicionar</button>
+          </form>
+          <div id="equipe-list" style="margin-top:12px;"></div>
+        </div>
+
         <div>
           <div class="card">
             <h3 style="font-size:14px;margin:0 0 10px 0;">Nova tarefa</h3>
@@ -894,8 +906,10 @@ let CRM_CONTATOS = [
 
 /* Sócias-gestoras: Andreia e Vanessa · Colaboradoras: uma por loja */
 let EQUIPE = [
- {nome:"Andreia",cargo:"Sócia-gestora",loja:"Todas"},
- {nome:"Vanessa",cargo:"Sócia-gestora",loja:"Todas"},
+ {nome:"Andreia",cargo:"Sócia",loja:"Todas"},
+ {nome:"Vanessa",cargo:"Sócia",loja:"Todas"},
+ {nome:"Anderson",cargo:"Sócio",loja:"Todas"},
+ {nome:"Jandrey",cargo:"Sócio",loja:"Todas"},
  {nome:"Eloisa",cargo:"Colaboradora",loja:"Ouro Verde"},
  {nome:"Tainara",cargo:"Colaboradora",loja:"Itaipulândia"},
  {nome:"Mayara",cargo:"Colaboradora",loja:"Toledo"},
@@ -1704,6 +1718,30 @@ function populateEquipeSelects(){
   const opts = EQUIPE.map(e=>`<option value="${esc(e.nome)}">${esc(e.nome)} — ${esc(e.cargo)} (${esc(e.loja)})</option>`).join('');
   document.getElementById('fb-colaborador').innerHTML = opts;
   document.getElementById('tk-colaborador').innerHTML = opts;
+  renderEquipeCad();
+}
+/* Lista do cadastro da equipe, com opção de remover */
+function renderEquipeCad(){
+  const box = document.getElementById('equipe-list');
+  if(!box) return;
+  const ordem = {'Sócia':0,'Sócio':0,'Colaboradora':1};
+  const rows = EQUIPE.map((e,i)=>({e,i})).sort((a,b)=> (ordem[a.e.cargo]??2)-(ordem[b.e.cargo]??2) || String(a.e.nome).localeCompare(b.e.nome));
+  box.innerHTML = `<table><thead><tr><th>Nome</th><th>Cargo</th><th>Loja</th><th></th></tr></thead>
+    <tbody>${rows.map(({e,i})=>`<tr>
+      <td class="strong">${esc(e.nome)}</td>
+      <td>${esc(e.cargo)}</td>
+      <td>${esc(e.loja)}</td>
+      <td style="text-align:right;"><button class="btn ghost" data-eqdel="${i}">remover</button></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
+  box.querySelectorAll('[data-eqdel]').forEach(b=>{
+    b.onclick = ()=>{
+      const idx = +b.dataset.eqdel, pes = EQUIPE[idx];
+      if(!pes || !confirm('Remover '+pes.nome+' da equipe?')) return;
+      EQUIPE.splice(idx,1);
+      tnDelete('equipe', pes.id ? {id:pes.id} : {nome:pes.nome});
+      populateEquipeSelects(); renderAll();
+    };
+  });
 }
 function renderFeedbacks(){
   const sorted = [...FEEDBACKS].sort((a,b)=> new Date(b.data)-new Date(a.data));
@@ -2073,6 +2111,7 @@ function applyPerfil(){
   const socia = perfil==='socia';
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
+  const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
   document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio Proprietários' : 'Perfil: Colaboradora';
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
@@ -2350,6 +2389,17 @@ document.getElementById('form-feedback').addEventListener('submit', e=>{
   document.getElementById('fb-texto').value='';
   renderFeedbacks();
 });
+document.getElementById('form-equipe').addEventListener('submit', e=>{
+  e.preventDefault();
+  const nome=document.getElementById('eq-nome').value.trim();
+  if(!nome) return;
+  const cargo=document.getElementById('eq-cargo').value, loja=document.getElementById('eq-loja').value;
+  if(EQUIPE.some(x=>x.nome.toLowerCase()===nome.toLowerCase())){ alert('Já existe alguém com esse nome na equipe.'); return; }
+  EQUIPE.push({nome,cargo,loja});
+  tnInsert('equipe',{nome,cargo,loja});
+  e.target.reset();
+  populateEquipeSelects(); renderAll();
+});
 document.getElementById('form-tarefa').addEventListener('submit', e=>{
   e.preventDefault();
   TAREFAS.push({colaborador: document.getElementById('tk-colaborador').value, titulo: document.getElementById('tk-titulo').value, prazo: document.getElementById('tk-prazo').value, prioridade: document.getElementById('tk-prioridade').value, status:'pendente'});
@@ -2410,7 +2460,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
-  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({nome:r.nome,cargo:r.cargo,loja:r.loja})); }catch(e){}
+  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial,entradas:+r.saldo_final,saidas:+r.saidas,conta:+r.saldo_conta})); }catch(e){}
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
@@ -2509,6 +2559,7 @@ function tnMode(mode){
   else if(mode==='setpass'){ title.textContent='Criar sua senha'; sub.textContent='Escolha a senha que você usará para entrar no painel.'; }
 }
 // grava no Supabase (fire-and-forget; não trava a UI se falhar)
+async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
 
 tnInitApp();
