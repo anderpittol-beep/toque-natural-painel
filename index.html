@@ -258,8 +258,6 @@ window.TN_CONFIG = {
           <option value="Ouro Verde">Ouro Verde</option>
           <option value="Toledo">Toledo</option>
         </select>
-        <label class="hint" for="marginTarget">Margem alvo</label>
-        <input type="number" id="marginTarget" value="35" min="0" max="90" style="width:60px;">%
         <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
@@ -2181,7 +2179,7 @@ document.querySelectorAll('[data-toggle]').forEach(link=>{
 });
 
 document.getElementById('storeFilter').onchange = renderAll;
-document.getElementById('marginTarget').onchange = (e)=>{ marginTarget = num(e.target.value) ?? 35; renderAll(); };
+{ const mt=document.getElementById('marginTarget'); if(mt) mt.onchange = (e)=>{ marginTarget = num(e.target.value) ?? 35; renderAll(); }; }
 document.getElementById('margemStatusFilter').onchange = renderMargem;
 document.getElementById('estoqueStatusFilter').onchange = renderEstoque;
 document.getElementById('igStoreFilter').onchange = renderInstagram;
