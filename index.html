@@ -828,6 +828,7 @@ window.TN_CONFIG = {
             <input type="number" id="gt-salario" placeholder="Salário base" step="0.01">
             <input type="number" id="gt-comissao" placeholder="Comissão do mês" step="0.01">
             <input type="number" id="gt-encargo" placeholder="Encargos" step="0.01">
+            <input type="number" id="gt-vale" placeholder="Vale alimentação" step="0.01">
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar folha</button>
           </form>
           <p class="hint" id="gt-aviso" style="margin:8px 0 0 0;"></p>
@@ -1106,14 +1107,14 @@ let DESPESAS_FIXAS = [
 ];
 /* GENTE E GESTÃO — folha por pessoa: salário + comissão do mês + encargos. Confidencial (só perfil Sócia). */
 let GENTE = [
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Ouro Verde", salario:6000, comissao:0, encargo:178.31},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Itaipulândia", salario:6000, comissao:0, encargo:191.15},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Toledo", salario:0, comissao:0, encargo:469.93},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Eloisa", papel:"Colaboradora", loja:"Ouro Verde", salario:2447, comissao:0, encargo:87.05},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", salario:2848.72, comissao:0, encargo:369.04},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", salario:2141.25, comissao:0, encargo:86.56},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Ouro Verde", salario:6000, comissao:0, encargo:178.31, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Itaipulândia", salario:6000, comissao:0, encargo:191.15, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Toledo", salario:0, comissao:0, encargo:469.93, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Eloisa", papel:"Colaboradora", loja:"Ouro Verde", salario:2447, comissao:0, encargo:87.05, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", salario:2848.72, comissao:0, encargo:369.04, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", salario:2141.25, comissao:0, encargo:86.56, vale:0},
 ];
-const gTotal = g => (g.salario||0)+(g.comissao||0)+(g.encargo||0);
+const gTotal = g => (g.salario||0)+(g.comissao||0)+(g.encargo||0)+(g.vale||0);
 /* Boletos e despesas variáveis — reais (totais do mês por loja, planilha "Despesas de Ago") */
 let BOLETOS = [
  {data:"Ago/26", loja:"Ouro Verde", descricao:"Compras/NF do mês (total)", valor:7127.20, status:"Pago"},
@@ -2567,7 +2568,7 @@ async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
   if(!herdadas.length) return false;
   const regs = herdadas.map(g=>({ competencia: gtCompetencia(), ano: gtAno, mes: gtMes, pessoa: g.pessoa,
-                 papel: g.papel, loja: g.loja, salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0,
+                 papel: g.papel, loja: g.loja, salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0, vale: +g.vale||0,
                  origem: 'painel' }));
   regs.forEach(r=>GENTE.push(r));
   try{
@@ -2611,7 +2612,7 @@ function renderGente(){
   const podeEd = (typeof perfil!=='undefined' && perfil==='socia') && gtGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
   document.getElementById('tbl-gente').innerHTML = `
-    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Total</th>${podeEd?'<th></th>':''}</tr></thead>
+    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${rows.map(g=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
@@ -2621,6 +2622,7 @@ function renderGente(){
           <td><input type="number" data-ge="salario" value="${+g.salario||0}" step="0.01" style="width:104px;"></td>
           <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" style="width:96px;"></td>
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:96px;"></td>
+          <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:92px;"></td>
           <td class="strong">—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
@@ -2633,12 +2635,13 @@ function renderGente(){
         <td>${BRL(g.salario)}</td>
         <td>${g.comissao?`<span style="color:var(--good);font-weight:600;">${BRL(g.comissao)}</span>`:'—'}</td>
         <td>${BRL(g.encargo)}</td>
+        <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${podeEd?8:7}" class="hint">Nenhum lançamento de folha.</td></tr>`}
-    <tr><td colspan="6" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
+      </tr>`;}).join('') || `<tr><td colspan="${podeEd?9:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
+    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
 
   // ===== Retenção de 13º e férias (provisão do mês) =====
   const prov = rows.map(g=>({g, p:gProvisao(g)})).filter(x=>x.p.total>0);
@@ -2682,8 +2685,8 @@ function renderGente(){
       const pes = get('pessoa');
       if(!pes){ alert('O nome não pode ficar vazio.'); return; }
       Object.assign(g, { pessoa:pes, papel:get('papel'), loja:get('loja'),
-        salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0 });
-      if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,encargo:g.encargo});
+        salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0, vale:num(get('vale'))||0 });
+      if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,encargo:g.encargo,vale:g.vale});
       folhaEditando=null; renderGente(); renderCaixa();
     };
   });
@@ -2866,13 +2869,14 @@ document.getElementById('form-gente').addEventListener('submit', async e=>{
   const reg={ pessoa, papel, loja,
     salario:num(document.getElementById('gt-salario').value)||0,
     comissao:num(document.getElementById('gt-comissao').value)||0,
-    encargo:num(document.getElementById('gt-encargo').value)||0 };
+    encargo:num(document.getElementById('gt-encargo').value)||0,
+    vale:num(document.getElementById('gt-vale').value)||0 };
   if(!gtGerenciavel()){ alert('Escolha uma competência a partir de Set/26 para lançar a folha.'); return; }
   await gtMaterializar();
   Object.assign(reg, { competencia: gtCompetencia(), ano: gtAno, mes: gtMes, origem: 'painel' });
   const i=GENTE.findIndex(g=> +g.ano===gtAno && +g.mes===gtMes && g.pessoa.toLowerCase()===pessoa.toLowerCase() && g.papel===papel && g.loja===loja);
   if(i>=0){
-    const id=GENTE[i].id; Object.assign(GENTE[i], reg); if(id){ GENTE[i].id=id; tnUpdate('folha',{id},{salario:reg.salario,comissao:reg.comissao,encargo:reg.encargo}); }
+    const id=GENTE[i].id; Object.assign(GENTE[i], reg); if(id){ GENTE[i].id=id; tnUpdate('folha',{id},{salario:reg.salario,comissao:reg.comissao,encargo:reg.encargo,vale:reg.vale}); }
   } else {
     GENTE.push(reg);
     await tnInsertRet('folha', reg);
@@ -3084,7 +3088,7 @@ async function tnLoadAll(sb){
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||''})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,origem:r.origem||''})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||''})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({data:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
