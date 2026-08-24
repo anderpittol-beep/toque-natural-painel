@@ -584,6 +584,17 @@ window.TN_CONFIG = {
         <h2 class="section-title">Tarefas da equipe</h2>
         <p class="section-desc">Delegue tarefas por colaborador e por loja. Fica salvo apenas durante esta sessão do painel — exporte periodicamente se quiser manter histórico. <span class="hint">(O feedback da equipe fica em <strong>Gente e Gestão</strong>, restrito aos Sócio Proprietários.)</span></p>
 
+        <div class="card" id="card-plano" style="margin-bottom:16px;">
+          <div class="toolbar" style="justify-content:space-between;align-items:center;">
+            <div>
+              <h3 style="font-size:14px;margin:0;">Plano de Ação — progresso das ações</h3>
+              <p class="hint" style="margin:2px 0 0 0;">Percentual de micro tarefas concluídas em cada ação. Clique numa rosca para filtrar o quadro.</p>
+            </div>
+            <button class="btn ghost" id="plano-limpar" style="display:none;">ver todas</button>
+          </div>
+          <div id="plano-donuts" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px;"></div>
+        </div>
+
         <div class="card" id="card-equipe-cad" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
           <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
@@ -603,6 +614,7 @@ window.TN_CONFIG = {
               <select id="tk-colaborador"></select>
               <input type="text" id="tk-titulo" placeholder="Descrição da tarefa" required style="grid-column:1/-1;">
               <input type="text" id="tk-prazo" placeholder="Prazo (ex: 20/08/2026)">
+              <select id="tk-area" title="Ação do Plano de Ação"></select>
               <select id="tk-prioridade">
                 <option>Normal</option>
                 <option>Alta</option>
@@ -922,13 +934,21 @@ let FEEDBACKS = [
 ];
 
 let TAREFAS = [
- {colaborador:"Tainara",titulo:"Contar inventário físico de suplementos",prazo:"18/08/2026",prioridade:"Alta",status:"pendente"},
- {colaborador:"Eloisa",titulo:"Separar produtos com validade < 15 dias para promoção",prazo:"16/08/2026",prioridade:"Urgente",status:"pendente"},
- {colaborador:"Mayara",titulo:"Atualizar etiquetas de preço da seção de chás",prazo:"20/08/2026",prioridade:"Normal",status:"andamento"},
- {colaborador:"Andreia",titulo:"Revisar margem de todos os produtos sem custo cadastrado",prazo:"22/08/2026",prioridade:"Urgente",status:"andamento"},
- {colaborador:"Mayara",titulo:"Ligar para clientes inativos há mais de 120 dias",prazo:"25/08/2026",prioridade:"Alta",status:"pendente"},
- {colaborador:"Eloisa",titulo:"Negociar reposição de óleo de coco com fornecedor",prazo:"17/08/2026",prioridade:"Urgente",status:"concluida"},
- {colaborador:"Vanessa",titulo:"Treinar equipe em nova tabela de margem alvo",prazo:"14/08/2026",prioridade:"Normal",status:"concluida"},
+ /* Ações macro do Plano de Ação (planilha do Drive) */
+ {tipo:"acao",area:"Treinamento 10 produtos estrelas",titulo:"Treinamento Técnico e de Vendas focado nos 10 produtos estrelas",colaborador:"Andreia",prazo:"",prioridade:"Alta",status:"andamento",detalhe:"Por quê: aumentar a autoridade da colaboradora, o ticket médio e a conversão. Onde: Loja de Toledo. Quando: início imediato, aplicação diária. Quem: Gestor (treinamento) e Colaboradora (execução). Custo: R$ 0. Como: F1 diagnóstico de ticket médio e conversão, livro sobre chás, curso da Associação Comercial. F2 Guia Rápido de Benefícios, combos agregados, exposição no caixa, pasta no Drive. F3 meta diária de combos e simulação de atendimento. F4 vídeos Pílulas de Saúde e tráfego em raio de 3 km. F5 analisar ticket médio e reunião quinzenal."},
+ {tipo:"acao",area:"Evento de Inauguração (Open House)",titulo:"Evento de Inauguração Oficial (Open House) com degustação e parceiro",colaborador:"Andreia",prazo:"",prioridade:"Alta",status:"andamento",detalhe:"Por quê: o bairro não conhece a loja; criar marco de chegada e gerar fluxo. Onde: Loja Toledo. Quando: próximo sábado ou até 15 dias. Quem: Equipe + Nutricionista/Influencer local. Custo: R$ 300 a R$ 700. Como: 1 pré-evento (definir data e nutricionista, convites com desconto, mapear lideranças, convite VIP). 2 semana do evento (Feirinha, wind banner). 3 dia do evento (recepção com chá, degustação, consultoria expressa, captar WhatsApp, Kit Boas-Vindas). 4 pós-evento (mensagem na segunda e diagnóstico financeiro)."},
+ {tipo:"acao",area:"Marketing de Proximidade",titulo:"Marketing de Proximidade (tráfego pago + offline)",colaborador:"Anderson",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Por quê: atrair o público que circula no bairro Pioneiro. Onde: Instagram raio 3 km e academias/estúdios vizinhos. Quando: ativação contínua. Quem: Gestor de tráfego e Colaboradora. Custo: R$ 10 a R$ 20 por dia mais impressão. Como: anúncios focados no endereço e vouchers de degustação em academias parceiras."},
+ {tipo:"acao",area:"Sinalização Visual Externa",titulo:"Melhoria da Sinalização Visual Externa",colaborador:"Anderson",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Por quê: o ponto está escondido e o cliente de passagem não entra. Onde: fachada e calçada da loja. Quando: até 10 dias. Quem: empresa de comunicação visual ou proprietário. Custo: R$ 250 a R$ 500. Como: instalar wind banner ou cavalete com oferta clara Produtos a Granel Frescos - Entre e Prove."},
+ {tipo:"acao",area:"Rever margem dos produtos",titulo:"Rever margem dos produtos e comparar entre as 3 lojas",colaborador:"Andreia",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Ação do Plano de Ação sem os demais campos preenchidos na planilha."},
+ /* Micro tarefas das sócias */
+ {tipo:"tarefa",area:"Treinamento 10 produtos estrelas",titulo:"Identificar os 10 produtos mais vendidos e repassar para a colaboradora estudar",colaborador:"Andreia",prazo:"22/05/2026",prioridade:"Normal",status:"concluida",detalhe:"Relatório tirado desde dezembro (abertura da loja). Colaboradora pesquisou benefícios e contraindicações de cada produto para ganhar domínio e saber ofertar. Resultado: Mari soube falar com clareza e convicção, sugerir substituições e indicar produtos a partir de sintomas."},
+ {tipo:"tarefa",area:"Evento de Inauguração (Open House)",titulo:"Encontrar nutricionista para o dia da inauguração (cerca de 1h30)",colaborador:"Andreia",prazo:"30/05/2026",prioridade:"Alta",status:"pendente",detalhe:"Nutricionista parceira presente no dia do evento."},
+ {tipo:"tarefa",area:"Evento de Inauguração (Open House)",titulo:"Montar a arte dos convites de inauguração",colaborador:"Andreia",prazo:"30/05/2026",prioridade:"Alta",status:"pendente",detalhe:"Destacar a fachada da loja e o desconto ao apresentar o convite no evento. Após aprovada entre os sócios, enviar para a gráfica de Missal."},
+ {tipo:"tarefa",area:"Evento de Inauguração (Open House)",titulo:"Entregar convites na Feirinha e comércios próximos",colaborador:"Andreia",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Na sexta-feira anterior ao evento, entregar convites na Feirinha e convidar pessoalmente os comércios próximos, mostrando localização e produtos."},
+ {tipo:"tarefa",area:"Outros",titulo:"Instalação da câmera",colaborador:"Vanessa",prazo:"22/05/2026",prioridade:"Normal",status:"concluida",detalhe:"Câmera instalada conforme planejado."},
+ {tipo:"tarefa",area:"Outros",titulo:"Precificação e porcentagem: definir por onde começar e o cronograma",colaborador:"Andreia",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Definir em qual começar e o cronograma a seguir."},
+ {tipo:"tarefa",area:"Outros",titulo:"Configurar ar-condicionado de Toledo",colaborador:"Andreia",prazo:"",prioridade:"Normal",status:"pendente",detalhe:""},
+ {tipo:"tarefa",area:"Outros",titulo:"Curso de vendas pelo YouTube",colaborador:"Andreia",prazo:"",prioridade:"Normal",status:"pendente",detalhe:"Separar um vídeo para a Mary assistir."},
 ];
 
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
@@ -1761,7 +1781,9 @@ function tarefaCard(t){
   return `<div class="kcard">
     <div class="who">${prioDot(t.prioridade)}${esc(t.colaborador)}</div>
     <div>${esc(t.titulo)}</div>
+    ${t.area?`<div style="margin-top:5px;"><span class="store-tag">${esc(t.area)}</span></div>`:''}
     <div class="meta">Prazo: ${esc(t.prazo||'—')} · ${esc(t.prioridade)}</div>
+    ${t.detalhe?`<details style="margin-top:5px;"><summary class="hint" style="cursor:pointer;">detalhes</summary><div class="hint" style="margin-top:4px;white-space:pre-wrap;">${esc(t.detalhe)}</div></details>`:''}
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
       ${status!=='pendente' ? `<button class="btn ghost" data-move="${TAREFAS.indexOf(t)}" data-to="pendente">← pendente</button>`:''}
       ${status!=='andamento' ? `<button class="btn ghost" data-move="${TAREFAS.indexOf(t)}" data-to="andamento">${status==='pendente'?'iniciar →':'← reabrir'}</button>`:''}
@@ -1769,19 +1791,71 @@ function tarefaCard(t){
     </div>
   </div>`;
 }
+/* ===== PLANO DE AÇÃO — progresso por ação macro (roscas interativas) ===== */
+let planoFiltro = '';
+function acoesMacro(){
+  const acoes = TAREFAS.filter(t=>t.tipo==='acao').map(a=>a.area);
+  const extras = [...new Set(TAREFAS.filter(t=>t.tipo!=='acao').map(t=>t.area||'Outros'))].filter(a=>!acoes.includes(a));
+  return acoes.concat(extras);
+}
+function progressoArea(area){
+  const micro = TAREFAS.filter(t=>t.tipo!=='acao' && (t.area||'Outros')===area);
+  const feitas = micro.filter(t=>t.status==='concluida').length;
+  return {total:micro.length, feitas, pct: micro.length ? feitas/micro.length*100 : 0};
+}
+function donutSVG(pct, cor){
+  const r=34, c=2*Math.PI*r, on=c*Math.min(pct,100)/100;
+  return `<svg viewBox="0 0 90 90" width="90" height="90" role="img" style="display:block;margin:0 auto;">
+    <circle cx="45" cy="45" r="${r}" fill="none" stroke="var(--baseline)" stroke-width="11"/>
+    <circle cx="45" cy="45" r="${r}" fill="none" stroke="${cor}" stroke-width="11" stroke-linecap="round"
+      stroke-dasharray="${on.toFixed(1)} ${(c-on).toFixed(1)}" transform="rotate(-90 45 45)"/>
+    <text x="45" y="50" text-anchor="middle" font-size="17" font-weight="700" fill="var(--text-primary)">${Math.round(pct)}%</text>
+  </svg>`;
+}
+function renderPlanoAcao(){
+  const box = document.getElementById('plano-donuts');
+  if(!box) return;
+  box.innerHTML = acoesMacro().map(area=>{
+    const p = progressoArea(area);
+    const cor = p.total===0 ? 'var(--text-muted)' : (p.pct>=100?'var(--good)':(p.pct>0?'var(--warning)':'var(--critical)'));
+    const sel = planoFiltro===area;
+    return `<div class="card clickable" data-plano="${esc(area)}" style="text-align:center;cursor:pointer;${sel?'outline:2px solid var(--accent,#1f7a4d);':''}">
+      ${donutSVG(p.pct, cor)}
+      <div class="strong" style="font-size:12.5px;margin-top:6px;line-height:1.25;">${esc(area)}</div>
+      <div class="hint" style="margin-top:2px;">${p.total ? p.feitas+' de '+p.total+' concluída'+(p.total>1?'s':'') : 'sem tarefas'}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-plano]').forEach(el=>{
+    el.onclick = ()=>{ planoFiltro = (planoFiltro===el.dataset.plano) ? '' : el.dataset.plano; renderPlanoAcao(); renderTarefas(); };
+  });
+  const btn = document.getElementById('plano-limpar');
+  if(btn){ btn.style.display = planoFiltro ? '' : 'none'; btn.onclick = ()=>{ planoFiltro=''; renderPlanoAcao(); renderTarefas(); }; }
+  // seletor de ação no formulário de nova tarefa
+  const selA = document.getElementById('tk-area');
+  if(selA){
+    const areas = acoesMacro(), atual = selA.value;
+    const opts = areas.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    if(selA.innerHTML!==opts){ selA.innerHTML = opts; if(areas.includes(atual)) selA.value = atual; }
+  }
+}
+/* Tarefas exibidas no quadro: só micro tarefas, respeitando o filtro de ação */
+function tarefasVisiveis(){
+  return TAREFAS.filter(t=> t.tipo!=='acao' && (!planoFiltro || (t.area||'Outros')===planoFiltro));
+}
 function renderTarefas(){
+  renderPlanoAcao();
   const view = (document.getElementById('tarefaView')||{}).value || 'status';
   document.getElementById('kanban-status').style.display = view==='status' ? '' : 'none';
   document.getElementById('kanban-periodo').style.display = view==='status' ? 'none' : '';
   if(view==='status'){
     const cols = {pendente:'kanban-pendente', andamento:'kanban-andamento', concluida:'kanban-concluida'};
     Object.entries(cols).forEach(([status,id])=>{
-      const items = TAREFAS.filter(t=>t.status===status);
+      const items = tarefasVisiveis().filter(t=>t.status===status);
       document.getElementById(id).innerHTML = items.map(tarefaCard).join('') || '<p class="hint">Nada aqui.</p>';
     });
   } else {
     // visão por período: só tarefas não concluídas (o que pode ser executado)
-    const abertas = TAREFAS.filter(t=>t.status!=='concluida');
+    const abertas = tarefasVisiveis().filter(t=>t.status!=='concluida');
     let buckets;
     if(view==='semana'){
       const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
@@ -1812,7 +1886,9 @@ function renderTarefas(){
     document.getElementById('kanban-periodo').innerHTML = `<div class="kanban" style="grid-template-columns:repeat(${Math.min(usados.length,view==='semana'?5:6)},1fr);">${cols}</div>`;
   }
   document.querySelectorAll('[data-move]').forEach(btn=>{
-    btn.onclick = ()=>{ TAREFAS[+btn.dataset.move].status = btn.dataset.to; renderTarefas(); };
+    btn.onclick = ()=>{ const t=TAREFAS[+btn.dataset.move]; t.status = btn.dataset.to;
+      if(t.id) tnUpdate('tarefas',{id:t.id},{status:t.status});
+      renderTarefas(); };
   });
 }
 
@@ -2402,8 +2478,10 @@ document.getElementById('form-equipe').addEventListener('submit', e=>{
 });
 document.getElementById('form-tarefa').addEventListener('submit', e=>{
   e.preventDefault();
-  TAREFAS.push({colaborador: document.getElementById('tk-colaborador').value, titulo: document.getElementById('tk-titulo').value, prazo: document.getElementById('tk-prazo').value, prioridade: document.getElementById('tk-prioridade').value, status:'pendente'});
-  tnInsert('tarefas',{colaborador:document.getElementById('tk-colaborador').value,titulo:document.getElementById('tk-titulo').value,prazo:document.getElementById('tk-prazo').value,prioridade:document.getElementById('tk-prioridade').value,status:'pendente'});
+  const _area = (document.getElementById('tk-area')||{}).value || 'Outros';
+  const _t = {tipo:'tarefa', area:_area, colaborador: document.getElementById('tk-colaborador').value, titulo: document.getElementById('tk-titulo').value, prazo: document.getElementById('tk-prazo').value, prioridade: document.getElementById('tk-prioridade').value, status:'pendente', detalhe:''};
+  TAREFAS.push(_t);
+  tnInsert('tarefas',_t);
   document.getElementById('tk-titulo').value=''; document.getElementById('tk-prazo').value='';
   renderTarefas();
 });
@@ -2466,7 +2544,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
-  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status})); }catch(e){}
+  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
   populateEquipeSelects();
   renderAll();
@@ -2559,6 +2637,7 @@ function tnMode(mode){
   else if(mode==='setpass'){ title.textContent='Criar sua senha'; sub.textContent='Escolha a senha que você usará para entrar no painel.'; }
 }
 // grava no Supabase (fire-and-forget; não trava a UI se falhar)
+async function tnUpdate(tabela,match,valores){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).update(valores).match(match); if(error) console.warn('update',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
 
