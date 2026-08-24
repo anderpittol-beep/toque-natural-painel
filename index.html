@@ -278,7 +278,7 @@ window.TN_CONFIG = {
           <div class="grid grid-4" id="alert-cards"></div>
         </div>
         <div class="section-block card">
-          <h2 class="section-title" style="margin-bottom:12px;">Lucro mensal — consolidado (Abr–Jul/26)</h2>
+          <h2 class="section-title" style="margin-bottom:12px;">Lucro mensal — consolidado (<span class="js-periodo">Abr–Jul/26</span>)</h2>
           <div id="chart-lucro-mini"></div>
         </div>
       </section>
@@ -286,7 +286,7 @@ window.TN_CONFIG = {
       <!-- FINANCEIRO -->
       <section class="view" id="view-financeiro">
         <h2 class="section-title">Receitas x despesas</h2>
-        <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, Abr–Jul/26.</p>
+        <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
         <div class="toolbar">
           <div class="import-box">
             <button class="btn" id="btn-import-financeiro">Importar relatório financeiro (CSV)</button>
@@ -396,7 +396,7 @@ window.TN_CONFIG = {
         </div>
         <div class="card" style="margin-top:14px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Participação de cada loja</h3>
-          <p class="hint" style="margin:0 0 14px 0;">Quanto cada loja representa no total da rede (dados reais Abr–Jul/26). Independe do filtro de loja no topo.</p>
+          <p class="hint" style="margin:0 0 14px 0;">Quanto cada loja representa no total da rede (dados reais <span class="js-periodo">Abr–Jul/26</span>). Independe do filtro de loja no topo.</p>
           <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap;">
             <div id="pie-share" style="flex-shrink:0;"></div>
             <div id="pie-legend" style="flex:1;min-width:220px;"></div>
@@ -1162,6 +1162,17 @@ function filteredClientes(){
 }
 
 /* ============ RENDER: VISÃO GERAL ============ */
+/* Rótulo do período com base nos meses realmente carregados (ex.: "Abr–Ago/26") */
+function periodoLabel(){
+  const m = (FINANCEIRO && FINANCEIRO.meses) || [];
+  if(!m.length) return "";
+  if(m.length===1) return m[0];
+  return m[0].split("/")[0] + "–" + m[m.length-1];
+}
+function atualizarPeriodo(){
+  const txt = periodoLabel();
+  document.querySelectorAll(".js-periodo").forEach(el=> el.textContent = txt);
+}
 function renderVisaoGeral(){
   const s = currentStore();
   const prods = filteredProducts();
@@ -1173,9 +1184,9 @@ function renderVisaoGeral(){
   const ticketMedio = null; // not enough data modelled — omitted intentionally
 
   const kpis = [
-    {label:'Faturamento (Abr–Jul/26)', value: BRL(receita), accent:''},
-    {label:'Despesas (Abr–Jul/26)', value: BRL(despesa), accent:''},
-    {label:'Lucro (Abr–Jul/26)', value: BRL(lucro), accent: lucro>=0?'accent-good':'accent-critical'},
+    {label:'Faturamento ('+periodoLabel()+')', value: BRL(receita), accent:''},
+    {label:'Despesas ('+periodoLabel()+')', value: BRL(despesa), accent:''},
+    {label:'Lucro ('+periodoLabel()+')', value: BRL(lucro), accent: lucro>=0?'accent-good':'accent-critical'},
     {label:'Clientes ativos (≤30 dias)', value: clientesAtivos, accent:''},
   ];
   document.getElementById('kpi-cards').innerHTML = kpis.map(k=>`
@@ -1218,9 +1229,9 @@ function renderFinanceiro(){
   const totReceita = receita.reduce((a,b)=>a+b,0), totDespesa = despesa.reduce((a,b)=>a+b,0);
 
   document.getElementById('fin-kpis').innerHTML = `
-    <div class="card stat-tile"><div class="label">Receita (Abr–Jul/26)</div><div class="value">${BRL(totReceita)}</div></div>
-    <div class="card stat-tile"><div class="label">Despesa (Abr–Jul/26)</div><div class="value">${BRL(totDespesa)}</div></div>
-    <div class="card stat-tile ${totReceita-totDespesa>=0?'accent-good':'accent-critical'}"><div class="label">Lucro (Abr–Jul/26)</div><div class="value">${BRL(totReceita-totDespesa)}</div></div>
+    <div class="card stat-tile"><div class="label">Receita (${periodoLabel()})</div><div class="value">${BRL(totReceita)}</div></div>
+    <div class="card stat-tile"><div class="label">Despesa (${periodoLabel()})</div><div class="value">${BRL(totDespesa)}</div></div>
+    <div class="card stat-tile ${totReceita-totDespesa>=0?'accent-good':'accent-critical'}"><div class="label">Lucro (${periodoLabel()})</div><div class="value">${BRL(totReceita-totDespesa)}</div></div>
   `;
 
   document.getElementById('chart-financeiro').innerHTML = renderStackedChart(meses, [
@@ -2622,6 +2633,7 @@ document.getElementById('form-tarefa').addEventListener('submit', e=>{
 
 /* ============ INIT ============ */
 function renderAll(){
+  atualizarPeriodo();
   applyStoreTheme();
   renderVisaoGeral();
   renderFinanceiro();
