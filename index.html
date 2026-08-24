@@ -2417,7 +2417,11 @@ function renderCaixa(){
   const folhaPorLoja = {};
   genteList.forEach(g=>{ folhaPorLoja[g.loja]=(folhaPorLoja[g.loja]||0)+gTotal(g); });
   const folhaTotal = genteList.reduce((a,g)=>a+gTotal(g),0);
-  const totFixas = totFixasBase + folhaTotal;
+  // retenção mensal de 13º e férias, rateada por loja
+  const provPorLoja = {};
+  genteList.forEach(g=>{ const p=gProvisao(g); if(p.total>0) provPorLoja[g.loja]=(provPorLoja[g.loja]||0)+p.total; });
+  const provTotal = Object.values(provPorLoja).reduce((a,b)=>a+b,0);
+  const totFixas = totFixasBase + folhaTotal + provTotal;
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
   // saldo em conta: último dia registrado por loja (soma das lojas exibidas)
   const lojasCx = [...new Set(caixa.map(c=>c.loja))];
@@ -2457,7 +2461,9 @@ function renderCaixa(){
 
   // Tabela despesas fixas (+ linha de folha vinda de Gente e Gestão)
   const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>
-    `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td></tr>`).join('');
+    `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td></tr>`).join('')
+    + Object.keys(provPorLoja).sort().map(l=>
+    `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td></tr>`).join('');
   const podeEditar = socia && fxGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   document.getElementById('tbl-fixas').innerHTML = `
@@ -2483,7 +2489,7 @@ function renderCaixa(){
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;}).join('')}
     ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td></tr>' : '</tr>')}
-    <tr><td colspan="3" class="strong" style="text-align:right;">Total fixo/mês (com folha)</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
+    <tr><td colspan="3" class="strong" style="text-align:right;">Total fixo/mês (com folha e retenções)</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
 
   // ações de editar / excluir (materializa o mês herdado antes de alterar)
   document.querySelectorAll('[data-fxeditar]').forEach(b=>{
