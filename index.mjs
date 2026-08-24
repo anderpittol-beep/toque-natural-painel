@@ -84,8 +84,12 @@ async function main() {
     await delWhere('despesas_fixas', 'competencia', COMPETENCIA);
     await insert('despesas_fixas', despesasFixas);
   }
-  await delWhere('folha', 'competencia', COMPETENCIA);
-  await insert('folha', folha);
+  if (fixasNoPainel(COMPETENCIA)) {
+    console.log('   folha:             gerida no painel a partir de Set/2026 — sync ignorado');
+  } else {
+    await delWhere('folha', 'competencia', COMPETENCIA);
+    await insert('folha', folha);
+  }
   await delWhere('boletos', 'competencia', COMPETENCIA);
   await insert('boletos', boletos);
 
