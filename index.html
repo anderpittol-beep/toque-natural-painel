@@ -1184,23 +1184,47 @@ function atualizarPeriodo(){
 /* ===== PREFERÊNCIAS DO USUÁRIO (última análise) =====
    Guarda no próprio navegador, por e-mail logado, os meses/lojas escolhidos. */
 let tnUserKey = 'tn_prefs_anon';
-function salvarPrefs(){
-  try{
-    const lojas = [...document.querySelectorAll('.store-chk')].filter(c=>c.checked).map(c=>c.value);
-    localStorage.setItem(tnUserKey, JSON.stringify({ mesesSel, anoAtivo, lojas }));
-  }catch(_){}
+let tnUserId = null;          // id do usuário logado (para gravar no Supabase)
+let _prefsTimer = null;
+
+function prefsAtuais(){
+  const lojas = [...document.querySelectorAll('.store-chk')].filter(c=>c.checked).map(c=>c.value);
+  return { mesesSel, anoAtivo, lojas };
 }
-function carregarPrefs(){
+function aplicarPrefs(p){
+  if(!p) return;
+  if('mesesSel' in p) mesesSel = p.mesesSel;               // null | [] | [..]
+  if(p.anoAtivo) anoAtivo = p.anoAtivo;
+  if(Array.isArray(p.lojas) && p.lojas.length){
+    document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
+  }
+}
+function salvarPrefs(){
+  const p = prefsAtuais();
+  try{ localStorage.setItem(tnUserKey, JSON.stringify(p)); }catch(_){}   // cópia local (resposta imediata)
+  // grava também no Supabase, para a análise seguir a pessoa em qualquer dispositivo
+  clearTimeout(_prefsTimer);
+  _prefsTimer = setTimeout(()=>{
+    try{
+      if(window.TN && window.TN.sb && tnUserId){
+        window.TN.sb.from('user_prefs')
+          .upsert({ id: tnUserId, prefs: p, atualizado_em: new Date().toISOString() })
+          .then(({error})=>{ if(error) console.warn('prefs', error.message); });
+      }
+    }catch(e){ console.warn(e); }
+  }, 600);
+}
+/* Carrega do Supabase (fonte principal) e cai para o navegador se não houver nada lá */
+async function carregarPrefs(){
+  let p = null;
   try{
-    const raw = localStorage.getItem(tnUserKey);
-    if(!raw) return;
-    const p = JSON.parse(raw);
-    if(p && ('mesesSel' in p)) mesesSel = p.mesesSel;      // null | [] | [..]
-    if(p && p.anoAtivo) anoAtivo = p.anoAtivo;
-    if(p && Array.isArray(p.lojas) && p.lojas.length){
-      document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
+    if(window.TN && window.TN.sb && tnUserId){
+      const {data} = await window.TN.sb.from('user_prefs').select('prefs').eq('id', tnUserId).maybeSingle();
+      if(data && data.prefs) p = data.prefs;
     }
   }catch(_){}
+  if(!p){ try{ const raw = localStorage.getItem(tnUserKey); if(raw) p = JSON.parse(raw); }catch(_){} }
+  aplicarPrefs(p);
 }
 /* ===== FILTRO DE MESES (abas de ano + checks) — permite comparar Ago/26 com Ago/27 ===== */
 let mesesSel = null;    // null = todos (padrão) | [] = nenhum | ['Ago/26',...] = seleção
@@ -2417,7 +2441,10 @@ function applyPerfil(){
   const tg = document.getElementById('perfil-toggle');
   if(tg){
     tg.style.display = (perfilReal==='socia') ? '' : 'none';
-    tg.textContent = socia ? 'ver como Colaboradora' : 'voltar para Sócio';
+    tg.textContent = socia ? 'ver como Colaboradora' : '← voltar para Sócio';
+    // na prévia o botão fica em destaque, para a saída ficar sempre evidente
+    tg.className = socia ? 'btn ghost' : 'btn primary';
+    tg.style.fontWeight = socia ? '' : '600';
     tg.onclick = ()=>{ perfil = socia ? 'colab' : 'socia'; applyPerfil(); renderAll(); };
   }
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
@@ -2786,7 +2813,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
   populateEquipeSelects();
-  carregarPrefs();          // restaura a última análise deste usuário
+  await carregarPrefs();    // restaura a última análise deste usuário
   renderAll();
   tnSetUpdate(lu&&lu.valor?lu.valor:LAST_UPDATE);
 }
@@ -2795,6 +2822,7 @@ async function tnAfterLogin(sb){
   try{
     const {data:{user}}=await sb.auth.getUser();
     if(user&&user.email) tnUserKey = 'tn_prefs_' + user.email;   // preferências por usuário
+    if(user&&user.id) tnUserId = user.id;
     let q=sb.from('profiles').select('papel'); if(user&&user.id) q=q.eq('id',user.id);
     const {data:prof}=await q.maybeSingle();
     if(prof&&prof.papel==='socia'){ perfil='socia'; perfilReal='socia'; applyPerfil(); }
