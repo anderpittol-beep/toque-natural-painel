@@ -426,6 +426,22 @@ window.TN_CONFIG = {
         <div class="grid grid-4" id="premios" style="margin-bottom:18px;"></div>
 
         <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 8px 0;">Benefícios do colaborador</h3>
+          <p class="hint" style="margin:0 0 10px 0;">Vantagens de quem faz parte da equipe Toque Natural Celeiro.</p>
+          <div class="grid grid-2" style="gap:12px;">
+            <div class="card" style="background:var(--surface-2,transparent);">
+              <div class="strong" style="font-size:15px;">🛒 10% de desconto em compras</div>
+              <div class="hint" style="margin-top:4px;">Desconto de 10% para o colaborador em compras de produtos na loja.</div>
+            </div>
+            <div class="card" style="background:var(--surface-2,transparent);">
+              <div class="strong" style="font-size:15px;">⭐ Programa de pontos</div>
+              <div class="hint" style="margin-top:4px;">Acúmulo de pontos nas compras, que podem ser trocados por benefícios internos.</div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Meta diária por loja</h3>
           <p class="hint" style="margin:0 0 12px 0;">Meta diária = meta mensal ÷ dias úteis do mês (segunda a sábado). "Necessário/dia" é quanto ainda falta dividido pelos dias úteis restantes até o fim do mês — o ritmo diário preciso para bater a meta.</p>
           <div style="overflow-x:auto;"><table id="tbl-meta-diaria"></table></div>
@@ -582,7 +598,7 @@ window.TN_CONFIG = {
       <!-- EQUIPE -->
       <section class="view" id="view-equipe">
         <h2 class="section-title">Tarefas da equipe</h2>
-        <p class="section-desc">Delegue tarefas por colaborador e por loja. Fica salvo apenas durante esta sessão do painel — exporte periodicamente se quiser manter histórico. <span class="hint">(O feedback da equipe fica em <strong>Gente e Gestão</strong>, restrito aos Sócio Proprietários.)</span></p>
+        <p class="section-desc">Delegue tarefas por colaborador e por loja, acompanhando o avanço de cada ação do Plano de Ação. <span class="hint">(O <strong>cadastro da equipe</strong> e o <strong>feedback</strong> ficam em <strong>Gente e Gestão</strong>, restritos aos Sócio Proprietários.)</span></p>
 
         <div class="card" id="card-plano" style="margin-bottom:16px;">
           <div class="toolbar" style="justify-content:space-between;align-items:center;">
@@ -593,18 +609,6 @@ window.TN_CONFIG = {
             <button class="btn ghost" id="plano-limpar" style="display:none;">ver todas</button>
           </div>
           <div id="plano-donuts" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px;"></div>
-        </div>
-
-        <div class="card" id="card-equipe-cad" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
-          <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
-            <input type="text" id="eq-nome" placeholder="Nome" required>
-            <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
-            <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <button class="btn primary" type="submit">Adicionar</button>
-          </form>
-          <div id="equipe-list" style="margin-top:12px;"></div>
         </div>
 
         <div>
@@ -622,21 +626,6 @@ window.TN_CONFIG = {
               </select>
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Criar tarefa</button>
             </form>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:20px;">
-          <h3 style="font-size:14px;margin:0 0 8px 0;">Benefícios do colaborador</h3>
-          <p class="hint" style="margin:0 0 10px 0;">Vantagens de quem faz parte da equipe Toque Natural Celeiro.</p>
-          <div class="grid grid-2" style="gap:12px;">
-            <div class="card" style="background:var(--surface-2,transparent);">
-              <div class="strong" style="font-size:15px;">🛒 10% de desconto em compras</div>
-              <div class="hint" style="margin-top:4px;">Desconto de 10% para o colaborador em compras de produtos na loja.</div>
-            </div>
-            <div class="card" style="background:var(--surface-2,transparent);">
-              <div class="strong" style="font-size:15px;">⭐ Programa de pontos</div>
-              <div class="hint" style="margin-top:4px;">Acúmulo de pontos nas compras, que podem ser trocados por benefícios internos.</div>
-            </div>
           </div>
         </div>
 
@@ -818,6 +807,19 @@ window.TN_CONFIG = {
           <p class="hint" style="margin:8px 0 0 0;">Dica: para atualizar a comissão de alguém, lance novamente com o mesmo nome, papel e loja — o registro é substituído.</p>
         </div>
         <div class="card"><div style="overflow-x:auto;"><table id="tbl-gente"></table></div></div>
+
+        <div class="card" id="card-equipe-cad" style="margin-top:20px;">
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
+          <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
+            <input type="text" id="eq-nome" placeholder="Nome" required>
+            <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
+            <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+            <button class="btn primary" type="submit">Adicionar</button>
+          </form>
+          <div id="equipe-list" style="margin-top:12px;"></div>
+        </div>
+
 
         <div class="card" id="card-feedback" style="margin-top:20px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio Proprietários</span></h3>
