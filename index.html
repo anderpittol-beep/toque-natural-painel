@@ -954,7 +954,7 @@ let TAREFAS = [
 ];
 
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
-let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":7000 };
+let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 };
 const SEMANAS_MES = 4.345; // p/ derivar meta semanal a partir da mensal
 let VENDAS_DIARIAS = [
  {data:"03/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:950},
@@ -1778,18 +1778,43 @@ function prioDot(p){
   const c = p==='Urgente'?'var(--critical)':(p==='Alta'?'var(--warning)':'var(--text-muted)');
   return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:6px;" title="${esc(p)}"></span>`;
 }
+/* Índice da tarefa em edição (só Sócio Proprietários) */
+let tarefaEditando = null;
 function tarefaCard(t){
-  const status=t.status;
+  const status=t.status, i=TAREFAS.indexOf(t), socia=(typeof perfil!=='undefined' && perfil==='socia');
+  if(socia && tarefaEditando===i){
+    const opPes = EQUIPE.map(e=>`<option ${e.nome===t.colaborador?'selected':''}>${esc(e.nome)}</option>`).join('');
+    const opArea = acoesMacro().map(a=>`<option ${a===t.area?'selected':''}>${esc(a)}</option>`).join('');
+    const opPri = ['Normal','Alta','Urgente'].map(p=>`<option ${p===t.prioridade?'selected':''}>${p}</option>`).join('');
+    return `<div class="kcard" style="outline:2px solid var(--accent,#1f7a4d);">
+      <input type="text" data-ed="titulo" value="${esc(t.titulo)}" placeholder="Descrição" style="width:100%;box-sizing:border-box;margin-bottom:5px;">
+      <select data-ed="colaborador" style="width:100%;margin-bottom:5px;">${opPes}</select>
+      <select data-ed="area" style="width:100%;margin-bottom:5px;">${opArea}</select>
+      <input type="text" data-ed="prazo" value="${esc(t.prazo||'')}" placeholder="Prazo (ex: 20/08/2026)" style="width:100%;box-sizing:border-box;margin-bottom:5px;">
+      <select data-ed="prioridade" style="width:100%;margin-bottom:5px;">${opPri}</select>
+      <textarea data-ed="detalhe" placeholder="Detalhes" style="width:100%;box-sizing:border-box;min-height:56px;">${esc(t.detalhe||'')}</textarea>
+      <div style="margin-top:7px;display:flex;gap:6px;">
+        <button class="btn primary" data-salvar="${i}">salvar</button>
+        <button class="btn ghost" data-cancelar="1">cancelar</button>
+      </div>
+    </div>`;
+  }
   return `<div class="kcard">
-    <div class="who">${prioDot(t.prioridade)}${esc(t.colaborador)}</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+      <div class="who">${prioDot(t.prioridade)}${esc(t.colaborador)}</div>
+      ${socia?`<div style="flex-shrink:0;">
+        <button class="btn ghost" data-editar="${i}" title="Editar tarefa" style="padding:2px 6px;">✏️</button>
+        <button class="btn ghost" data-excluir="${i}" title="Excluir tarefa" style="padding:2px 6px;">🗑️</button>
+      </div>`:''}
+    </div>
     <div>${esc(t.titulo)}</div>
     ${t.area?`<div style="margin-top:5px;"><span class="store-tag">${esc(t.area)}</span></div>`:''}
     <div class="meta">Prazo: ${esc(t.prazo||'—')} · ${esc(t.prioridade)}</div>
     ${t.detalhe?`<details style="margin-top:5px;"><summary class="hint" style="cursor:pointer;">detalhes</summary><div class="hint" style="margin-top:4px;white-space:pre-wrap;">${esc(t.detalhe)}</div></details>`:''}
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
-      ${status!=='pendente' ? `<button class="btn ghost" data-move="${TAREFAS.indexOf(t)}" data-to="pendente">← pendente</button>`:''}
-      ${status!=='andamento' ? `<button class="btn ghost" data-move="${TAREFAS.indexOf(t)}" data-to="andamento">${status==='pendente'?'iniciar →':'← reabrir'}</button>`:''}
-      ${status!=='concluida' ? `<button class="btn ghost" data-move="${TAREFAS.indexOf(t)}" data-to="concluida">concluir →</button>`:''}
+      ${status!=='pendente' ? `<button class="btn ghost" data-move="${i}" data-to="pendente">← pendente</button>`:''}
+      ${status!=='andamento' ? `<button class="btn ghost" data-move="${i}" data-to="andamento">${status==='pendente'?'iniciar →':'← reabrir'}</button>`:''}
+      ${status!=='concluida' ? `<button class="btn ghost" data-move="${i}" data-to="concluida">concluir →</button>`:''}
     </div>
   </div>`;
 }
@@ -1891,6 +1916,34 @@ function renderTarefas(){
     btn.onclick = ()=>{ const t=TAREFAS[+btn.dataset.move]; t.status = btn.dataset.to;
       if(t.id) tnUpdate('tarefas',{id:t.id},{status:t.status});
       renderTarefas(); };
+  });
+  // edição/exclusão de tarefas — só Sócio Proprietários
+  document.querySelectorAll('[data-editar]').forEach(b=>{
+    b.onclick = ()=>{ tarefaEditando = +b.dataset.editar; renderTarefas(); };
+  });
+  document.querySelectorAll('[data-cancelar]').forEach(b=>{
+    b.onclick = ()=>{ tarefaEditando = null; renderTarefas(); };
+  });
+  document.querySelectorAll('[data-salvar]').forEach(b=>{
+    b.onclick = ()=>{
+      const card = b.closest('.kcard'), t = TAREFAS[+b.dataset.salvar];
+      if(!t) return;
+      const val = k => { const el = card.querySelector('[data-ed="'+k+'"]'); return el ? el.value.trim() : t[k]; };
+      const titulo = val('titulo');
+      if(!titulo){ alert('A descrição da tarefa não pode ficar vazia.'); return; }
+      Object.assign(t, {titulo, colaborador:val('colaborador'), area:val('area'), prazo:val('prazo'), prioridade:val('prioridade'), detalhe:val('detalhe')});
+      if(t.id) tnUpdate('tarefas',{id:t.id},{titulo:t.titulo,colaborador:t.colaborador,area:t.area,prazo:t.prazo,prioridade:t.prioridade,detalhe:t.detalhe});
+      tarefaEditando = null; renderTarefas();
+    };
+  });
+  document.querySelectorAll('[data-excluir]').forEach(b=>{
+    b.onclick = ()=>{
+      const i = +b.dataset.excluir, t = TAREFAS[i];
+      if(!t || !confirm('Excluir a tarefa "'+t.titulo+'"?')) return;
+      TAREFAS.splice(i,1);
+      if(t.id) tnDelete('tarefas',{id:t.id});
+      tarefaEditando = null; renderTarefas();
+    };
   });
 }
 
