@@ -44,6 +44,18 @@ async function upsert(tabela, linhas, onConflict) {
   return linhas.length;
 }
 
+// Competência a partir da qual as despesas fixas são mantidas pelo painel
+const CORTE_FIXAS = { ano: 2026, mes: 9 };   // Set/2026
+const MES_NUM = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
+function fixasNoPainel(competencia) {
+  const m = String(competencia || '').match(/^\s*([A-Za-zçÇ]{3})[^\/]*\/\s*(\d{2,4})/);
+  if (!m) return false;
+  const mes = MES_NUM[m[1].toLowerCase()];
+  let ano = Number(m[2]); if (ano < 100) ano += 2000;
+  if (!mes || !ano) return false;
+  return ano > CORTE_FIXAS.ano || (ano === CORTE_FIXAS.ano && mes >= CORTE_FIXAS.mes);
+}
+
 async function main() {
   console.log('→ Baixando planilha do Drive...');
   const buffer = await baixarPlanilha(PLANILHA_FILE_ID, GOOGLE_CREDENTIALS);
@@ -64,8 +76,14 @@ async function main() {
   await upsert('financeiro_mensal', financeiro, 'ano,mes,loja');
 
   // despesas/folha/boletos: substitui a competência inteira (evita órfãos)
-  await delWhere('despesas_fixas', 'competencia', COMPETENCIA);
-  await insert('despesas_fixas', despesasFixas);
+  // A partir de Set/2026 as despesas fixas passam a ser gerenciadas no painel
+  // (com recorrência e edição própria), então o sync deixa de sobrescrevê-las.
+  if (fixasNoPainel(COMPETENCIA)) {
+    console.log('   despesas_fixas:    geridas no painel a partir de Set/2026 — sync ignorado');
+  } else {
+    await delWhere('despesas_fixas', 'competencia', COMPETENCIA);
+    await insert('despesas_fixas', despesasFixas);
+  }
   await delWhere('folha', 'competencia', COMPETENCIA);
   await insert('folha', folha);
   await delWhere('boletos', 'competencia', COMPETENCIA);

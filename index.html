@@ -331,15 +331,25 @@ window.TN_CONFIG = {
 
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card" id="card-fixas">
-            <h3 style="font-size:14px;margin:0 0 4px 0;">Despesas fixas do mês</h3>
-            <p class="hint" style="margin:0 0 12px 0;">Recorrentes: aluguel, água, internet, sistema... A folha (salários + comissões) entra pelo total, vinda de <strong>Gente e Gestão</strong>.</p>
-            <form class="feedback-form" id="form-fixa" style="grid-template-columns:2fr 1fr 1fr;">
+            <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div>
+                <h3 style="font-size:14px;margin:0 0 4px 0;">Despesas fixas do mês</h3>
+                <p class="hint" style="margin:0;">Recorrentes: aluguel, água, internet, sistema... A folha entra pelo total, vinda de <strong>Gente e Gestão</strong>. Cada mês herda o anterior; ao editar, o novo valor segue para os meses seguintes.</p>
+              </div>
+              <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+                <button class="btn ghost" id="fx-mes-ant" title="Mês anterior" style="padding:3px 9px;">‹</button>
+                <span class="strong" id="fx-competencia" style="font-size:13px;min-width:72px;text-align:center;">—</span>
+                <button class="btn ghost" id="fx-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
+              </div>
+            </div>
+            <form class="feedback-form" id="form-fixa" style="grid-template-columns:2fr 1fr 1fr;margin-top:10px;">
               <input type="text" id="fx-descricao" placeholder="Descrição" required>
               <input type="number" id="fx-valor" placeholder="Valor" step="0.01">
-              <input type="text" id="fx-venc" placeholder="Venc. (dia)">
+              <input type="number" id="fx-venc" placeholder="Venc. (dia)" min="1" max="31">
               <select id="fx-loja" style="grid-column:1/-1;"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar despesa fixa</button>
             </form>
+            <p class="hint" id="fx-aviso" style="margin:8px 0 0 0;"></p>
             <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-fixas"></table></div>
           </div>
           <div class="card">
@@ -1054,29 +1064,29 @@ let CAIXA_DIARIO = [];
 /* Despesas fixas mensais (SEM folha) — reais, planilha "Despesas de Ago".
    Salários/encargos ficam em GENTE (área Gente e Gestão) e entram no total via renderCaixa. */
 let DESPESAS_FIXAS = [
- {loja:"Ouro Verde", descricao:"Aluguel", valor:1100, venc:""},
- {loja:"Ouro Verde", descricao:"Luz", valor:149.43, venc:""},
- {loja:"Ouro Verde", descricao:"Água", valor:119.8, venc:""},
- {loja:"Ouro Verde", descricao:"Internet", valor:114.9, venc:""},
- {loja:"Ouro Verde", descricao:"Sistema", valor:102.13, venc:""},
- {loja:"Ouro Verde", descricao:"Escritório", valor:333.33, venc:""},
- {loja:"Ouro Verde", descricao:"Guarda (segurança)", valor:40, venc:""},
- {loja:"Ouro Verde", descricao:"Imposto DAS", valor:260.49, venc:""},
- {loja:"Ouro Verde", descricao:"Rádio", valor:150, venc:""},
- {loja:"Toledo", descricao:"Aluguel", valor:1450, venc:""},
- {loja:"Toledo", descricao:"Luz", valor:122.21, venc:""},
- {loja:"Toledo", descricao:"Água", valor:180.42, venc:""},
- {loja:"Toledo", descricao:"Internet", valor:135, venc:""},
- {loja:"Toledo", descricao:"Sistema", valor:200, venc:""},
- {loja:"Toledo", descricao:"Escritório", valor:333.33, venc:""},
- {loja:"Toledo", descricao:"Imposto DAS", valor:108.54, venc:""},
- {loja:"Itaipulândia", descricao:"Aluguel", valor:1781.45, venc:""},
- {loja:"Itaipulândia", descricao:"Internet", valor:109.9, venc:""},
- {loja:"Itaipulândia", descricao:"Sistema", valor:102.12, venc:""},
- {loja:"Itaipulândia", descricao:"Escritório", valor:333.33, venc:""},
- {loja:"Itaipulândia", descricao:"Imposto DAS", valor:526.83, venc:""},
- {loja:"Itaipulândia", descricao:"Assemetra", valor:80, venc:""},
- {loja:"Itaipulândia", descricao:"Cartão de Crédito", valor:2742.23, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Aluguel", valor:1100, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Luz", valor:149.43, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Água", valor:119.8, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Internet", valor:114.9, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Sistema", valor:102.13, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Escritório", valor:333.33, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Guarda (segurança)", valor:40, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Imposto DAS", valor:260.49, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Ouro Verde", descricao:"Rádio", valor:150, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Aluguel", valor:1450, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Luz", valor:122.21, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Água", valor:180.42, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Internet", valor:135, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Sistema", valor:200, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Escritório", valor:333.33, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Toledo", descricao:"Imposto DAS", valor:108.54, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Aluguel", valor:1781.45, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Internet", valor:109.9, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Sistema", valor:102.12, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Escritório", valor:333.33, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Imposto DAS", valor:526.83, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Assemetra", valor:80, venc:""},
+ {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Cartão de Crédito", valor:2742.23, venc:""},
 ];
 /* GENTE E GESTÃO — folha por pessoa: salário + comissão do mês + encargos. Confidencial (só perfil Sócia). */
 let GENTE = [
@@ -2317,12 +2327,67 @@ function renderPatrimonio(){
       ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido</td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
 }
 
+/* ===== DESPESAS FIXAS RECORRENTES (competência mês/ano) =====
+   Cada mês herda as despesas do mês anterior. Editar/excluir vale da competência
+   em diante; o histórico dos meses já fechados não muda. */
+const MES_ABREV = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const FIXAS_CORTE = { ano:2026, mes:9 };          // a partir daqui o painel manda
+let fxAno = TODAY.getFullYear(), fxMes = TODAY.getMonth()+1;
+let fixaEditando = null;                           // chave da linha em edição
+function fxKey(d){ return d.id || ('L:'+d.ano+'-'+d.mes+'-'+d.loja+'-'+d.descricao); }
+
+function fxCompetencia(){ return MES_ABREV[fxMes] + '/' + String(fxAno).slice(2); }
+function fxGerenciavel(){ return fxAno > FIXAS_CORTE.ano || (fxAno===FIXAS_CORTE.ano && fxMes >= FIXAS_CORTE.mes); }
+function fxMesAnterior(a,m){ return m===1 ? {ano:a-1, mes:12} : {ano:a, mes:m-1}; }
+
+/* Despesas válidas para a competência: as do próprio mês; se ainda não houver
+   lançamento nenhum, herda o mês anterior (recorrência). */
+function fixasDaCompetencia(ano, mes, prof){
+  prof = prof || 0;
+  const doMes = DESPESAS_FIXAS.filter(d=> +d.ano===ano && +d.mes===mes);
+  if(doMes.length || prof>24) return doMes;
+  const p = fxMesAnterior(ano, mes);
+  return fixasDaCompetencia(p.ano, p.mes, prof+1).map(d=> ({...d, id:null, herdada:true, ano, mes}));
+}
+/* Materializa no banco as despesas herdadas, para poder editar/excluir o mês */
+async function fxMaterializar(){
+  const herdadas = fixasDaCompetencia(fxAno, fxMes).filter(d=>d.herdada);
+  if(!herdadas.length) return false;
+  const regs = herdadas.map(d=>({ competencia: fxCompetencia(), ano: fxAno, mes: fxMes, loja: d.loja,
+                  descricao: d.descricao, valor: +d.valor||0, venc: d.venc||'', origem: 'painel' }));
+  regs.forEach(r=>DESPESAS_FIXAS.push(r));
+  // grava tudo de uma vez e devolve os ids gerados
+  try{
+    if(window.TN&&window.TN.sb){
+      const {data,error}=await window.TN.sb.from('despesas_fixas').insert(regs).select();
+      if(error) console.warn('insert despesas_fixas', error.message);
+      else if(Array.isArray(data)) data.forEach((row,i)=>{ if(regs[i]) regs[i].id = row.id; });
+    }
+  }catch(e){ console.warn(e); }
+  return true;
+}
+function renderFixas(){
+  const lbl = document.getElementById('fx-competencia');
+  if(lbl) lbl.textContent = fxCompetencia();
+  const aviso = document.getElementById('fx-aviso');
+  if(aviso){
+    aviso.textContent = fxGerenciavel()
+      ? ''
+      : 'Competência anterior a Set/26: os valores vêm da planilha e não são editáveis aqui.';
+  }
+  const ant = document.getElementById('fx-mes-ant'), prox = document.getElementById('fx-mes-prox');
+  if(ant) ant.onclick = ()=>{ const p=fxMesAnterior(fxAno,fxMes); fxAno=p.ano; fxMes=p.mes; fixaEditando=null; renderCaixa(); };
+  if(prox) prox.onclick = ()=>{ if(fxMes===12){fxAno++;fxMes=1;} else fxMes++; fixaEditando=null; renderCaixa(); };
+  const form = document.getElementById('form-fixa');
+  if(form) form.style.display = fxGerenciavel() ? '' : 'none';
+}
 /* ============ RENDER: CAIXA DIÁRIO & DESPESAS ============ */
 function renderCaixa(){
+  renderFixas();
   const s = currentStore();
   const inStore = (l)=> selStores().includes(l) || l==='Todas';
   const caixa = CAIXA_DIARIO.filter(x=>inStore(x.loja));
-  const fixas = DESPESAS_FIXAS.filter(x=>inStore(x.loja));
+  const fixas = fixasDaCompetencia(fxAno, fxMes).filter(x=>inStore(x.loja));
   const boletos = BOLETOS.filter(x=>inStore(x.loja));
   const fech = c => (c.inicial||0)+(c.entradas||0)-(c.saidas||0);
 
@@ -2376,11 +2441,70 @@ function renderCaixa(){
   // Tabela despesas fixas (+ linha de folha vinda de Gente e Gestão)
   const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>
     `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td></tr>`).join('');
+  const podeEditar = socia && fxGerenciavel();
+  const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   document.getElementById('tbl-fixas').innerHTML = `
-    <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th></tr></thead>
-    <tbody>${fixas.map(f=>`<tr><td class="strong">${esc(f.descricao)}</td><td>${esc(f.loja)}</td><td>dia ${esc(f.venc||'—')}</td><td>${BRL(f.valor)}</td></tr>`).join('')}
-    ${folhaRows}
-    <tr><td colspan="3" class="strong" style="text-align:right;">Total fixo/mês (com folha)</td><td class="strong">${BRL(totFixas)}</td></tr></tbody>`;
+    <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th>${podeEditar?'<th></th>':''}</tr></thead>
+    <tbody>${fixas.map(f=>{
+      if(podeEditar && fixaEditando && fxKey(f)===fixaEditando){
+        return `<tr>
+          <td><input type="text" data-fe="descricao" value="${esc(f.descricao)}" style="width:100%;box-sizing:border-box;"></td>
+          <td><select data-fe="loja">${lojasOpt.map(l=>`<option ${l===f.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td><input type="number" data-fe="venc" value="${esc(f.venc||'')}" min="1" max="31" style="width:64px;"></td>
+          <td><input type="number" data-fe="valor" value="${(+f.valor||0)}" step="0.01" style="width:104px;"></td>
+          <td style="white-space:nowrap;"><button class="btn primary" data-fxsalvar="1" style="padding:2px 8px;">salvar</button>
+              <button class="btn ghost" data-fxcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
+      return `<tr>
+        <td class="strong">${esc(f.descricao)}</td>
+        <td>${esc(f.loja)}</td>
+        <td>dia ${esc(f.venc||'—')}</td>
+        <td>${BRL(f.valor)}</td>
+        ${podeEditar?`<td style="white-space:nowrap;text-align:right;">
+          <button class="btn ghost" data-fxeditar="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+      </tr>`;}).join('')}
+    ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td></tr>' : '</tr>')}
+    <tr><td colspan="3" class="strong" style="text-align:right;">Total fixo/mês (com folha)</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
+
+  // ações de editar / excluir (materializa o mês herdado antes de alterar)
+  document.querySelectorAll('[data-fxeditar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const desc = b.dataset.fxdesc, loja = b.dataset.fxloja;
+      await fxMaterializar();                      // 1º uso do mês: cria as herdadas
+      const d = DESPESAS_FIXAS.find(x=> +x.ano===fxAno && +x.mes===fxMes && x.loja===loja && x.descricao===desc);
+      fixaEditando = d ? fxKey(d) : null;
+      renderCaixa();
+    };
+  });
+  document.querySelectorAll('[data-fxcancelar]').forEach(b=>{ b.onclick = ()=>{ fixaEditando=null; renderCaixa(); }; });
+  document.querySelectorAll('[data-fxsalvar]').forEach(b=>{
+    b.onclick = ()=>{
+      const tr = b.closest('tr');
+      const d = DESPESAS_FIXAS.find(x=>fxKey(x)===fixaEditando);
+      if(!d) return;
+      const get = k => { const el = tr.querySelector('[data-fe="'+k+'"]'); return el ? el.value.trim() : ''; };
+      const desc = get('descricao');
+      if(!desc){ alert('A descrição não pode ficar vazia.'); return; }
+      Object.assign(d, { descricao:desc, loja:get('loja'), venc:get('venc'), valor:num(get('valor'))||0 });
+      if(d.id) tnUpdate('despesas_fixas',{id:d.id},{descricao:d.descricao, loja:d.loja, venc:d.venc, valor:d.valor});
+      fixaEditando = null; renderCaixa();
+    };
+  });
+  document.querySelectorAll('[data-fxexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      const desc = b.dataset.fxdesc, loja = b.dataset.fxloja;
+      if(!confirm('Excluir "'+desc+'" a partir de '+fxCompetencia()+'?')) return;
+      await fxMaterializar();
+      const i = DESPESAS_FIXAS.findIndex(x=> +x.ano===fxAno && +x.mes===fxMes && x.loja===loja && x.descricao===desc);
+      if(i<0) return;
+      const id = DESPESAS_FIXAS[i].id;
+      DESPESAS_FIXAS.splice(i,1);
+      if(id) tnDelete('despesas_fixas',{id});
+      renderCaixa();
+    };
+  });
 
   // Tabela boletos/variáveis
   const bf = document.getElementById('boletoStatusFilter').value;
@@ -2614,14 +2738,21 @@ document.getElementById('form-caixa').addEventListener('submit', e=>{
   tnInsert('caixa_diario',{data:document.getElementById('cx-data').value||TODAY.toLocaleDateString('pt-BR'),loja:document.getElementById('cx-loja').value,vendas:num(document.getElementById('cx-vendas').value)||0,saldo_inicial:num(document.getElementById('cx-inicial').value)||0,saldo_final:num(document.getElementById('cx-entradas').value)||0,saidas:num(document.getElementById('cx-saidas').value)||0,saldo_conta:num(document.getElementById('cx-conta').value)||0});
   e.target.reset(); renderCaixa(); renderDesempenho();
 });
-document.getElementById('form-fixa').addEventListener('submit', e=>{
+document.getElementById('form-fixa').addEventListener('submit', async e=>{
   e.preventDefault();
-  DESPESAS_FIXAS.push({
-    descricao: document.getElementById('fx-descricao').value,
+  if(!fxGerenciavel()){ alert('Escolha uma competência a partir de Set/26 para incluir despesas.'); return; }
+  await fxMaterializar();     // garante que o mês já existe antes de somar a nova
+  const _fx = {
+    competencia: fxCompetencia(), ano: fxAno, mes: fxMes,
+    descricao: document.getElementById('fx-descricao').value.trim(),
     valor: num(document.getElementById('fx-valor').value)||0,
     venc: document.getElementById('fx-venc').value,
     loja: document.getElementById('fx-loja').value,
-  });
+    origem: 'painel',
+  };
+  if(!_fx.descricao) return;
+  DESPESAS_FIXAS.push(_fx);
+  await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
 });
 document.getElementById('form-boleto').addEventListener('submit', e=>{
@@ -2796,7 +2927,7 @@ async function tnLoadAll(sb){
   const res={};
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
-  try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||''})); }catch(e){}
+  try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||''})); }catch(e){}
   try{ tnReplaceArray(GENTE,res.folha,r=>({pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({data:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
@@ -2911,6 +3042,17 @@ function tnMode(mode){
   else if(mode==='setpass'){ title.textContent='Criar sua senha'; sub.textContent='Escolha a senha que você usará para entrar no painel.'; }
 }
 // grava no Supabase (fire-and-forget; não trava a UI se falhar)
+async function tnInsertRet(tabela,row){
+  try{
+    if(window.TN&&window.TN.sb){
+      const {data,error}=await window.TN.sb.from(tabela).insert(row).select().maybeSingle();
+      if(error){ console.warn('insert',tabela,error.message); return null; }
+      if(data&&data.id) row.id=data.id;
+      return data;
+    }
+  }catch(e){ console.warn(e); }
+  return null;
+}
 async function tnUpdate(tabela,match,valores){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).update(valores).match(match); if(error) console.warn('update',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
