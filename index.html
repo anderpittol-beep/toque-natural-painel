@@ -224,7 +224,6 @@ window.TN_CONFIG = {
     <nav class="navlist" id="nav">
       <div class="nav-group">Gerencial</div>
       <button data-view="visao-geral" class="active"><span class="navicon">◆</span>Visão geral</button>
-      <button data-view="financeiro"><span class="navicon">$</span>Receitas &amp; despesas</button>
       <button data-view="caixa"><span class="navicon">▦</span>Caixa diário &amp; despesas</button>
       <button data-view="projecao"><span class="navicon">↗</span>Projeção 12 meses</button>
       <button data-view="margem"><span class="navicon">%</span>Margem por produto</button>
@@ -282,31 +281,28 @@ window.TN_CONFIG = {
           <p class="section-desc">Contagens calculadas a partir dos cadastros de produto, estoque, validade e clientes. Clique para ir direto à lista.</p>
           <div class="grid grid-4" id="alert-cards"></div>
         </div>
+        <div class="section-block">
+          <h2 class="section-title">Receitas x despesas</h2>
+          <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
+          <div class="toolbar">
+            <div class="import-box">
+              <button class="btn" id="btn-import-financeiro">Importar relatório financeiro (CSV)</button>
+              <button class="btn ghost" id="btn-template-financeiro">baixar modelo</button>
+              <input type="file" id="file-financeiro" accept=".csv">
+            </div>
+          </div>
+          <div class="card chart-card">
+            <div class="legend">
+              <div class="item">Em cada mês: <strong style="margin:0 4px;">R</strong> = Receita &nbsp;·&nbsp; <strong style="margin:0 4px;">D</strong> = Despesa. Cores = participação de cada loja.</div>
+            </div>
+            <div id="chart-financeiro"></div>
+            <div class="table-toggle"><a href="#" class="btn ghost" data-toggle="tbl-financeiro">ver como tabela</a></div>
+            <div class="hidden-table" id="tbl-financeiro"></div>
+          </div>
+        </div>
         <div class="section-block card">
           <h2 class="section-title" style="margin-bottom:12px;">Lucro mensal — consolidado (<span class="js-periodo">Abr–Jul/26</span>)</h2>
           <div id="chart-lucro-mini"></div>
-        </div>
-      </section>
-
-      <!-- FINANCEIRO -->
-      <section class="view" id="view-financeiro">
-        <h2 class="section-title">Receitas x despesas</h2>
-        <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
-        <div class="toolbar">
-          <div class="import-box">
-            <button class="btn" id="btn-import-financeiro">Importar relatório financeiro (CSV)</button>
-            <button class="btn ghost" id="btn-template-financeiro">baixar modelo</button>
-            <input type="file" id="file-financeiro" accept=".csv">
-          </div>
-        </div>
-        <div class="grid grid-3" id="fin-kpis" style="margin-bottom:16px;"></div>
-        <div class="card chart-card">
-          <div class="legend">
-            <div class="item">Em cada mês: <strong style="margin:0 4px;">R</strong> = Receita &nbsp;·&nbsp; <strong style="margin:0 4px;">D</strong> = Despesa. Cores = participação de cada loja.</div>
-          </div>
-          <div id="chart-financeiro"></div>
-          <div class="table-toggle"><a href="#" class="btn ghost" data-toggle="tbl-financeiro">ver como tabela</a></div>
-          <div class="hidden-table" id="tbl-financeiro"></div>
         </div>
       </section>
 
@@ -1290,11 +1286,7 @@ function renderFinanceiro(){
   const despesa = idx.map(j=> lojas.reduce((sum,l)=>sum+(FINANCEIRO[l].despesa[j]||0),0));
   const totReceita = receita.reduce((a,b)=>a+b,0), totDespesa = despesa.reduce((a,b)=>a+b,0);
 
-  document.getElementById('fin-kpis').innerHTML = `
-    <div class="card stat-tile"><div class="label">Receita (${periodoLabel()})</div><div class="value">${BRL(totReceita)}</div></div>
-    <div class="card stat-tile"><div class="label">Despesa (${periodoLabel()})</div><div class="value">${BRL(totDespesa)}</div></div>
-    <div class="card stat-tile ${totReceita-totDespesa>=0?'accent-good':'accent-critical'}"><div class="label">Lucro (${periodoLabel()})</div><div class="value">${BRL(totReceita-totDespesa)}</div></div>
-  `;
+  // KPIs de receita/despesa/lucro ficam no bloco único da Visão geral (kpi-cards)
 
   document.getElementById('chart-financeiro').innerHTML = renderStackedChart(meses, [
     {name:'Receita', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[j]); return o;}},
@@ -2471,7 +2463,6 @@ wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
 /* ============ NAV / VIEW SWITCH ============ */
 const VIEW_TITLES = {
   'visao-geral':['Visão geral','Consolidado das lojas selecionadas'],
-  'financeiro':['Receitas & despesas','Relatório financeiro por loja'],
   'caixa':['Caixa diário & despesas','Recursos disponíveis, fechamento e despesas por loja'],
   'gente':['Gente e Gestão','Folha confidencial: salários, comissões e encargos'],
   'projecao':['Projeção 12 meses','Cenário Ago/26 → Jul/27 com base nos dados reais'],
