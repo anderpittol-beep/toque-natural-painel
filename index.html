@@ -606,8 +606,12 @@ window.TN_CONFIG = {
               <h3 style="font-size:14px;margin:0;">Plano de Ação — progresso das ações</h3>
               <p class="hint" style="margin:2px 0 0 0;">Percentual de micro tarefas concluídas em cada ação. Clique numa rosca para filtrar o quadro.</p>
             </div>
-            <button class="btn ghost" id="plano-limpar" style="display:none;">ver todas</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn ghost" id="plano-nova" style="display:none;">+ nova ação</button>
+              <button class="btn ghost" id="plano-limpar" style="display:none;">ver todas</button>
+            </div>
           </div>
+          <div id="plano-form"></div>
           <div id="plano-donuts" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px;"></div>
         </div>
 
@@ -1839,14 +1843,77 @@ function donutSVG(pct, cor){
     <text x="45" y="50" text-anchor="middle" font-size="17" font-weight="700" fill="var(--text-primary)">${Math.round(pct)}%</text>
   </svg>`;
 }
+let acaoEditando = null; // null | 'nova' | <nome da ação>
+function acaoRecord(area){ return TAREFAS.find(t=>t.tipo==='acao' && (t.area||'')===area) || null; }
+function planoFormHTML(){
+  if(acaoEditando===null) return '';
+  const nova = acaoEditando==='nova';
+  const rec = nova ? {area:'',colaborador:(EQUIPE[0]?EQUIPE[0].nome:''),prioridade:'Normal',detalhe:''} : (acaoRecord(acaoEditando)||{area:acaoEditando,colaborador:'',prioridade:'Normal',detalhe:''});
+  const opPes = EQUIPE.map(e=>`<option ${e.nome===rec.colaborador?'selected':''}>${esc(e.nome)}</option>`).join('');
+  const opPri = ['Normal','Alta','Urgente'].map(p=>`<option ${p===(rec.prioridade||'Normal')?'selected':''}>${p}</option>`).join('');
+  return `<div class="card" style="margin-top:12px;outline:2px solid var(--accent,#1f7a4d);">
+    <h4 style="margin:0 0 8px 0;font-size:13px;">${nova?'Nova ação macro':'Editar ação'}</h4>
+    <div class="feedback-form" style="grid-template-columns:repeat(2,1fr);">
+      <input type="text" id="ac-nome" placeholder="Nome da ação" value="${esc(rec.area||'')}" style="grid-column:1/-1;">
+      <select id="ac-colab">${opPes}</select>
+      <select id="ac-prioridade">${opPri}</select>
+      <textarea id="ac-detalhe" placeholder="Detalhes / observações" style="grid-column:1/-1;min-height:56px;">${esc(rec.detalhe||'')}</textarea>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;">
+      <button class="btn primary" id="ac-salvar">${nova?'Criar ação':'Salvar'}</button>
+      <button class="btn ghost" id="ac-cancelar">cancelar</button>
+    </div>
+  </div>`;
+}
+function salvarAcao(){
+  const nome=(document.getElementById('ac-nome').value||'').trim();
+  if(!nome){ alert('Informe o nome da ação.'); return; }
+  const colab=document.getElementById('ac-colab').value, prio=document.getElementById('ac-prioridade').value, det=document.getElementById('ac-detalhe').value;
+  if(acaoEditando==='nova'){
+    if(acoesMacro().includes(nome)){ alert('Já existe uma ação com esse nome.'); return; }
+    const rec={tipo:'acao', area:nome, titulo:nome, colaborador:colab, prazo:'', prioridade:prio, status:'pendente', detalhe:det};
+    TAREFAS.push(rec); tnInsert('tarefas', rec);
+  } else {
+    const antigo=acaoEditando, rec=acaoRecord(antigo);
+    if(nome!==antigo && acoesMacro().includes(nome)){ alert('Já existe uma ação com esse nome.'); return; }
+    if(rec){
+      if(nome!==antigo){
+        TAREFAS.filter(t=>t.tipo!=='acao' && (t.area||'')===antigo).forEach(t=>{ t.area=nome; if(t.id) tnUpdate('tarefas',{id:t.id},{area:nome}); });
+        if(planoFiltro===antigo) planoFiltro=nome;
+      }
+      Object.assign(rec,{area:nome, titulo:nome, colaborador:colab, prioridade:prio, detalhe:det});
+      if(rec.id) tnUpdate('tarefas',{id:rec.id},{area:nome,titulo:nome,colaborador:colab,prioridade:prio,detalhe:det});
+    }
+  }
+  acaoEditando=null; renderPlanoAcao(); renderTarefas();
+}
+function excluirAcao(area){
+  const rec=acaoRecord(area);
+  const micros=TAREFAS.filter(t=>t.tipo!=='acao' && (t.area||'')===area);
+  const msg=micros.length ? 'Excluir a ação "'+area+'" e suas '+micros.length+' tarefa(s)?' : 'Excluir a ação "'+area+'"?';
+  if(!confirm(msg)) return;
+  micros.forEach(t=>{ if(t.id) tnDelete('tarefas',{id:t.id}); });
+  if(rec && rec.id) tnDelete('tarefas',{id:rec.id});
+  for(let i=TAREFAS.length-1;i>=0;i--){ const t=TAREFAS[i]; if(t===rec || (t.tipo!=='acao' && (t.area||'')===area)) TAREFAS.splice(i,1); }
+  if(planoFiltro===area) planoFiltro='';
+  if(acaoEditando===area) acaoEditando=null;
+  renderPlanoAcao(); renderTarefas();
+}
 function renderPlanoAcao(){
   const box = document.getElementById('plano-donuts');
   if(!box) return;
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
   box.innerHTML = acoesMacro().map(area=>{
     const p = progressoArea(area);
     const cor = p.total===0 ? 'var(--text-muted)' : (p.pct>=100?'var(--good)':(p.pct>0?'var(--warning)':'var(--critical)'));
     const sel = planoFiltro===area;
-    return `<div class="card clickable" data-plano="${esc(area)}" style="text-align:center;cursor:pointer;${sel?'outline:2px solid var(--accent,#1f7a4d);':''}">
+    const real = !!acaoRecord(area);
+    const acoes = (socia && real) ? `<div style="position:absolute;top:6px;right:6px;display:flex;gap:2px;">
+        <button class="btn ghost" data-acedit="${esc(area)}" title="Editar ação" style="padding:1px 5px;">✏️</button>
+        <button class="btn ghost" data-acdel="${esc(area)}" title="Excluir ação" style="padding:1px 5px;">🗑️</button>
+      </div>` : '';
+    return `<div class="card clickable" data-plano="${esc(area)}" style="position:relative;text-align:center;cursor:pointer;${sel?'outline:2px solid var(--accent,#1f7a4d);':''}">
+      ${acoes}
       ${donutSVG(p.pct, cor)}
       <div class="strong" style="font-size:12.5px;margin-top:6px;line-height:1.25;">${esc(area)}</div>
       <div class="hint" style="margin-top:2px;">${p.total ? p.feitas+' de '+p.total+' concluída'+(p.total>1?'s':'') : 'sem tarefas'}</div>
@@ -1855,6 +1922,18 @@ function renderPlanoAcao(){
   box.querySelectorAll('[data-plano]').forEach(el=>{
     el.onclick = ()=>{ planoFiltro = (planoFiltro===el.dataset.plano) ? '' : el.dataset.plano; renderPlanoAcao(); renderTarefas(); };
   });
+  box.querySelectorAll('[data-acedit]').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); acaoEditando=b.dataset.acedit; renderPlanoAcao(); }; });
+  box.querySelectorAll('[data-acdel]').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); excluirAcao(b.dataset.acdel); }; });
+  // formulário de nova/editar ação
+  const fbox = document.getElementById('plano-form');
+  if(fbox){
+    fbox.innerHTML = planoFormHTML();
+    const bs=fbox.querySelector('#ac-salvar'), bc=fbox.querySelector('#ac-cancelar');
+    if(bs) bs.onclick=salvarAcao;
+    if(bc) bc.onclick=()=>{ acaoEditando=null; renderPlanoAcao(); };
+  }
+  const bnova=document.getElementById('plano-nova');
+  if(bnova){ bnova.style.display = socia ? '' : 'none'; bnova.onclick=()=>{ acaoEditando='nova'; renderPlanoAcao(); }; }
   const btn = document.getElementById('plano-limpar');
   if(btn){ btn.style.display = planoFiltro ? '' : 'none'; btn.onclick = ()=>{ planoFiltro=''; renderPlanoAcao(); renderTarefas(); }; }
   // seletor de ação no formulário de nova tarefa
