@@ -254,6 +254,7 @@ window.TN_CONFIG = {
         <span id="anoTabs" style="display:inline-flex;gap:4px;align-items:center;"></span>
         <span id="mesChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;"></span>
         <button class="btn ghost" id="mesLimpar" style="padding:3px 8px;font-size:12px;">todos</button>
+        <button class="btn ghost" id="mesNenhum" style="padding:3px 8px;font-size:12px;">desmarcar</button>
         <span style="opacity:.35;">|</span>
         <span class="hint">Comparar lojas</span>
         <span id="storeChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">
@@ -261,7 +262,7 @@ window.TN_CONFIG = {
           <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Ouro Verde" checked> Ouro Verde</label>
           <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Toledo" checked> Toledo</label>
         </span>
-        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
+        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
@@ -1166,10 +1167,10 @@ function filteredClientes(){
 /* Rótulo do período com base nos meses realmente carregados (ex.: "Abr–Ago/26") */
 function periodoLabel(){
   const m = (typeof mesesLabels==="function") ? mesesLabels() : ((FINANCEIRO && FINANCEIRO.meses) || []);
-  if(!m.length) return "";
+  if(!m.length) return "nenhum mês selecionado";
   let base;
   if(m.length===1) base = m[0];
-  else if(typeof mesesSel!=="undefined" && mesesSel.length) base = m.join(", ");   // comparação avulsa
+  else if(typeof mesesSel!=="undefined" && mesesSel!==null) base = m.join(", ");   // comparação avulsa
   else base = m[0].split("/")[0] + "–" + m[m.length-1];
   const todos = (FINANCEIRO && FINANCEIRO.meses) || [];
   const p = FINANCEIRO && FINANCEIRO.parcialAte;
@@ -1180,8 +1181,29 @@ function atualizarPeriodo(){
   const txt = periodoLabel();
   document.querySelectorAll(".js-periodo").forEach(el=> el.textContent = txt);
 }
+/* ===== PREFERÊNCIAS DO USUÁRIO (última análise) =====
+   Guarda no próprio navegador, por e-mail logado, os meses/lojas escolhidos. */
+let tnUserKey = 'tn_prefs_anon';
+function salvarPrefs(){
+  try{
+    const lojas = [...document.querySelectorAll('.store-chk')].filter(c=>c.checked).map(c=>c.value);
+    localStorage.setItem(tnUserKey, JSON.stringify({ mesesSel, anoAtivo, lojas }));
+  }catch(_){}
+}
+function carregarPrefs(){
+  try{
+    const raw = localStorage.getItem(tnUserKey);
+    if(!raw) return;
+    const p = JSON.parse(raw);
+    if(p && ('mesesSel' in p)) mesesSel = p.mesesSel;      // null | [] | [..]
+    if(p && p.anoAtivo) anoAtivo = p.anoAtivo;
+    if(p && Array.isArray(p.lojas) && p.lojas.length){
+      document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
+    }
+  }catch(_){}
+}
 /* ===== FILTRO DE MESES (abas de ano + checks) — permite comparar Ago/26 com Ago/27 ===== */
-let mesesSel = [];      // rótulos escolhidos, ex.: ["Ago/26","Ago/27"]. Vazio = todos.
+let mesesSel = null;    // null = todos (padrão) | [] = nenhum | ['Ago/26',...] = seleção
 let anoAtivo = null;    // aba de ano em exibição
 
 function anosDisponiveis(){
@@ -1191,9 +1213,8 @@ function anosDisponiveis(){
 /* Índices (em FINANCEIRO.meses) dos meses selecionados, sempre em ordem */
 function mesesIdx(){
   const m = (FINANCEIRO && FINANCEIRO.meses) || [];
-  if(!mesesSel.length) return m.map((_,i)=>i);
-  const idx = m.map((lab,i)=> mesesSel.includes(lab) ? i : -1).filter(i=>i>=0);
-  return idx.length ? idx : m.map((_,i)=>i);   // nunca deixa vazio
+  if(mesesSel === null) return m.map((_,i)=>i);          // sem filtro = todos
+  return m.map((lab,i)=> mesesSel.includes(lab) ? i : -1).filter(i=>i>=0);
 }
 function mesesLabels(){ const m=(FINANCEIRO&&FINANCEIRO.meses)||[]; return mesesIdx().map(i=>m[i]); }
 /* Soma de um campo (receita/despesa) da loja, só nos meses selecionados */
@@ -1210,25 +1231,31 @@ function renderMesFiltro(){
   tabs.innerHTML = anos.map(a=>`<button class="btn ${a===anoAtivo?'primary':'ghost'}" data-ano="${esc(a)}" style="padding:3px 9px;font-size:12px;">20${esc(a)}</button>`).join('');
   const doAno = (FINANCEIRO.meses||[]).filter(x=>x.split("/")[1]===anoAtivo);
   box.innerHTML = doAno.map(lab=>{
-    const on = !mesesSel.length || mesesSel.includes(lab);
+    const on = (mesesSel === null) || mesesSel.includes(lab);
     return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;"><input type="checkbox" class="mes-chk" value="${esc(lab)}" ${on?'checked':''}> ${esc(lab.split("/")[0])}</label>`;
   }).join('');
-  tabs.querySelectorAll('[data-ano]').forEach(b=>{ b.onclick=()=>{ anoAtivo=b.dataset.ano; renderMesFiltro(); }; });
+  tabs.querySelectorAll('[data-ano]').forEach(b=>{ b.onclick=()=>{ anoAtivo=b.dataset.ano; salvarPrefs(); renderMesFiltro(); }; });
   box.querySelectorAll('.mes-chk').forEach(chk=>{
     chk.onchange = ()=>{
       const todos = (FINANCEIRO.meses||[]).slice();
-      let sel = mesesSel.length ? mesesSel.slice() : todos.slice();   // começa do estado visível
+      let sel = (mesesSel === null) ? todos.slice() : mesesSel.slice();  // parte do estado visível
       sel = chk.checked ? [...new Set(sel.concat(chk.value))] : sel.filter(x=>x!==chk.value);
-      mesesSel = (sel.length===todos.length) ? [] : sel;              // tudo marcado = sem filtro
-      renderAll();
+      mesesSel = (sel.length===todos.length) ? null : sel;              // tudo marcado = sem filtro
+      salvarPrefs(); renderAll();
     };
   });
-  const btn = document.getElementById('mesLimpar');
-  if(btn){
-    const filtrando = mesesSel.length>0;
-    btn.textContent = filtrando ? 'todos os meses' : 'todos';
-    btn.style.opacity = filtrando ? '1' : '.55';
-    btn.onclick = ()=>{ mesesSel=[]; renderAll(); };
+  const filtrando = (mesesSel !== null);
+  const btnT = document.getElementById('mesLimpar');
+  if(btnT){
+    btnT.textContent = filtrando ? 'todos os meses' : 'todos';
+    btnT.style.opacity = filtrando ? '1' : '.55';
+    btnT.onclick = ()=>{ mesesSel=null; salvarPrefs(); renderAll(); };
+  }
+  const btnN = document.getElementById('mesNenhum');
+  if(btnN){
+    const nenhum = Array.isArray(mesesSel) && mesesSel.length===0;
+    btnN.style.opacity = nenhum ? '.55' : '1';
+    btnN.onclick = ()=>{ mesesSel=[]; salvarPrefs(); renderAll(); };
   }
 }
 function renderVisaoGeral(){
@@ -2381,14 +2408,22 @@ function renderGente(){
 
 /* ============ PERFIL DE ACESSO (Sócia / Colaboradora) ============ */
 // Acesso de Sócio vem do login (Supabase profiles.papel='socia'); sem PIN.
-let perfil = 'colab';
+let perfil = 'colab';        // visão em uso
+let perfilReal = 'colab';    // papel verdadeiro, vindo do login
 function applyPerfil(){
   document.body.setAttribute('data-perfil', perfil);
   const socia = perfil==='socia';
+  // botão de alternar visão: só aparece para quem é sócio de verdade
+  const tg = document.getElementById('perfil-toggle');
+  if(tg){
+    tg.style.display = (perfilReal==='socia') ? '' : 'none';
+    tg.textContent = socia ? 'ver como Colaboradora' : 'voltar para Sócio';
+    tg.onclick = ()=>{ perfil = socia ? 'colab' : 'socia'; applyPerfil(); renderAll(); };
+  }
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : 'Perfil: Colaboradora';
+  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : (perfilReal==='socia' ? 'Prévia: Colaboradora' : 'Perfil: Colaboradora');
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
@@ -2494,7 +2529,7 @@ document.querySelectorAll('[data-toggle]').forEach(link=>{
   link.onclick = (e)=>{ e.preventDefault(); document.getElementById(link.dataset.toggle).classList.toggle('shown'); };
 });
 
-document.querySelectorAll('.store-chk').forEach(chk=> chk.onchange = renderAll);
+document.querySelectorAll('.store-chk').forEach(chk=> chk.onchange = ()=>{ salvarPrefs(); renderAll(); });
 { const mt=document.getElementById('marginTarget'); if(mt) mt.onchange = (e)=>{ marginTarget = num(e.target.value) ?? 35; renderAll(); }; }
 document.getElementById('margemStatusFilter').onchange = renderMargem;
 document.getElementById('estoqueStatusFilter').onchange = renderEstoque;
@@ -2751,12 +2786,19 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
   populateEquipeSelects();
+  carregarPrefs();          // restaura a última análise deste usuário
   renderAll();
   tnSetUpdate(lu&&lu.valor?lu.valor:LAST_UPDATE);
 }
 
 async function tnAfterLogin(sb){
-  try{ const {data:{user}}=await sb.auth.getUser(); let q=sb.from('profiles').select('papel'); if(user&&user.id) q=q.eq('id',user.id); const {data:prof}=await q.maybeSingle(); if(prof&&prof.papel==='socia'){ perfil='socia'; applyPerfil(); } }catch(_){}
+  try{
+    const {data:{user}}=await sb.auth.getUser();
+    if(user&&user.email) tnUserKey = 'tn_prefs_' + user.email;   // preferências por usuário
+    let q=sb.from('profiles').select('papel'); if(user&&user.id) q=q.eq('id',user.id);
+    const {data:prof}=await q.maybeSingle();
+    if(prof&&prof.papel==='socia'){ perfil='socia'; perfilReal='socia'; applyPerfil(); }
+  }catch(_){}
   await tnLoadAll(sb);
 }
 
