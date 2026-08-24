@@ -251,6 +251,11 @@ window.TN_CONFIG = {
         <div style="margin-top:7px;"><span class="store-chip" id="store-chip"><span class="sdot"></span><span id="store-chip-label">Todas as lojas</span></span></div>
       </div>
       <div class="topbar-controls">
+        <span class="hint">Comparar meses</span>
+        <span id="anoTabs" style="display:inline-flex;gap:4px;align-items:center;"></span>
+        <span id="mesChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;"></span>
+        <button class="btn ghost" id="mesLimpar" style="padding:3px 8px;font-size:12px;">todos</button>
+        <span style="opacity:.35;">|</span>
         <span class="hint">Comparar lojas</span>
         <span id="storeChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">
           <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Itaipulândia" checked> Itaipulândia</label>
@@ -1164,22 +1169,78 @@ function filteredClientes(){
 /* ============ RENDER: VISÃO GERAL ============ */
 /* Rótulo do período com base nos meses realmente carregados (ex.: "Abr–Ago/26") */
 function periodoLabel(){
-  const m = (FINANCEIRO && FINANCEIRO.meses) || [];
+  const m = (typeof mesesLabels==="function") ? mesesLabels() : ((FINANCEIRO && FINANCEIRO.meses) || []);
   if(!m.length) return "";
-  const base = (m.length===1) ? m[0] : (m[0].split("/")[0] + "–" + m[m.length-1]);
+  let base;
+  if(m.length===1) base = m[0];
+  else if(typeof mesesSel!=="undefined" && mesesSel.length) base = m.join(", ");   // comparação avulsa
+  else base = m[0].split("/")[0] + "–" + m[m.length-1];
+  const todos = (FINANCEIRO && FINANCEIRO.meses) || [];
   const p = FINANCEIRO && FINANCEIRO.parcialAte;
-  return p ? (base + " \u00b7 at\u00e9 " + p) : base;
+  const incluiUltimo = !m.length || !todos.length || m[m.length-1]===todos[todos.length-1];
+  return (p && incluiUltimo) ? (base + " \u00b7 at\u00e9 " + p) : base;
 }
 function atualizarPeriodo(){
   const txt = periodoLabel();
   document.querySelectorAll(".js-periodo").forEach(el=> el.textContent = txt);
+}
+/* ===== FILTRO DE MESES (abas de ano + checks) — permite comparar Ago/26 com Ago/27 ===== */
+let mesesSel = [];      // rótulos escolhidos, ex.: ["Ago/26","Ago/27"]. Vazio = todos.
+let anoAtivo = null;    // aba de ano em exibição
+
+function anosDisponiveis(){
+  const m = (FINANCEIRO && FINANCEIRO.meses) || [];
+  return [...new Set(m.map(x=>x.split("/")[1]))];
+}
+/* Índices (em FINANCEIRO.meses) dos meses selecionados, sempre em ordem */
+function mesesIdx(){
+  const m = (FINANCEIRO && FINANCEIRO.meses) || [];
+  if(!mesesSel.length) return m.map((_,i)=>i);
+  const idx = m.map((lab,i)=> mesesSel.includes(lab) ? i : -1).filter(i=>i>=0);
+  return idx.length ? idx : m.map((_,i)=>i);   // nunca deixa vazio
+}
+function mesesLabels(){ const m=(FINANCEIRO&&FINANCEIRO.meses)||[]; return mesesIdx().map(i=>m[i]); }
+/* Soma de um campo (receita/despesa) da loja, só nos meses selecionados */
+function somaMeses(loja, campo){
+  const arr = (FINANCEIRO[loja] && FINANCEIRO[loja][campo]) || [];
+  return mesesIdx().reduce((a,i)=> a + (arr[i]||0), 0);
+}
+function renderMesFiltro(){
+  const tabs = document.getElementById('anoTabs'), box = document.getElementById('mesChecks');
+  if(!tabs || !box) return;
+  const anos = anosDisponiveis();
+  if(!anos.length){ tabs.innerHTML=''; box.innerHTML=''; return; }
+  if(!anos.includes(anoAtivo)) anoAtivo = anos[anos.length-1];   // por padrão, o ano mais recente
+  tabs.innerHTML = anos.map(a=>`<button class="btn ${a===anoAtivo?'primary':'ghost'}" data-ano="${esc(a)}" style="padding:3px 9px;font-size:12px;">20${esc(a)}</button>`).join('');
+  const doAno = (FINANCEIRO.meses||[]).filter(x=>x.split("/")[1]===anoAtivo);
+  box.innerHTML = doAno.map(lab=>{
+    const on = !mesesSel.length || mesesSel.includes(lab);
+    return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;"><input type="checkbox" class="mes-chk" value="${esc(lab)}" ${on?'checked':''}> ${esc(lab.split("/")[0])}</label>`;
+  }).join('');
+  tabs.querySelectorAll('[data-ano]').forEach(b=>{ b.onclick=()=>{ anoAtivo=b.dataset.ano; renderMesFiltro(); }; });
+  box.querySelectorAll('.mes-chk').forEach(chk=>{
+    chk.onchange = ()=>{
+      const todos = (FINANCEIRO.meses||[]).slice();
+      let sel = mesesSel.length ? mesesSel.slice() : todos.slice();   // começa do estado visível
+      sel = chk.checked ? [...new Set(sel.concat(chk.value))] : sel.filter(x=>x!==chk.value);
+      mesesSel = (sel.length===todos.length) ? [] : sel;              // tudo marcado = sem filtro
+      renderAll();
+    };
+  });
+  const btn = document.getElementById('mesLimpar');
+  if(btn){
+    const filtrando = mesesSel.length>0;
+    btn.textContent = filtrando ? 'todos os meses' : 'todos';
+    btn.style.opacity = filtrando ? '1' : '.55';
+    btn.onclick = ()=>{ mesesSel=[]; renderAll(); };
+  }
 }
 function renderVisaoGeral(){
   const s = currentStore();
   const prods = filteredProducts();
   const lojas = selStores();
   let receita=0, despesa=0;
-  lojas.forEach(l=>{ receita += FINANCEIRO[l].receita.reduce((a,b)=>a+b,0); despesa += FINANCEIRO[l].despesa.reduce((a,b)=>a+b,0); });
+  lojas.forEach(l=>{ receita += somaMeses(l,'receita'); despesa += somaMeses(l,'despesa'); });
   const lucro = receita-despesa;
   const clientesAtivos = filteredClientes().filter(c=>computeCliente(c).status==='ativo').length;
   const ticketMedio = null; // not enough data modelled — omitted intentionally
@@ -1211,9 +1272,9 @@ function renderVisaoGeral(){
   document.querySelectorAll('[data-jump]').forEach(el=>el.onclick=()=>setView(el.dataset.jump));
 
   // lucro por loja (empilhado quando Todas)
-  const meses = FINANCEIRO.meses;
+  const idx = mesesIdx(), meses = mesesLabels();
   document.getElementById('chart-lucro-mini').innerHTML =
-    renderStackedChart(meses, [{name:'Lucro', data:(i)=>{const o={}; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[i]-FINANCEIRO[l].despesa[i]); return o;}}], v=>BRL(v), lojas)
+    renderStackedChart(meses, [{name:'Lucro', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[j]-FINANCEIRO[l].despesa[j]); return o;}}], v=>BRL(v), lojas)
     + (lojas.length>1 ? storeLegend() : '');
 }
 function storeLegend(){
@@ -1224,9 +1285,9 @@ function storeLegend(){
 function renderFinanceiro(){
   const s = currentStore();
   const lojas = selStores();
-  const meses = FINANCEIRO.meses;
-  const receita = meses.map((_,i)=> lojas.reduce((sum,l)=>sum+FINANCEIRO[l].receita[i],0));
-  const despesa = meses.map((_,i)=> lojas.reduce((sum,l)=>sum+FINANCEIRO[l].despesa[i],0));
+  const idx = mesesIdx(), meses = mesesLabels();
+  const receita = idx.map(j=> lojas.reduce((sum,l)=>sum+(FINANCEIRO[l].receita[j]||0),0));
+  const despesa = idx.map(j=> lojas.reduce((sum,l)=>sum+(FINANCEIRO[l].despesa[j]||0),0));
   const totReceita = receita.reduce((a,b)=>a+b,0), totDespesa = despesa.reduce((a,b)=>a+b,0);
 
   document.getElementById('fin-kpis').innerHTML = `
@@ -1236,13 +1297,13 @@ function renderFinanceiro(){
   `;
 
   document.getElementById('chart-financeiro').innerHTML = renderStackedChart(meses, [
-    {name:'Receita', data:(i)=>{const o={}; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[i]); return o;}},
-    {name:'Despesa', data:(i)=>{const o={}; lojas.forEach(l=>o[l]=FINANCEIRO[l].despesa[i]); return o;}},
+    {name:'Receita', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[j]); return o;}},
+    {name:'Despesa', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].despesa[j]); return o;}},
   ], v=>BRL(v), lojas) + (lojas.length>1 ? storeLegend() : '');
 
   document.getElementById('tbl-financeiro').innerHTML = `
     <table><thead><tr><th>Mês</th><th>Receita</th><th>Despesa</th><th>Lucro</th></tr></thead>
-    <tbody>${meses.map((m,i)=>{const parc = FINANCEIRO.parcialAte && i===meses.length-1;
+    <tbody>${meses.map((m,i)=>{const parc = FINANCEIRO.parcialAte && m===FINANCEIRO.meses[FINANCEIRO.meses.length-1];
       return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(FINANCEIRO.parcialAte)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`;}).join('')}</tbody></table>
   `;
 }
@@ -1333,8 +1394,8 @@ const STORE_PIE_COLOR = { 'Itaipulândia':'#1f7a4d', 'Ouro Verde':'#e2892b', 'To
 function renderStoreShare(){
   const metric = document.getElementById('pieMetric').value;
   const raw = selStores().map(l=>{
-    const r = FINANCEIRO[l].receita.reduce((a,b)=>a+b,0);
-    const d = FINANCEIRO[l].despesa.reduce((a,b)=>a+b,0);
+    const r = somaMeses(l,'receita');
+    const d = somaMeses(l,'despesa');
     return { loja:l, valor: metric==='lucro' ? (r-d) : r };
   });
   // para a pizza usamos apenas valores positivos; negativos são listados à parte
@@ -2635,6 +2696,7 @@ document.getElementById('form-tarefa').addEventListener('submit', e=>{
 
 /* ============ INIT ============ */
 function renderAll(){
+  renderMesFiltro();
   atualizarPeriodo();
   applyStoreTheme();
   renderVisaoGeral();
@@ -2665,12 +2727,13 @@ function tnMapFinanceiro(rows){
   const ab=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const byMes={};
   let _parcial=null;
-  rows.forEach(r=>{ (byMes[r.mes]=byMes[r.mes]||{_ano:r.ano}); byMes[r.mes][r.loja]={receita:+r.receita,despesa:+r.despesa}; if(r.parcial_ate) _parcial=r.parcial_ate; });
+  // chave = ano*100+mes, para que Jul/26 e Jul/27 sejam períodos distintos
+  rows.forEach(r=>{ const k=(+r.ano)*100+(+r.mes); (byMes[k]=byMes[k]||{_ano:r.ano,_mes:r.mes}); byMes[k][r.loja]={receita:+r.receita,despesa:+r.despesa}; if(r.parcial_ate) _parcial=r.parcial_ate; });
   const nums=Object.keys(byMes).map(Number).sort((a,b)=>a-b);
   Object.keys(FINANCEIRO).forEach(k=>delete FINANCEIRO[k]);
-  FINANCEIRO.meses=nums.map(m=>ab[m]+'/'+String(byMes[m]._ano).slice(2));
+  FINANCEIRO.meses=nums.map(k=>ab[byMes[k]._mes]+'/'+String(byMes[k]._ano).slice(2));
   ['Itaipulândia','Ouro Verde','Toledo'].forEach(l=>{
-    FINANCEIRO[l]={receita:nums.map(m=>(byMes[m][l]?byMes[m][l].receita:0)),despesa:nums.map(m=>(byMes[m][l]?byMes[m][l].despesa:0))};
+    FINANCEIRO[l]={receita:nums.map(k=>(byMes[k][l]?byMes[k][l].receita:0)),despesa:nums.map(k=>(byMes[k][l]?byMes[k][l].despesa:0))};
   });
   FINANCEIRO.parcialAte = _parcial;   // último mês ainda em andamento (ex.: "24/08/2026")
 }
