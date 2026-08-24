@@ -70,6 +70,45 @@ function despesaDoMesPorLoja(wb, mes) {
   return temAlgo ? acc : null;
 }
 
+// Receita REALIZADA do mês, lida da aba "Projeção de <mês>".
+// Nessa aba, as colunas "Realidade" (E/G/I) trazem o lançado por dia; os dias que
+// ainda não aconteceram ficam preenchidos por FÓRMULA (média dos dias anteriores).
+// Somamos apenas as células digitadas — assim o mês corrente não entra inflado por projeção.
+const COL_REALIDADE = { 'Ouro Verde': 4, 'Toledo': 6, 'Itaipulândia': 8 }; // E, G, I (0-based)
+
+function abaProjecao(wb, mes) {
+  const abbr = MES_ABBR[mes];
+  if (!abbr) return null;
+  return Object.keys(wb.Sheets).find(n => {
+    const l = n.toLowerCase();
+    return l.includes('proje') && l.includes(abbr);
+  }) || null;
+}
+
+function receitaRealizada(wb, mes) {
+  const nome = abaProjecao(wb, mes);
+  if (!nome) return null;
+  const ws = wb.Sheets[nome];
+  if (!ws) return null;
+  const acc = { 'Ouro Verde': 0, 'Toledo': 0, 'Itaipulândia': 0 };
+  let temReal = false, temProjecao = false, ultimoDia = 0;
+  for (let r = 2; r < 60; r++) {              // linha 3 em diante (0-based)
+    const diaCell = ws[XLSX.utils.encode_cell({ r, c: 2 })];   // coluna C = dia do mês
+    const dia = (diaCell && typeof diaCell.v === 'number') ? diaCell.v : null;
+    if (dia === null) continue;               // cabeçalho ou linha "Total" -> ignora
+    for (const loja of LOJAS) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c: COL_REALIDADE[loja] })];
+      if (!cell || typeof cell.v !== 'number') continue;
+      if (cell.f) { temProjecao = true; continue; }   // fórmula no dia = valor projetado
+      acc[loja] += cell.v;
+      temReal = true;
+      if (dia > ultimoDia) ultimoDia = dia;
+    }
+  }
+  if (!temReal) return null;
+  return { acc, parcial: temProjecao, ultimoDia };
+}
+
 export function parseFinanceiro(wb, ano = 2026) {
   const data = rows(wb, '2026');
   const out = [];
@@ -87,7 +126,13 @@ export function parseFinanceiro(wb, ano = 2026) {
       { loja: 'Toledo',       receita: num(r[10]), despesa: num(r[11]) },
       { loja: 'Itaipulândia', receita: num(r[13]), despesa: num(r[14]) },
     ];
+    // mês em andamento: troca a receita projetada pela realizada até hoje
+    const real = receitaRealizada(wb, mes);
+    const parcialAte = (real && real.parcial && real.ultimoDia)
+      ? String(real.ultimoDia).padStart(2, '0') + '/' + String(mes).padStart(2, '0') + '/' + ano
+      : null;
     for (const b of blocos) {
+      if (real && real.parcial && real.acc[b.loja] > 0) b.receita = Math.round(real.acc[b.loja] * 100) / 100;
       if (!b.receita) continue;
       let despesa = b.despesa;
       // se a despesa não foi lançada na aba 2026, calcula pela aba "Despesas de <mês>"
@@ -97,7 +142,7 @@ export function parseFinanceiro(wb, ano = 2026) {
       }
       // só grava meses completos (receita E despesa válidas > 0)
       if (despesa && despesa > 0) {
-        out.push({ ano, mes, loja: b.loja, receita: b.receita, despesa });
+        out.push({ ano, mes, loja: b.loja, receita: b.receita, despesa, parcial_ate: parcialAte });
       }
     }
   }

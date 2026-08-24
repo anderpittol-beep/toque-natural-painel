@@ -1166,8 +1166,9 @@ function filteredClientes(){
 function periodoLabel(){
   const m = (FINANCEIRO && FINANCEIRO.meses) || [];
   if(!m.length) return "";
-  if(m.length===1) return m[0];
-  return m[0].split("/")[0] + "–" + m[m.length-1];
+  const base = (m.length===1) ? m[0] : (m[0].split("/")[0] + "–" + m[m.length-1]);
+  const p = FINANCEIRO && FINANCEIRO.parcialAte;
+  return p ? (base + " \u00b7 at\u00e9 " + p) : base;
 }
 function atualizarPeriodo(){
   const txt = periodoLabel();
@@ -1241,7 +1242,8 @@ function renderFinanceiro(){
 
   document.getElementById('tbl-financeiro').innerHTML = `
     <table><thead><tr><th>Mês</th><th>Receita</th><th>Despesa</th><th>Lucro</th></tr></thead>
-    <tbody>${meses.map((m,i)=>`<tr><td class="strong">${m}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`).join('')}</tbody></table>
+    <tbody>${meses.map((m,i)=>{const parc = FINANCEIRO.parcialAte && i===meses.length-1;
+      return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(FINANCEIRO.parcialAte)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`;}).join('')}</tbody></table>
   `;
 }
 
@@ -2662,13 +2664,15 @@ function tnMapFinanceiro(rows){
   if(!rows||!rows.length) return;
   const ab=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const byMes={};
-  rows.forEach(r=>{ (byMes[r.mes]=byMes[r.mes]||{_ano:r.ano}); byMes[r.mes][r.loja]={receita:+r.receita,despesa:+r.despesa}; });
+  let _parcial=null;
+  rows.forEach(r=>{ (byMes[r.mes]=byMes[r.mes]||{_ano:r.ano}); byMes[r.mes][r.loja]={receita:+r.receita,despesa:+r.despesa}; if(r.parcial_ate) _parcial=r.parcial_ate; });
   const nums=Object.keys(byMes).map(Number).sort((a,b)=>a-b);
   Object.keys(FINANCEIRO).forEach(k=>delete FINANCEIRO[k]);
   FINANCEIRO.meses=nums.map(m=>ab[m]+'/'+String(byMes[m]._ano).slice(2));
   ['Itaipulândia','Ouro Verde','Toledo'].forEach(l=>{
     FINANCEIRO[l]={receita:nums.map(m=>(byMes[m][l]?byMes[m][l].receita:0)),despesa:nums.map(m=>(byMes[m][l]?byMes[m][l].despesa:0))};
   });
+  FINANCEIRO.parcialAte = _parcial;   // último mês ainda em andamento (ex.: "24/08/2026")
 }
 
 async function tnLoadAll(sb){
