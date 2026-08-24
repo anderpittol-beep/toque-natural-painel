@@ -598,7 +598,7 @@ window.TN_CONFIG = {
       <!-- EQUIPE -->
       <section class="view" id="view-equipe">
         <h2 class="section-title">Tarefas da equipe</h2>
-        <p class="section-desc">Delegue tarefas por colaborador e por loja, acompanhando o avanço de cada ação do Plano de Ação. <span class="hint">(O <strong>cadastro da equipe</strong> e o <strong>feedback</strong> ficam em <strong>Gente e Gestão</strong>, restritos aos Sócio Proprietários.)</span></p>
+        <p class="section-desc">Delegue tarefas por colaborador e por loja, acompanhando o avanço de cada ação do Plano de Ação. <span class="hint">(O <strong>cadastro da equipe</strong> e o <strong>feedback</strong> ficam em <strong>Gente e Gestão</strong>, restritos aos Sócio.)</span></p>
 
         <div class="card" id="card-plano" style="margin-bottom:16px;">
           <div class="toolbar" style="justify-content:space-between;align-items:center;">
@@ -791,7 +791,7 @@ window.TN_CONFIG = {
       <!-- GENTE E GESTÃO (confidencial) -->
       <section class="view" id="view-gente">
         <h2 class="section-title">Gente e Gestão <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial</span></h2>
-        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita aos Sócio Proprietários — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
+        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita aos Sócio — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
         <div class="grid grid-4" id="gente-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Lançar / atualizar folha do mês</h3>
@@ -809,7 +809,7 @@ window.TN_CONFIG = {
         <div class="card"><div style="overflow-x:auto;"><table id="tbl-gente"></table></div></div>
 
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio Proprietários</span></h3>
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio</span></h3>
           <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
           <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
             <input type="text" id="eq-nome" placeholder="Nome" required>
@@ -822,8 +822,8 @@ window.TN_CONFIG = {
 
 
         <div class="card" id="card-feedback" style="margin-top:20px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio Proprietários</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos Sócio Proprietários.</p>
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos Sócio.</p>
           <form class="feedback-form" id="form-feedback">
             <select id="fb-colaborador"></select>
             <select id="fb-tipo">
@@ -1778,7 +1778,7 @@ function prioDot(p){
   const c = p==='Urgente'?'var(--critical)':(p==='Alta'?'var(--warning)':'var(--text-muted)');
   return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:6px;" title="${esc(p)}"></span>`;
 }
-/* Índice da tarefa em edição (só Sócio Proprietários) */
+/* Índice da tarefa em edição (só Sócio) */
 let tarefaEditando = null;
 function tarefaCard(t){
   const status=t.status, i=TAREFAS.indexOf(t), socia=(typeof perfil!=='undefined' && perfil==='socia');
@@ -1917,7 +1917,7 @@ function renderTarefas(){
       if(t.id) tnUpdate('tarefas',{id:t.id},{status:t.status});
       renderTarefas(); };
   });
-  // edição/exclusão de tarefas — só Sócio Proprietários
+  // edição/exclusão de tarefas — só Sócio
   document.querySelectorAll('[data-editar]').forEach(b=>{
     b.onclick = ()=>{ tarefaEditando = +b.dataset.editar; renderTarefas(); };
   });
@@ -2235,7 +2235,7 @@ function renderGente(){
 }
 
 /* ============ PERFIL DE ACESSO (Sócia / Colaboradora) ============ */
-// Acesso de Sócio Proprietários vem do login (Supabase profiles.papel='socia'); sem PIN.
+// Acesso de Sócio vem do login (Supabase profiles.papel='socia'); sem PIN.
 let perfil = 'colab';
 function applyPerfil(){
   document.body.setAttribute('data-perfil', perfil);
@@ -2243,7 +2243,7 @@ function applyPerfil(){
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio Proprietários' : 'Perfil: Colaboradora';
+  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : 'Perfil: Colaboradora';
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
