@@ -190,7 +190,7 @@ export function parseDespesas(wb, abaNome, competencia) {
         for (const loja of LOJAS) {
           const v = valores[loja];
           if (v != null && v !== 0) {
-            despesasFixas.push({ competencia, loja, descricao: desc, valor: v, venc: null });
+            despesasFixas.push({ competencia, ano, mes, loja, descricao: desc, valor: v, venc: null, origem: 'planilha' });
           }
         }
       }
@@ -220,8 +220,8 @@ export function parseDespesas(wb, abaNome, competencia) {
   const folha = [];
   for (const loja of LOJAS) {
     const s = folhaAcc[loja].socia, c = folhaAcc[loja].colab;
-    if (s.salario || s.encargo) folha.push({ competencia, pessoa: 'Sócias (Andreia/Vanessa)', papel: 'Sócia', loja, salario: s.salario, comissao: 0, encargo: s.encargo });
-    if (c.salario || c.encargo) folha.push({ competencia, pessoa: COLAB_POR_LOJA[loja], papel: 'Colaboradora', loja, salario: c.salario, comissao: 0, encargo: c.encargo });
+    if (s.salario || s.encargo) folha.push({ competencia, ano, mes, pessoa: 'Sócias (Andreia/Vanessa)', papel: 'Sócia', loja, salario: s.salario, comissao: 0, encargo: s.encargo, origem: 'planilha' });
+    if (c.salario || c.encargo) folha.push({ competencia, ano, mes, pessoa: COLAB_POR_LOJA[loja], papel: 'Colaboradora', loja, salario: c.salario, comissao: 0, encargo: c.encargo, origem: 'planilha' });
   }
 
   return { despesasFixas, folha, boletos, comprasNf };
