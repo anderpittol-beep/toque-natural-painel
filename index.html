@@ -310,7 +310,10 @@ window.TN_CONFIG = {
       <section class="view" id="view-caixa">
         <h2 class="section-title">Despesas &amp; compras</h2>
         <p class="section-desc">Tudo o que sai: despesas fixas do mês, compras do mês (nota cheia, impacta o lucro), boletos pagos e a pagar, e o histórico de patrimônio &amp; manutenção. O disponível do dia fica em <strong>Caixa diário</strong>.</p>
-        <div class="grid grid-3" id="caixa-kpis" style="margin-bottom:16px;"></div>
+        <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:16px;">
+          <div class="grid grid-3" id="caixa-kpis" style="flex:1 1 560px;"></div>
+          <div id="disp-financeira" style="flex:0 1 320px;min-width:280px;"></div>
+        </div>
 
         <!-- DISPONIBILIDADE DE RECURSO — quanto há, quanto sai, o que sobra -->
         <div class="card" id="card-disponibilidade" style="margin-bottom:18px;">
@@ -3110,6 +3113,51 @@ function renderCaixa(){
     <div class="card stat-tile ${boletosAPagarKpi>0?'accent-warning':''}"><div class="label">A pagar no mês</div><div class="value">${BRL(boletosAPagarKpi)}</div><div class="hint">${esc(fxCompetencia())} · ainda vai sair</div></div>
     <div class="card stat-tile accent-good"><div class="label">Total em boletos</div><div class="value">${BRL(boletosPagosKpi + boletosAPagarKpi)}</div><div class="hint">pagos + a pagar</div></div>
   ` : '';
+  /* Disponibilidade financeira: o que sobra de recurso depois dos boletos.
+     A conta pedida é conta + espécie − boletos; ao lado mostramos o que ela
+     deixa de fora (maquininha a receber e fixas ainda em aberto), porque são
+     valores certos que mudam a leitura. */
+  const posLojas   = selStores().map(l=>dispAtualPorLoja(l)).filter(Boolean);
+  const contaDf    = posLojas.reduce((a,p)=>a+(+p.saldo_conta||0),0);
+  const especieDf  = posLojas.reduce((a,p)=>a+(+p.especie||0),0);
+  const maqDf      = posLojas.reduce((a,p)=>a+(+p.a_receber_maquininha||0),0);
+  const reservaDf  = posLojas.reduce((a,p)=>a+(+p.reserva||0),0);
+  const dataDf     = posLojas.map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
+
+  const boletosTodos = boletos.reduce((a,b)=> a + (b.status==='Pendente' ? (+b.valor||0) : 0), 0);
+  const fixasAbertas = fixasDaCompetencia(fxAno, fxMes)
+    .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
+    .reduce((a,d)=> a + (d.pago ? 0 : (+d.valor||0)), 0);
+
+  const dispFin   = contaDf + especieDf - boletosTodos;          // a conta pedida
+  const dispAmpla = dispFin + maqDf - fixasAbertas;              // considerando o que falta
+
+  const boxDf = document.getElementById('disp-financeira');
+  if(boxDf) boxDf.innerHTML = !socia ? '' : `
+    <div class="card" style="height:100%;display:flex;flex-direction:column;justify-content:center;
+         border:1px solid ${dispFin>=0?'rgba(63,125,79,.35)':'rgba(190,70,60,.35)'};">
+      <div class="label" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;">Disponibilidade financeira</div>
+      <div style="font-size:30px;font-weight:700;line-height:1.1;margin:6px 0 2px;color:${dispFin>=0?'var(--good)':'var(--critical)'};">${BRL(dispFin)}</div>
+      <div class="hint" style="margin-bottom:10px;">saldo em conta + espécie − boletos em aberto${dataDf?' · posição de '+esc(dataDf.toLocaleDateString('pt-BR')):''}</div>
+
+      <table style="font-size:12.5px;">
+        <tbody>
+          <tr><td>Saldo em conta</td><td style="text-align:right;">${BRL(contaDf)}</td></tr>
+          <tr><td>Em espécie</td><td style="text-align:right;">${BRL(especieDf)}</td></tr>
+          <tr><td>Boletos em aberto</td><td style="text-align:right;color:var(--critical);">− ${BRL(boletosTodos)}</td></tr>
+          <tr><td class="strong">Resultado</td><td class="strong" style="text-align:right;">${BRL(dispFin)}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="hint" style="margin-top:10px;padding-top:9px;border-top:1px solid rgba(245,236,214,0.12);">
+        <strong>Fora dessa conta:</strong><br>
+        maquininha a receber <strong>+ ${BRL(maqDf)}</strong><br>
+        fixas do mês ainda em aberto <strong>− ${BRL(fixasAbertas)}</strong><br>
+        <span style="display:inline-block;margin-top:6px;">Com os dois: <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong></span><br>
+        <span style="opacity:.8;">Reserva de ${BRL(reservaDf)} não entra em nenhuma das duas.</span>
+      </div>
+    </div>`;
+
   const cardFixas = document.getElementById('card-fixas');
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
 
