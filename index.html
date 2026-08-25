@@ -448,7 +448,7 @@ window.TN_CONFIG = {
           <div style="overflow-x:auto;"><table id="tbl-patrimonio"></table></div>
         </div>
         </div>
-        <p class="hint" style="margin-top:14px;">Quando conectarmos à sua planilha do Drive (abas "Despesas de..." e "Boletos"), estes lançamentos passam a carregar automaticamente, e o total de despesas alimenta o resultado de cada loja na aba Receitas &amp; despesas.</p>
+        <p class="hint" style="margin-top:14px;">Até Ago/26 os lançamentos vêm da planilha do Drive e aparecem recolhidos em uma linha de total. A partir de 01/09/2026 o lançamento é feito aqui no painel, e o total de despesas alimenta o resultado de cada loja na Visão geral.</p>
       </section>
 
       <!-- PROJEÇÃO -->
@@ -1107,13 +1107,7 @@ let PEDIDOS = [
 ];
 
 /* Patrimônio (compras de bens) e manutenções (reparos/serviços) */
-let PATRIMONIO = [
- {data:"05/08/2026", tipo:"Manutenção", loja:"Toledo", descricao:"Pintura da calçada e fachada", valor:850.00, fornecedor:"Pintor João", contato:"(45) 99900-0001", status:"Pago"},
- {data:"28/07/2026", tipo:"Patrimônio", loja:"Itaipulândia", descricao:"Impressora fiscal nova", valor:1290.00, fornecedor:"InfoTech", contato:"(45) 3333-0002", status:"Pago"},
- {data:"12/08/2026", tipo:"Patrimônio", loja:"Ouro Verde", descricao:"Freezer horizontal 300L", valor:2450.00, fornecedor:"Frigelar", contato:"(45) 3333-0003", status:"Pendente"},
- {data:"20/08/2026", tipo:"Manutenção", loja:"Todas", descricao:"Dedetização trimestral", valor:360.00, fornecedor:"DedControl", contato:"(45) 99900-0004", status:"Agendado"},
- {data:"15/07/2026", tipo:"Patrimônio", loja:"Toledo", descricao:"Prateleiras de reposição", valor:680.00, fornecedor:"Móveis Sul", contato:"(45) 3333-0005", status:"Pago"},
-];
+let PATRIMONIO = [];
 
 /* Controle diário de caixa por loja — fechamento e saldo em conta NÃO constam na aba
    de despesas; começam vazios para lançamento diário (ou mapeamento de aba específica). */
