@@ -3158,7 +3158,15 @@ function renderCaixa(){
   const fixasPagasFora = fixasMes.filter(d=> d.pago && !refletida(d)).reduce((a,d)=>a+(+d.valor||0),0);
   const fixasDescontar = fixasAbertas + fixasPagasFora;
 
-  const dispFin   = contaDf + especieDf - boletosTodos - fixasDescontar;
+  /* Folha segue a mesma lógica: salário, encargos e vale saem do caixa no mês.
+     A provisão de 13º e férias fica de fora — é retenção, não pagamento. */
+  const folhaMes = folhaDaCompetencia(fxAno, fxMes).filter(g=> inStore(g.loja));
+  const folhaDescontar = folhaMes
+    .filter(g=> !g.pago || !refletida(g))
+    .reduce((a,g)=> a + gTotal(g), 0);
+  const provisaoMes = folhaMes.reduce((a,g)=> a + gProvisao(g).total, 0);
+
+  const dispFin   = contaDf + especieDf - boletosTodos - fixasDescontar - folhaDescontar;
   const dispAmpla = dispFin + maqDf;                      // contando o que a maquininha ainda repassa
 
   const boxDf = document.getElementById('disp-financeira');
@@ -3176,6 +3184,8 @@ function renderCaixa(){
           <tr><td>Boletos em aberto</td><td style="text-align:right;color:var(--critical);">− ${BRL(boletosTodos)}</td></tr>
           <tr><td>Despesas fixas${fixasPagasFora?' <span class="hint">(inclui pagas após a posição)</span>':''}</td>
               <td style="text-align:right;color:var(--critical);">− ${BRL(fixasDescontar)}</td></tr>
+          <tr><td>Folha do mês <span class="hint">Gente e Gestão</span></td>
+              <td style="text-align:right;color:var(--critical);">− ${BRL(folhaDescontar)}</td></tr>
           <tr><td class="strong">Disponibilidade</td><td class="strong" style="text-align:right;">${BRL(dispFin)}</td></tr>
         </tbody>
       </table>
@@ -3185,7 +3195,7 @@ function renderCaixa(){
         <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong><br>
         <span style="display:inline-block;margin-top:4px;">Somando a reserva de ${BRL(reservaDf)}:
           <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla + reservaDf)}</strong></span><br>
-        <span style="opacity:.8;display:inline-block;margin-top:6px;">Fixas já pagas antes da posição não descontam de novo — o saldo lançado já as reflete.</span>
+        <span style="opacity:.8;display:inline-block;margin-top:6px;">Fixas e folha já pagas antes da posição não descontam de novo — o saldo lançado já as reflete. A retenção de 13º e férias (${BRL(provisaoMes)}) fica fora: é provisão, não pagamento do mês.</span>
       </div>
     </div>`;
 
@@ -3452,14 +3462,15 @@ function folhaDaCompetencia(ano, mes, prof){
   const doMes = GENTE.filter(g=> +g.ano===ano && +g.mes===mes);
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
-  return folhaDaCompetencia(p.ano, p.mes, prof+1).map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0}));
+  return folhaDaCompetencia(p.ano, p.mes, prof+1)
+    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, pago:false, pago_em:null}));
 }
 async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
   if(!herdadas.length) return false;
   const regs = herdadas.map(g=>({ competencia: gtCompetencia(), ano: gtAno, mes: gtMes, pessoa: g.pessoa,
                  papel: g.papel, loja: g.loja, salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0, vale: +g.vale||0,
-                 origem: 'painel' }));
+                 origem: 'painel', pago: false, pago_em: null }));
   regs.forEach(r=>GENTE.push(r));
   try{
     if(window.TN&&window.TN.sb){
@@ -3502,7 +3513,7 @@ function renderGente(){
   const podeEd = (typeof perfil!=='undefined' && perfil==='socia') && gtGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
   document.getElementById('tbl-gente').innerHTML = `
-    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th></th>':''}</tr></thead>
+    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th>Pago</th><th></th>':''}</tr></thead>
     <tbody>${rows.map(g=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
@@ -3514,6 +3525,7 @@ function renderGente(){
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:96px;"></td>
           <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:92px;"></td>
           <td class="strong">—</td>
+          <td class="hint">—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -3527,11 +3539,16 @@ function renderGente(){
         <td>${BRL(g.encargo)}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
-        ${podeEd?`<td style="white-space:nowrap;text-align:right;">
+        ${podeEd?`<td style="text-align:center;">
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+            <input type="checkbox" data-gpago="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" ${g.pago?'checked':''}>
+            ${g.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
+          </label></td>
+        <td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${podeEd?9:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
-    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
+      </tr>`;}).join('') || `<tr><td colspan="${podeEd?10:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
+    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?`<td class="hint" style="text-align:center;">${list.filter(x=>x.pago).length}/${list.length}</td><td></td>`:''}</tr></tbody>`;
 
   // ===== Retenção de 13º e férias (provisão do mês) =====
   const prov = rows.map(g=>({g, p:gProvisao(g)})).filter(x=>x.p.total>0);
@@ -3558,6 +3575,22 @@ function renderGente(){
     ${prov.length?`<tr><td colspan="4" class="strong" style="text-align:right;">Total</td><td class="strong">${BRL(t13)}</td><td class="strong">${BRL(tFer)}</td><td class="strong">${BRL(t13+tFer)}</td><td class="strong">${BRL((t13+tFer)*gtMes)}</td></tr>`:''}</tbody>`;
 
   // ===== ações de editar / excluir =====
+  /* Mesma regra das fixas: materializa a linha herdada antes de gravar a marca */
+  document.querySelectorAll('[data-gpago]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const pe=chk.dataset.gp, lo=chk.dataset.gl, pa=chk.dataset.gr, marcado=chk.checked;
+      chk.disabled = true;
+      await gtMaterializar();
+      const g = GENTE.find(x=> +x.ano===gtAno && +x.mes===gtMes && x.pessoa===pe && x.loja===lo && x.papel===pa);
+      if(g){
+        g.pago = marcado;
+        g.pago_em = marcado ? new Date().toISOString() : null;
+        if(g.id) await tnUpdate('folha', {id:g.id}, {pago:g.pago, pago_em:g.pago_em});
+      }
+      chk.disabled = false;
+      renderGente(); renderCaixa();
+    };
+  });
   document.querySelectorAll('[data-geditar]').forEach(b=>{
     b.onclick = async ()=>{
       const pe=b.dataset.gp, lo=b.dataset.gl, pa=b.dataset.gr;
@@ -4076,7 +4109,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||''})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
