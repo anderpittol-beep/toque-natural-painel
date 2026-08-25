@@ -444,6 +444,8 @@ window.TN_CONFIG = {
               <option value="Patrimônio">Só patrimônio</option>
               <option value="Manutenção">Só manutenção</option>
             </select>
+            <select id="patrimonioAnoFilter"><option value="">Todos os anos</option></select>
+            <select id="patrimonioMesFilter"><option value="">Todos os meses</option></select>
           </div>
           <div style="overflow-x:auto;"><table id="tbl-patrimonio"></table></div>
         </div>
@@ -939,25 +941,7 @@ function tooltip(show, x, y, html){
 }
 
 /* ============ SAMPLE DATA ============ */
-let PRODUCTS = [
- {nome:"Whey Protein Vegano 900g",categoria:"Suplementos",loja:"Itaipulândia",custo:68,preco:129.90,estoque:12,estoqueMin:8,vendasMes:22,validade:"2027-03-10"},
- {nome:"Whey Protein Vegano 900g",categoria:"Suplementos",loja:"Ouro Verde",custo:68,preco:99.90,estoque:5,estoqueMin:8,vendasMes:18,validade:"2027-03-10"},
- {nome:"Whey Protein Vegano 900g",categoria:"Suplementos",loja:"Toledo",custo:68,preco:129.90,estoque:20,estoqueMin:8,vendasMes:30,validade:"2027-01-15"},
- {nome:"Óleo de Coco Extra Virgem 500ml",categoria:"Óleos",loja:"Itaipulândia",custo:18,preco:34.90,estoque:30,estoqueMin:15,vendasMes:40,validade:"2026-09-05"},
- {nome:"Óleo de Coco Extra Virgem 500ml",categoria:"Óleos",loja:"Ouro Verde",custo:18,preco:34.90,estoque:6,estoqueMin:15,vendasMes:25,validade:"2026-10-01"},
- {nome:"Açaí em Pó 200g",categoria:"Alimentos",loja:"Toledo",custo:22,preco:39.90,estoque:10,estoqueMin:10,vendasMes:35,validade:"2026-08-20"},
- {nome:"Castanha do Pará 500g",categoria:"Oleaginosas",loja:"Itaipulândia",custo:null,preco:45.00,estoque:18,estoqueMin:10,vendasMes:15,validade:"2026-12-01"},
- {nome:"Chá Verde Orgânico 20 sachês",categoria:"Chás",loja:"Ouro Verde",custo:9,preco:16.90,estoque:40,estoqueMin:20,vendasMes:28,validade:"2027-06-01"},
- {nome:"Colágeno Hidrolisado 300g",categoria:"Suplementos",loja:"Itaipulândia",custo:52,preco:47.90,estoque:9,estoqueMin:10,vendasMes:12,validade:"2027-02-01"},
- {nome:"Granola Tradicional 1kg",categoria:"Alimentos",loja:"Ouro Verde",custo:12,preco:24.90,estoque:22,estoqueMin:12,vendasMes:33,validade:"2026-08-25"},
- {nome:"Mel Orgânico 500g",categoria:"Alimentos",loja:"Toledo",custo:15,preco:32.90,estoque:4,estoqueMin:10,vendasMes:20,validade:"2027-08-01"},
- {nome:"Quinoa em Grãos 500g",categoria:"Alimentos",loja:"Itaipulândia",custo:14,preco:27.90,estoque:16,estoqueMin:10,vendasMes:14,validade:"2026-11-10"},
- {nome:"Semente de Chia 500g",categoria:"Alimentos",loja:"Ouro Verde",custo:8,preco:15.90,estoque:25,estoqueMin:15,vendasMes:19,validade:"2026-08-18"},
- {nome:"Multivitamínico Adulto 60 cáps",categoria:"Suplementos",loja:"Toledo",custo:30,preco:null,estoque:14,estoqueMin:8,vendasMes:17,validade:"2027-05-01"},
- {nome:"Sabonete Natural Aveia 100g",categoria:"Cosméticos",loja:"Itaipulândia",custo:4,preco:12.90,estoque:50,estoqueMin:20,vendasMes:45,validade:null},
- {nome:"Farinha de Amêndoas 500g",categoria:"Alimentos",loja:"Ouro Verde",custo:19,preco:36.90,estoque:3,estoqueMin:10,vendasMes:21,validade:"2026-09-15"},
- {nome:"Própolis Extrato 30ml",categoria:"Suplementos",loja:"Toledo",custo:24,preco:74.90,estoque:11,estoqueMin:10,vendasMes:16,validade:"2027-04-01"},
-];
+let PRODUCTS = [];
 
 /* Dados reais — planilha "Finanças Toque Natural", aba 2026 (meses com Receita+Despesa completos: Abr–Jul/2026) */
 let FINANCEIRO = {
@@ -967,29 +951,10 @@ let FINANCEIRO = {
   "Toledo": {receita:[4418.39,5113.87,4425.41,5035.18], despesa:[7316.79,6432.90,6046.00,7916.47]},
 };
 
-let CLIENTES = [
- {nome:"Maria Silva",loja:"Itaipulândia",telefone:"(45) 99911-2201",ultimaCompra:"2026-08-10"},
- {nome:"João Pereira",loja:"Toledo",telefone:"(45) 99922-3312",ultimaCompra:"2026-05-02"},
- {nome:"Ana Costa",loja:"Ouro Verde",telefone:"(45) 99933-4423",ultimaCompra:"2026-01-20"},
- {nome:"Carlos Souza",loja:"Itaipulândia",telefone:"(45) 99944-5534",ultimaCompra:"2025-11-15"},
- {nome:"Fernanda Lima",loja:"Toledo",telefone:"(45) 99955-6645",ultimaCompra:"2026-07-28"},
- {nome:"Roberto Alves",loja:"Ouro Verde",telefone:"(45) 99966-7756",ultimaCompra:"2026-04-10"},
- {nome:"Juliana Rocha",loja:"Itaipulândia",telefone:"(45) 99977-8867",ultimaCompra:"2026-06-30"},
- {nome:"Marcos Vidal",loja:"Toledo",telefone:"(45) 99988-9978",ultimaCompra:"2026-02-14"},
- {nome:"Patrícia Nunes",loja:"Ouro Verde",telefone:"(45) 99900-1189",ultimaCompra:"2026-08-01"},
- {nome:"Eduardo Martins",loja:"Itaipulândia",telefone:"(45) 99911-2290",ultimaCompra:"2026-03-05"},
- {nome:"Camila Duarte",loja:"Toledo",telefone:"(45) 99922-3301",ultimaCompra:"2026-06-15"},
- {nome:"Sérgio Ramos",loja:"Ouro Verde",telefone:"(45) 99933-4412",ultimaCompra:"2025-12-20"},
- {nome:"Beatriz Fontes",loja:"Itaipulândia",telefone:"(45) 99944-5523",ultimaCompra:"2026-07-10"},
- {nome:"Lucas Barreto",loja:"Toledo",telefone:"(45) 99955-6634",ultimaCompra:"2026-05-20"},
-];
+let CLIENTES = [];
 
 /* CRM de reativação: histórico de contatos por cliente */
-let CRM_CONTATOS = [
- {cliente:"Marcos Vidal", data:"05/08/2026", canal:"WhatsApp", acao:"Enviado cupom de 10% + aviso de chegada de novos suplementos", resultado:"Sem resposta", proximo:"Ligar em 19/08/2026"},
- {cliente:"Carlos Souza", data:"02/08/2026", canal:"Ligação", acao:"Convite para degustação de granola nova", resultado:"Agendado / prometeu voltar", proximo:"Confirmar presença no sábado"},
- {cliente:"Sérgio Ramos", data:"28/07/2026", canal:"WhatsApp", acao:"Oferta personalizada de chá verde (marca preferida)", resultado:"Comprou", proximo:"Incluir na lista de recorrência mensal"},
-];
+let CRM_CONTATOS = [];
 
 /* Sócias-gestoras: Andreia e Vanessa · Colaboradoras: uma por loja */
 let EQUIPE = [
@@ -1002,11 +967,7 @@ let EQUIPE = [
  {nome:"Mayara",cargo:"Colaboradora",loja:"Toledo"},
 ];
 
-let FEEDBACKS = [
- {data:"2026-08-12",colaborador:"Eloisa",tipo:"Reconhecimento",texto:"Boa condução da troca de fornecedor de castanhas, sem impacto no estoque."},
- {data:"2026-08-08",colaborador:"Tainara",tipo:"Ponto de atenção",texto:"Reforçar conferência de validade na reposição de gôndola."},
- {data:"2026-08-05",colaborador:"Mayara",tipo:"Desenvolvimento",texto:"Convidar para o próximo treinamento de vendas consultivas."},
-];
+let FEEDBACKS = [];
 
 let TAREFAS = [
  /* Ações macro do Plano de Ação (planilha do Drive) */
@@ -1029,23 +990,7 @@ let TAREFAS = [
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
 let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 };
 const SEMANAS_MES = 4.345; // p/ derivar meta semanal a partir da mensal
-let VENDAS_DIARIAS = [
- {data:"03/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:950},
- {data:"05/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:1120},
- {data:"07/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:880},
- {data:"11/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:1340},
- {data:"13/08/2026", colab:"Eloisa", loja:"Ouro Verde", valor:990},
- {data:"03/08/2026", colab:"Tainara", loja:"Itaipulândia", valor:1200},
- {data:"05/08/2026", colab:"Tainara", loja:"Itaipulândia", valor:1500},
- {data:"08/08/2026", colab:"Tainara", loja:"Itaipulândia", valor:1350},
- {data:"11/08/2026", colab:"Tainara", loja:"Itaipulândia", valor:1620},
- {data:"14/08/2026", colab:"Tainara", loja:"Itaipulândia", valor:1410},
- {data:"04/08/2026", colab:"Mayara", loja:"Toledo", valor:420},
- {data:"06/08/2026", colab:"Mayara", loja:"Toledo", valor:380},
- {data:"08/08/2026", colab:"Mayara", loja:"Toledo", valor:510},
- {data:"12/08/2026", colab:"Mayara", loja:"Toledo", valor:460},
- {data:"14/08/2026", colab:"Mayara", loja:"Toledo", valor:390},
-];
+let VENDAS_DIARIAS = [];
 /* Histórico de destaque mensal (quem foi o destaque em cada mês) — base para 3 meses seguidos e anual */
 let HISTORICO_DESTAQUE = [
  {mes:"Mai/26", pessoa:"Tainara"},
@@ -1089,22 +1034,11 @@ const DATAS_COMEMORATIVAS = {
 
 let ig_state = {}; // "loja-idx" -> boolean postado
 
-let PARCERIAS = [
- {nome:"Academia Corpo & Vida", categoria:"Academias", loja:"Itaipulândia", contato:"Prof. Márcio · (45) 99810-1122", desconto:"10%", status:"Ativa", renovacao:"30/09/2026", obs:"Alunos ganham 10% na loja; clientes indicados fazem aula experimental grátis."},
- {nome:"Studio Pilates Equilíbrio", categoria:"Pilates", loja:"Ouro Verde", contato:"Fisio. Carla · (45) 99820-2233", desconto:"8%", status:"Ativa", renovacao:"15/12/2026", obs:"Indicação mútua; kit de suplementos como brinde a novos alunos."},
- {nome:"Cross Box Toledo", categoria:"Cross", loja:"Toledo", contato:"Coach Rafael · (45) 99830-3344", desconto:"12%", status:"Em negociação", renovacao:"", obs:"Avaliar combo pós-treino (whey + barra) com preço especial."},
- {nome:"Nutri Ana Beatriz", categoria:"Nutricionistas", loja:"Todas", contato:"Ana Beatriz CRN · (45) 99840-4455", desconto:"—", status:"Ativa", renovacao:"01/03/2027", obs:"Encaminha pacientes com lista de compras; loja divulga a nutri nas redes."},
- {nome:"Academia Força Total", categoria:"Academias", loja:"Ouro Verde", contato:"Recepção · (45) 99850-5566", desconto:"10%", status:"Pausada", renovacao:"25/08/2026", obs:"Retomar após reforma da academia."},
- {nome:"Nutri Felipe Ramos", categoria:"Nutricionistas", loja:"Itaipulândia", contato:"Felipe CRN · (45) 99860-6677", desconto:"5%", status:"Em negociação", renovacao:"", obs:"Definir vitrine de produtos recomendados por ele."},
-];
+let PARCERIAS = [];
 
 const ENTREGADORES = ["A definir","Moto Entregas Zé","Moto Entregas Duda","App (iFood/Loggi)","Retirada na loja"];
-let PEDIDO_SEQ = 4;
-let PEDIDOS = [
- {id:1, cliente:"Maria Silva", telefone:"(45) 99911-2201", loja:"Itaipulândia", itens:"1x Whey Vegano, 2x Barra de proteína", valor:169.80, endereco:"Rua das Flores, 120", entregador:"A definir", status:"novo"},
- {id:2, cliente:"João Pereira", telefone:"(45) 99922-3312", loja:"Toledo", itens:"1x Açaí em pó, 1x Granola", valor:64.80, endereco:"Av. Central, 450", entregador:"Moto Entregas Zé", status:"separacao"},
- {id:3, cliente:"Ana Costa", telefone:"(45) 99933-4423", loja:"Ouro Verde", itens:"3x Chá verde, 1x Mel orgânico", valor:83.60, endereco:"Rua XV, 88", entregador:"Moto Entregas Duda", status:"rota"},
-];
+let PEDIDO_SEQ = 0;
+let PEDIDOS = [];
 
 /* Patrimônio (compras de bens) e manutenções (reparos/serviços) */
 let PATRIMONIO = [];
@@ -1149,14 +1083,8 @@ let GENTE = [
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", salario:2141.25, comissao:0, encargo:86.56, vale:0},
 ];
 const gTotal = g => (g.salario||0)+(g.comissao||0)+(g.encargo||0)+(g.vale||0);
-/* Boletos e despesas variáveis — reais (totais do mês por loja, planilha "Despesas de Ago") */
-let BOLETOS = [
- {data:"Ago/26", loja:"Ouro Verde", descricao:"Compras/NF do mês (total)", valor:7127.20, status:"Pago"},
- {data:"Ago/26", loja:"Toledo", descricao:"Compras/NF do mês (total)", valor:1255.18, status:"Pago"},
- {data:"Ago/26", loja:"Itaipulândia", descricao:"Compras/NF do mês (total)", valor:6504.14, status:"Pago"},
- {data:"Ago/26", loja:"Ouro Verde", descricao:"Boletos a pagar (total)", valor:12047.38, status:"Pendente"},
- {data:"Ago/26", loja:"Itaipulândia", descricao:"Boletos a pagar (total)", valor:11512.40, status:"Pendente"},
-];
+/* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
+let BOLETOS = [];
 
 /* ============ COMPUTED FIELDS ============ */
 function computeMargem(p){
@@ -2371,7 +2299,28 @@ function renderPedidos(){
 function renderPatrimonio(){
   const s = currentStore();
   const tipo = document.getElementById('patrimonioTipoFilter').value;
+  const selAno = document.getElementById('patrimonioAnoFilter');
+  const selMes = document.getElementById('patrimonioMesFilter');
+
+  /* Ano e mês da data do lançamento (dd/mm/aaaa) */
+  const ptAno = p => { const d=parseBR(p.data); return d ? d.getFullYear() : null; };
+  const ptMes = p => { const d=parseBR(p.data); return d ? d.getMonth()+1 : null; };
+
   let list = PATRIMONIO.filter(p => selStores().includes(p.loja) || p.loja==='Todas');
+
+  /* Os anos da lista alimentam o seletor; o mês é fixo de Jan a Dez */
+  const anos = [...new Set(list.map(ptAno).filter(Boolean))].sort((a,b)=>b-a);
+  const manter = (el, valores, rotulo) => {
+    const atual = el.value;
+    el.innerHTML = `<option value="">${rotulo}</option>` +
+      valores.map(v=>`<option value="${v.v}">${esc(v.t)}</option>`).join('');
+    el.value = valores.some(v=>String(v.v)===atual) ? atual : '';
+  };
+  manter(selAno, anos.map(a=>({v:a, t:String(a)})), 'Todos os anos');
+  manter(selMes, MES_ABREV.slice(1).map((m,i)=>({v:i+1, t:m})), 'Todos os meses');
+  const fAno = selAno.value, fMes = selMes.value;
+  if(fAno) list = list.filter(p=> String(ptAno(p))===fAno);
+  if(fMes) list = list.filter(p=> String(ptMes(p))===fMes);
   const soma = (arr)=> arr.reduce((a,b)=>a+(b.valor||0),0);
   const totPatr = soma(list.filter(p=>p.tipo==='Patrimônio'));
   const totManut = soma(list.filter(p=>p.tipo==='Manutenção'));
@@ -3145,6 +3094,8 @@ document.getElementById('growDespesa').onchange = renderProjecao;
 document.getElementById('baseJanela').onchange = renderProjecao;
 document.getElementById('crmResultadoFilter').onchange = renderCRM;
 document.getElementById('patrimonioTipoFilter').onchange = renderPatrimonio;
+document.getElementById('patrimonioAnoFilter').onchange = renderPatrimonio;
+document.getElementById('patrimonioMesFilter').onchange = renderPatrimonio;
 document.getElementById('perfil-btn').onclick = async ()=>{
   // Sair: encerra a sessão do Supabase e volta para a tela de login
   try{ if(window.TN&&window.TN.sb){ await window.TN.sb.auth.signOut(); } }catch(_){}
