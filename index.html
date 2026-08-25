@@ -1365,6 +1365,23 @@ function somaMeses(loja, campo){
   const arr = (FINANCEIRO[loja] && FINANCEIRO[loja][campo]) || [];
   return mesesIdx().reduce((a,i)=> a + (arr[i]||0), 0);
 }
+/* Um único mês marcado no topo? Então as telas que trabalham por competência
+   (despesas fixas, compras, boletos, folha) passam a mostrar esse mesmo mês —
+   o recorte escolhido vale para o painel inteiro, não só para os gráficos. */
+function mesUnicoSel(){
+  if(!Array.isArray(mesesSel) || mesesSel.length!==1) return null;
+  const p = String(mesesSel[0]).split('/');
+  const mes = MES_ABREV.indexOf(p[0]), ano = 2000 + (+p[1]);
+  return (mes && ano) ? {ano, mes} : null;
+}
+function sincronizarCompetencias(){
+  const u = mesUnicoSel();
+  if(!u) return;
+  if(typeof fxAno!=='undefined'){ fxAno=u.ano; fxMes=u.mes; }
+  if(typeof cpAno!=='undefined'){ cpAno=u.ano; cpMes=u.mes; }
+  if(typeof gtAno!=='undefined'){ gtAno=u.ano; gtMes=u.mes; }
+}
+
 function renderMesFiltro(){
   const tabs = document.getElementById('anoTabs'), box = document.getElementById('mesChecks');
   if(!tabs || !box) return;
@@ -1372,11 +1389,20 @@ function renderMesFiltro(){
   if(!anos.length){ tabs.innerHTML=''; box.innerHTML=''; return; }
   if(!anos.includes(anoAtivo)) anoAtivo = anos[anos.length-1];   // por padrão, o ano mais recente
   tabs.innerHTML = anos.map(a=>`<button class="btn ${a===anoAtivo?'primary':'ghost'}" data-ano="${esc(a)}" style="padding:3px 9px;font-size:12px;">20${esc(a)}</button>`).join('');
-  const doAno = (FINANCEIRO.meses||[]).filter(x=>x.split("/")[1]===anoAtivo);
-  box.innerHTML = doAno.map(lab=>{
-    const on = (mesesSel === null) || mesesSel.includes(lab);
-    return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;"><input type="checkbox" class="mes-chk" value="${esc(lab)}" ${on?'checked':''}> ${esc(lab.split("/")[0])}</label>`;
+  /* Os doze meses sempre à vista, em duas fileiras — assim dá para escolher o
+     recorte sem depender de quais meses já têm dado carregado. */
+  const comDados = new Set((FINANCEIRO.meses||[]).filter(x=>x.split("/")[1]===anoAtivo));
+  const linha = (de, ate) => MES_ABREV.slice(de, ate+1).map(m=>{
+    const lab = m + '/' + anoAtivo;
+    const on  = (mesesSel === null) || mesesSel.includes(lab);
+    const tem = comDados.has(lab);
+    return `<label title="${tem?'':'sem dados neste mês'}" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;${tem?'cursor:pointer;':'opacity:.4;cursor:not-allowed;'}">
+      <input type="checkbox" class="mes-chk" value="${esc(lab)}" ${on&&tem?'checked':''} ${tem?'':'disabled'}> ${esc(m)}</label>`;
   }).join('');
+  box.innerHTML = `<span style="display:inline-flex;flex-direction:column;gap:3px;">
+      <span style="display:inline-flex;gap:10px;">${linha(1,6)}</span>
+      <span style="display:inline-flex;gap:10px;">${linha(7,12)}</span>
+    </span>`;
   tabs.querySelectorAll('[data-ano]').forEach(b=>{ b.onclick=()=>{ anoAtivo=b.dataset.ano; salvarPrefs(); renderMesFiltro(); }; });
   box.querySelectorAll('.mes-chk').forEach(chk=>{
     chk.onchange = ()=>{
@@ -1384,6 +1410,7 @@ function renderMesFiltro(){
       let sel = (mesesSel === null) ? todos.slice() : mesesSel.slice();  // parte do estado visível
       sel = chk.checked ? [...new Set(sel.concat(chk.value))] : sel.filter(x=>x!==chk.value);
       mesesSel = (sel.length===todos.length) ? null : sel;              // tudo marcado = sem filtro
+      sincronizarCompetencias();
       salvarPrefs(); renderAll();
     };
   });
@@ -3037,7 +3064,6 @@ function renderCaixa(){
     <div class="card stat-tile accent-warning"><div class="label">Despesas fixas / mês</div><div class="value">${BRL(totFixas)}</div><div class="hint">${esc(fxCompetencia())} · com folha e provisões</div></div>
     <div class="card stat-tile"><div class="label">Compras do mês</div><div class="value">${BRL(comprasMesKpi)}</div><div class="hint">${esc(cpCompetencia())} · nota cheia, impacta o lucro</div></div>
     <div class="card stat-tile"><div class="label">Boletos pagos no mês</div><div class="value">${BRL(boletosPagosKpi)}</div><div class="hint">${esc(fxCompetencia())} · saiu do caixa</div></div>
-    <div class="card stat-tile"><div class="label">Total do mês</div><div class="value">${BRL(totFixas + comprasMesKpi)}</div><div class="hint">fixas + compras (regime de competência)</div></div>
   ` : '';
   const cardFixas = document.getElementById('card-fixas');
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
