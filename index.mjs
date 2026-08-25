@@ -63,13 +63,14 @@ async function main() {
 
   console.log('→ Parseando abas...');
   const financeiro = parseFinanceiro(wb, Number(ANO));
-  const { despesasFixas, folha, boletos } = parseDespesas(wb, DESPESAS_ABA, COMPETENCIA);
+  const { despesasFixas, folha, boletos, comprasNf } = parseDespesas(wb, DESPESAS_ABA, COMPETENCIA);
   const estoque = parseEstoque(wb);
 
   console.log(`   financeiro_mensal: ${financeiro.length}`);
   console.log(`   despesas_fixas:    ${despesasFixas.length}`);
   console.log(`   folha:             ${folha.length}`);
   console.log(`   boletos:           ${boletos.length}`);
+  console.log(`   compras_nf:        ${comprasNf.length}`);
   console.log(`   estoque:           ${estoque.length}`);
 
   // financeiro: upsert por (ano,mes,loja)
@@ -90,8 +91,16 @@ async function main() {
     await delWhere('folha', 'competencia', COMPETENCIA);
     await insert('folha', folha);
   }
-  await delWhere('boletos', 'competencia', COMPETENCIA);
-  await insert('boletos', boletos);
+  if (fixasNoPainel(COMPETENCIA)) {
+    console.log('   boletos/compras:   geridos no painel a partir de Set/2026 — sync ignorado');
+  } else {
+    await delWhere('boletos', 'competencia', COMPETENCIA);
+    await insert('boletos', boletos);
+    // compras da planilha (nota cheia por dia) alimentam compras_nf
+    const { error: eDel } = await db.from('compras_nf').delete().eq('origem','planilha').eq('ano', Number(ANO));
+    if (eDel) throw new Error(`delete compras_nf: ${eDel.message}`);
+    await insert('compras_nf', comprasNf);
+  }
 
   // estoque: snapshot completo
   await delAll('estoque_inventario');

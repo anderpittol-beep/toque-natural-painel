@@ -164,6 +164,14 @@ export function parseDespesas(wb, abaNome, competencia) {
   for (const l of LOJAS) folhaAcc[l] = { socia: { salario: 0, encargo: 0 }, colab: { salario: 0, encargo: 0 } };
 
   const boletos = [];
+  const comprasNf = [];
+  // competência "Ago/26" -> ano/mês, para montar as datas de cada lançamento
+  const cm = String(competencia||'').match(/^\s*([A-Za-zçÇ]{3})[^\/]*\/\s*(\d{2,4})/);
+  const mes = cm ? MESES[cm[1].toLowerCase()] : null;
+  let ano = cm ? Number(cm[2]) : null; if (ano != null && ano < 100) ano += 2000;
+  const iso = d => (ano && mes) ? `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}` : null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const venceu = d => { const dt = (ano && mes) ? new Date(ano, mes-1, d) : null; return dt ? dt <= hoje : false; };
 
   for (const r of data) {
     const desc = txt(r[1]);
@@ -187,17 +195,24 @@ export function parseDespesas(wb, abaNome, competencia) {
         }
       }
     }
-    // Totais de compras (col6='Total') e boletos (col11='Total')
-    if (txt(r[6]).toLowerCase() === 'total') {
+    // Compras por dia (col6 = dia, col7/8/9 = lojas) -> nota cheia, regime de competência
+    const diaComp = num(r[6]);
+    if (diaComp && diaComp >= 1 && diaComp <= 31) {
       const comp = { 'Ouro Verde': num(r[7]), 'Toledo': num(r[8]), 'Itaipulândia': num(r[9]) };
-      for (const loja of LOJAS) if (comp[loja] != null) {
-        boletos.push({ competencia, loja, descricao: 'Compras/NF do mês (total)', valor: comp[loja], status: 'Pago' });
+      for (const loja of LOJAS) if (comp[loja]) {
+        comprasNf.push({ data: iso(diaComp), ano, mes, loja, fornecedor: 'Compras do dia (planilha)',
+                         descricao: 'Compras/NF', valor: comp[loja], parcelas: 1, origem: 'planilha' });
       }
     }
-    if (txt(r[11]).toLowerCase() === 'total') {
+    // Boletos por dia (col11 = dia, col12/13/14 = lojas) -> regime de caixa.
+    // Já vencidos contam como pagos; os que ainda vão vencer ficam em aberto.
+    const diaBol = num(r[11]);
+    if (diaBol && diaBol >= 1 && diaBol <= 31) {
       const bol = { 'Ouro Verde': num(r[12]), 'Toledo': num(r[13]), 'Itaipulândia': num(r[14]) };
-      for (const loja of LOJAS) if (bol[loja] != null && bol[loja] !== 0) {
-        boletos.push({ competencia, loja, descricao: 'Boletos a pagar (total)', valor: bol[loja], status: 'Pendente' });
+      for (const loja of LOJAS) if (bol[loja]) {
+        boletos.push({ competencia, ano, mes, data_pgto: iso(diaBol), loja,
+                       descricao: 'Boleto ' + String(diaBol).padStart(2,'0') + '/' + String(mes).padStart(2,'0'),
+                       valor: bol[loja], status: venceu(diaBol) ? 'Pago' : 'Pendente', origem: 'planilha' });
       }
     }
   }
@@ -209,7 +224,7 @@ export function parseDespesas(wb, abaNome, competencia) {
     if (c.salario || c.encargo) folha.push({ competencia, pessoa: COLAB_POR_LOJA[loja], papel: 'Colaboradora', loja, salario: c.salario, comissao: 0, encargo: c.encargo });
   }
 
-  return { despesasFixas, folha, boletos };
+  return { despesasFixas, folha, boletos, comprasNf };
 }
 
 // ---------- Aba "ESTOQUE" -> estoque_inventario ----------
