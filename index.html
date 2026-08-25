@@ -229,7 +229,6 @@ window.TN_CONFIG = {
       <button data-view="margem"><span class="navicon">%</span>Margem por produto</button>
       <button data-view="produtos"><span class="navicon">▲</span>Produtos mais vendidos</button>
       <button data-view="desempenho"><span class="navicon">★</span>Desempenho de vendas</button>
-      <button data-view="patrimonio"><span class="navicon">⌂</span>Patrimônio &amp; manutenção</button>
       <button data-view="gente" id="nav-gente"><span class="navicon">◈</span>Gente e Gestão <span class="lock">🔒</span></button>
       <div class="nav-group">Clientes</div>
       <button data-view="clientes"><span class="navicon">◐</span>Clientes &amp; CRM</button>
@@ -310,7 +309,7 @@ window.TN_CONFIG = {
       <!-- CAIXA DIÁRIO & DESPESAS -->
       <section class="view" id="view-caixa">
         <h2 class="section-title">Caixa diário &amp; despesas</h2>
-        <p class="section-desc">Controle diário dos recursos de cada loja: fechamento do caixa e saldo em conta por dia, além das despesas fixas do mês, dos boletos e das despesas variáveis pagas. Selecione a loja no topo para ver isolado. É aqui que você enxerga, dia a dia, quanto há disponível em cada loja.</p>
+        <p class="section-desc">Controle diário dos recursos de cada loja: fechamento do caixa e saldo em conta por dia, além das despesas fixas do mês, dos boletos, das compras do mês e do patrimônio &amp; manutenção. Selecione a loja no topo para ver isolado. É aqui que você enxerga, dia a dia, quanto há disponível em cada loja.</p>
         <div class="grid grid-4" id="caixa-kpis" style="margin-bottom:16px;"></div>
 
         <div class="card" style="margin-bottom:18px;">
@@ -405,6 +404,48 @@ window.TN_CONFIG = {
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-apagar"></table></div>
             </div>
           </div>
+        </div>
+
+        <div style="margin-top:26px;border-top:1px solid rgba(245,236,214,0.12);padding-top:20px;">
+        <h3 class="section-title" style="font-size:16px;">Patrimônio &amp; manutenção</h3>
+        <p class="section-desc">Controle de compras de patrimônio (impressora, freezer, prateleira, balança...) e de manutenções da loja (pintura, reparos, dedetização...). Registre data, descrição e valor; acompanhe quanto foi investido, o que está pendente de pagamento e as manutenções agendadas.</p>
+        <div class="grid grid-4" id="patrimonio-kpis" style="margin-bottom:16px;"></div>
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Novo lançamento</h3>
+          <form class="feedback-form" id="form-patrimonio" style="grid-template-columns:1fr 1fr 1fr;">
+            <input type="text" id="pt-data" placeholder="Data (dd/mm/aaaa)">
+            <select id="pt-tipo">
+              <option>Patrimônio</option>
+              <option>Manutenção</option>
+            </select>
+            <select id="pt-loja">
+              <option>Itaipulândia</option>
+              <option>Ouro Verde</option>
+              <option>Toledo</option>
+              <option>Todas</option>
+            </select>
+            <input type="text" id="pt-descricao" placeholder="Descrição (ex: Pintura da calçada / Impressora fiscal)" required style="grid-column:1/-1;">
+            <input type="number" id="pt-valor" placeholder="Valor (R$)" step="0.01" min="0">
+            <input type="text" id="pt-fornecedor" placeholder="Fornecedor / prestador">
+            <input type="text" id="pt-contato" placeholder="Contato do prestador (telefone)">
+            <select id="pt-status">
+              <option>Pago</option>
+              <option>Pendente</option>
+              <option>Agendado</option>
+            </select>
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar</button>
+          </form>
+        </div>
+        <div class="card">
+          <div class="toolbar filters" style="margin-bottom:12px;">
+            <select id="patrimonioTipoFilter">
+              <option value="">Patrimônio + Manutenção</option>
+              <option value="Patrimônio">Só patrimônio</option>
+              <option value="Manutenção">Só manutenção</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto;"><table id="tbl-patrimonio"></table></div>
+        </div>
         </div>
         <p class="hint" style="margin-top:14px;">Quando conectarmos à sua planilha do Drive (abas "Despesas de..." e "Boletos"), estes lançamentos passam a carregar automaticamente, e o total de despesas alimenta o resultado de cada loja na aba Receitas &amp; despesas.</p>
       </section>
@@ -799,47 +840,6 @@ window.TN_CONFIG = {
       </section>
 
       <!-- PATRIMÔNIO & MANUTENÇÃO -->
-      <section class="view" id="view-patrimonio">
-        <h2 class="section-title">Patrimônio &amp; manutenção</h2>
-        <p class="section-desc">Controle de compras de patrimônio (impressora, freezer, prateleira, balança...) e de manutenções da loja (pintura, reparos, dedetização...). Registre data, descrição e valor; acompanhe quanto foi investido, o que está pendente de pagamento e as manutenções agendadas.</p>
-        <div class="grid grid-4" id="patrimonio-kpis" style="margin-bottom:16px;"></div>
-        <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Novo lançamento</h3>
-          <form class="feedback-form" id="form-patrimonio" style="grid-template-columns:1fr 1fr 1fr;">
-            <input type="text" id="pt-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="pt-tipo">
-              <option>Patrimônio</option>
-              <option>Manutenção</option>
-            </select>
-            <select id="pt-loja">
-              <option>Itaipulândia</option>
-              <option>Ouro Verde</option>
-              <option>Toledo</option>
-              <option>Todas</option>
-            </select>
-            <input type="text" id="pt-descricao" placeholder="Descrição (ex: Pintura da calçada / Impressora fiscal)" required style="grid-column:1/-1;">
-            <input type="number" id="pt-valor" placeholder="Valor (R$)" step="0.01" min="0">
-            <input type="text" id="pt-fornecedor" placeholder="Fornecedor / prestador">
-            <input type="text" id="pt-contato" placeholder="Contato do prestador (telefone)">
-            <select id="pt-status">
-              <option>Pago</option>
-              <option>Pendente</option>
-              <option>Agendado</option>
-            </select>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar</button>
-          </form>
-        </div>
-        <div class="card">
-          <div class="toolbar filters" style="margin-bottom:12px;">
-            <select id="patrimonioTipoFilter">
-              <option value="">Patrimônio + Manutenção</option>
-              <option value="Patrimônio">Só patrimônio</option>
-              <option value="Manutenção">Só manutenção</option>
-            </select>
-          </div>
-          <div style="overflow-x:auto;"><table id="tbl-patrimonio"></table></div>
-        </div>
-      </section>
 
       <!-- GENTE E GESTÃO (confidencial) -->
       <section class="view" id="view-gente">
@@ -3109,7 +3109,6 @@ const VIEW_TITLES = {
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
   'parcerias':['Parcerias & bônus','Academias, pilates, cross e nutricionistas'],
   'pedidos':['Pedidos & entregas','Do WhatsApp à separação e coleta do entregador'],
-  'patrimonio':['Patrimônio & manutenção','Compras de bens e manutenções da loja'],
 };
 function setView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
