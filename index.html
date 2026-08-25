@@ -537,8 +537,14 @@ window.TN_CONFIG = {
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Meta diária por loja</h3>
-          <p class="hint" style="margin:0 0 12px 0;">Meta diária = meta mensal ÷ dias úteis do mês (segunda a sábado). "Necessário/dia" é quanto ainda falta dividido pelos dias úteis restantes até o fim do mês — o ritmo diário preciso para bater a meta.</p>
+          <p class="hint" style="margin:0 0 12px 0;">A meta por dia é o que ainda falta da meta mensal dividido pelos dias úteis que restam (segunda a sábado — a loja fecha domingo). Sobe quando o mês atrasa e cai quando adianta.</p>
           <div style="overflow-x:auto;"><table id="tbl-meta-diaria"></table></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Histórico de faturamento por loja</h3>
+          <p class="hint" style="margin:0 0 8px 0;">Meses fechados, vindos da planilha do Drive (mesma receita da Visão geral). É o faturamento da loja que conta como realizado da colaboradora. Use os filtros de loja e de mês no topo para escolher o recorte.</p>
+          <div style="overflow-x:auto;"><table id="tbl-hist-faturamento"></table></div>
         </div>
 
         <div class="card" style="margin-bottom:16px;">
@@ -1701,6 +1707,40 @@ function renderDesempenho(){
       }).join('');
       return `<tr><td class="strong">${esc(w.label)}</td>${cells}<td>${best?esc(best.n)+' ('+best.pct.toFixed(0)+'%)':'<span class="hint">—</span>'}</td></tr>`;
     }).join('') || `<tr><td colspan="${nomes.length+2}" class="hint">Sem vendas (registre ou lance no Caixa diário).</td></tr>`}</tbody>`;
+
+  // ===== Histórico de faturamento por loja (planilha do Drive) =====
+  const hb = document.getElementById('tbl-hist-faturamento');
+  if(hb){
+    const idxH = mesesIdx();
+    const lojasH = selStores();
+    const colabDe = l => { const e = EQUIPE.find(x=>x.cargo==='Colaboradora' && x.loja===l); return e ? e.nome : '—'; };
+    const linhas = [];
+    idxH.forEach(j=>{
+      const rotulo = (FINANCEIRO.meses||[])[j];
+      lojasH.forEach(l=>{
+        const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
+        if(!rec) return;
+        linhas.push({mes:rotulo, loja:l, rec, meta:METAS_MENSAIS[l]||0, colab:colabDe(l),
+                     parcial:(FINANCEIRO.parcialPorMes||{})[rotulo]});
+      });
+    });
+    const totRec = linhas.reduce((a,x)=>a+x.rec,0);
+    const totMeta = linhas.reduce((a,x)=>a+x.meta,0);
+    const pctTot = totMeta ? totRec/totMeta*100 : 0;
+    hb.innerHTML = `
+      <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th></tr></thead>
+      <tbody>${linhas.map(x=>{
+        const pct = x.meta ? x.rec/x.meta*100 : 0;
+        return `<tr>
+          <td class="strong">${esc(x.mes)}${x.parcial?` <span class="hint">até ${esc(x.parcial)}</span>`:''}</td>
+          <td>${esc(x.loja)}</td>
+          <td>${esc(x.colab)}</td>
+          <td class="strong">${BRL(x.rec)}</td>
+          <td>${x.meta?BRL(x.meta):'<span class="hint">—</span>'}</td>
+          <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
+        </tr>`;}).join('') || `<tr><td colspan="6" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
+      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td></tr>`:''}</tbody>`;
+  }
 
   // ===== Premiações (por % da meta) =====
   let premSemana=null;
