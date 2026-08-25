@@ -554,14 +554,9 @@ window.TN_CONFIG = {
         </div>
 
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Metas semanais &amp; registro de venda diária</h3>
-          <div id="metas-box" class="filters" style="margin-bottom:12px;"></div>
-          <form class="feedback-form" id="form-venda" style="grid-template-columns:1fr 1fr 1fr;">
-            <input type="text" id="vd-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="vd-colab"></select>
-            <input type="number" id="vd-valor" placeholder="Valor vendido (R$)" step="0.01">
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar venda</button>
-          </form>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Meta mensal por loja</h3>
+          <p class="hint" style="margin:0 0 10px 0;">Base de todo o resto: a meta do dia, a meta da semana e os percentuais saem daqui. Só o perfil Sócio edita.</p>
+          <div id="metas-box" class="filters"></div>
         </div>
 
         <div class="card">
@@ -1627,12 +1622,14 @@ function diasUteisRestantes(ref, incluirRef){ // até o fim do mês, seg–sáb 
 }
 function renderDesempenho(){
   const nomes = vendedorasAtuais();
-  document.getElementById('vd-colab').innerHTML = nomes.map(n=>`<option>${esc(n)}</option>`).join('');
-  document.getElementById('metas-box').innerHTML = nomes.map(n=>
-    `<span class="hint" style="margin-right:4px;">Meta mensal ${esc(lojaOf(n))}</span><input type="number" data-meta="${esc(lojaOf(n))}" value="${METAS_MENSAIS[lojaOf(n)]||0}" step="500" style="width:110px;margin-right:14px;">`).join('');
-  document.querySelectorAll('[data-meta]').forEach(inp=>{
-    inp.onchange = ()=>{ METAS_MENSAIS[inp.dataset.meta] = num(inp.value)||0; renderDesempenho(); };
-  });
+  const socioMeta = (typeof perfil!=='undefined' && perfil==='socia');
+  document.getElementById('metas-box').innerHTML = [...new Set(nomes.map(lojaOf))].map(l=>
+    `<span class="hint" style="margin-right:4px;">Meta mensal ${esc(l)}</span><input type="number" data-meta="${esc(l)}" value="${METAS_MENSAIS[l]||0}" step="500" style="width:110px;margin-right:14px;" ${socioMeta?'':'disabled title="Somente o perfil Sócio edita a meta."'}>`).join('');
+  if(socioMeta){
+    document.querySelectorAll('[data-meta]').forEach(inp=>{
+      inp.onchange = ()=>{ METAS_MENSAIS[inp.dataset.meta] = num(inp.value)||0; tnUpsertMeta(inp.dataset.meta, METAS_MENSAIS[inp.dataset.meta]); renderAll(); };
+    });
+  }
 
   const vendas = vendasCompiladas().filter(v=>nomes.includes(v.colab));
 
@@ -3048,6 +3045,7 @@ function applyPerfil(){
     if(atual && atual.id==='view-gente') setView('visao-geral');
   }
   renderCaixa();
+  renderDesempenho();   // os campos de meta mudam de editavel para leitura
 }
 
 /* ============ CSV IMPORT ============ */
@@ -3152,19 +3150,6 @@ document.getElementById('margemStatusFilter').onchange = renderMargem;
 document.getElementById('estoqueStatusFilter').onchange = renderEstoque;
 document.getElementById('igStoreFilter').onchange = renderInstagram;
 document.getElementById('tarefaView').onchange = renderTarefas;
-document.getElementById('form-venda').addEventListener('submit', e=>{
-  e.preventDefault();
-  const colab = document.getElementById('vd-colab').value;
-  const emp = EQUIPE.find(x=>x.nome===colab);
-  VENDAS_DIARIAS.push({
-    data: document.getElementById('vd-data').value || TODAY.toLocaleDateString('pt-BR'),
-    colab, loja: emp?emp.loja:'',
-    valor: num(document.getElementById('vd-valor').value)||0,
-  });
-  tnInsert('vendas_diarias',{data:document.getElementById('vd-data').value||TODAY.toLocaleDateString('pt-BR'),colaborador:colab,loja:emp?emp.loja:'',valor:num(document.getElementById('vd-valor').value)||0});
-  document.getElementById('vd-data').value=''; document.getElementById('vd-valor').value='';
-  renderDesempenho();
-});
 document.getElementById('growReceita').onchange = renderProjecao;
 document.getElementById('growDespesa').onchange = renderProjecao;
 document.getElementById('baseJanela').onchange = renderProjecao;
@@ -3570,6 +3555,15 @@ async function tnInsertRet(tabela,row){
 }
 async function tnUpdate(tabela,match,valores){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).update(valores).match(match); if(error) console.warn('update',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
+/* Meta mensal da loja: gravada no Supabase para valer em qualquer dispositivo */
+async function tnUpsertMeta(loja, valor){
+  try{
+    if(window.TN && window.TN.sb){
+      const {error} = await window.TN.sb.from('metas_mensais').upsert({loja, valor}, {onConflict:'loja'});
+      if(error) console.warn('meta', error.message);
+    }
+  }catch(e){ console.warn(e); }
+}
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
 
 tnInitApp();
