@@ -343,6 +343,7 @@ window.TN_CONFIG = {
             <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
               <div>
                 <h3 style="font-size:14px;margin:0 0 4px 0;">Despesas fixas do mês</h3>
+                <p class="hint" id="fx-aviso-total" style="margin:0 0 6px 0;border-left:3px solid var(--warning,#d9a441);padding:6px 10px;background:rgba(217,164,65,0.07);display:none;"></p>
                 <p class="hint" style="margin:0;">Recorrentes: aluguel, água, internet, sistema... A folha entra pelo total, vinda de <strong>Gente e Gestão</strong>. Cada mês herda o anterior; ao editar, o novo valor segue para os meses seguintes.</p>
               </div>
               <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
@@ -2875,6 +2876,13 @@ function renderCompras(){
   if(lbl) lbl.textContent = cpCompetencia();
   const aviso = document.getElementById('cp-aviso');
   if(aviso) aviso.textContent = cpGerenciavel() ? '' : 'Competência anterior a Set/26: as compras vinham da planilha e não são lançadas aqui.';
+  const avisoFx = document.getElementById('fx-aviso-total');
+  if(avisoFx){
+    const totalSemDetalhe = fixasDaCompetencia(fxAno, fxMes)
+      .some(d => String(d.descricao||'').startsWith('Despesa total do mês'));
+    avisoFx.style.display = totalSemDetalhe ? '' : 'none';
+    avisoFx.textContent = 'Este mês não tem aba de despesas na planilha: o valor veio da aba 2026 como total por loja, já incluindo folha e compras. Por isso aparece em uma linha só.';
+  }
   const ant=document.getElementById('cp-mes-ant'), prox=document.getElementById('cp-mes-prox');
   if(ant) ant.onclick=()=>{ const p=fxMesAnterior(cpAno,cpMes); cpAno=p.ano; cpMes=p.mes; compraEditando=null; renderCaixa(); };
   if(prox) prox.onclick=()=>{ if(cpMes===12){cpAno++;cpMes=1;} else cpMes++; compraEditando=null; renderCaixa(); };
@@ -3053,6 +3061,12 @@ function renderCaixa(){
   /* Ao lado das fixas, o que mais sai no mês: a nota cheia das compras (afeta o
      lucro) e os boletos efetivamente pagos (afetam o caixa). São coisas
      diferentes, por isso aparecem separadas. */
+  /* Abril não tem aba de despesas na planilha: o valor veio da aba 2026 como
+     total por loja, já com folha e compras dentro. Sem avisar, o número
+     pareceria uma despesa fixa gigante ao lado dos outros meses. */
+  const soTotal = fixasDaCompetencia(fxAno, fxMes)
+    .some(d => String(d.descricao||'').startsWith('Despesa total do mês'));
+
   const comprasMesKpi = comprasDaCompetencia(cpAno, cpMes)
     .filter(c=> selStores().includes(c.loja))
     .reduce((a,c)=> a + (+c.valor||0), 0);
@@ -3061,7 +3075,7 @@ function renderCaixa(){
     .reduce((a,b)=> a + (+b.valor||0), 0);
 
   document.getElementById('caixa-kpis').innerHTML = socia ? `
-    <div class="card stat-tile accent-warning"><div class="label">Despesas fixas / mês</div><div class="value">${BRL(totFixas)}</div><div class="hint">${esc(fxCompetencia())} · com folha e provisões</div></div>
+    <div class="card stat-tile accent-warning"><div class="label">${soTotal?'Despesa do mês':'Despesas fixas / mês'}</div><div class="value">${BRL(totFixas)}</div><div class="hint">${esc(fxCompetencia())} · ${soTotal?'total da planilha, sem detalhamento':'com folha e provisões'}</div></div>
     <div class="card stat-tile"><div class="label">Compras do mês</div><div class="value">${BRL(comprasMesKpi)}</div><div class="hint">${esc(cpCompetencia())} · nota cheia, impacta o lucro</div></div>
     <div class="card stat-tile"><div class="label">Boletos pagos no mês</div><div class="value">${BRL(boletosPagosKpi)}</div><div class="hint">${esc(fxCompetencia())} · saiu do caixa</div></div>
   ` : '';
@@ -3122,7 +3136,7 @@ function renderCaixa(){
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;}).join('')}
     ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td></tr>' : '</tr>')}
-    <tr><td colspan="3" class="strong" style="text-align:right;">Total fixo/mês (com folha e retenções)</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
+    <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
 
   // ações de editar / excluir (materializa o mês herdado antes de alterar)
   document.querySelectorAll('[data-fxeditar]').forEach(b=>{
