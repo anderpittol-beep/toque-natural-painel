@@ -504,7 +504,7 @@ window.TN_CONFIG = {
 
         <div class="card" >
           <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
-          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia vem da meta mensal da loja, dividida pelos dias do mês.</p>
+          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia é o que falta da meta mensal dividido pelos dias úteis que restam. O total de vendas do dia alimenta a receita da loja na Visão geral e na projeção.</p>
           <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
             <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
             <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
@@ -1189,15 +1189,65 @@ function despesaPainelLoja(ano, mes, loja){
                          .reduce((a,c)=>a+(+c.valor||0),0);
   return fixas + folha + prov + compras;
 }
+/* Receita da loja no mês, somando o que foi fechado no caixa diário */
+function receitaPainelLoja(ano, mes, loja){
+  return CAIXA_DIARIO.reduce((a,c)=>{
+    const d = parseBR(c.data);
+    if(!d || c.loja!==loja) return a;
+    if(d.getFullYear()!==ano || d.getMonth()+1!==mes) return a;
+    return a + (+c.vendas||0);
+  }, 0);
+}
+
+/* Competências que o painel passa a mandar (a partir do corte), vindas de
+   qualquer lançamento: caixa diário, despesas fixas, folha ou compras. */
+function competenciasDoPainel(){
+  const set = new Set();
+  const marca = (ano, mes)=>{
+    if(!ano || !mes) return;
+    if(ano > FIXAS_CORTE.ano || (ano===FIXAS_CORTE.ano && mes >= FIXAS_CORTE.mes))
+      set.add(ano*100+mes);
+  };
+  CAIXA_DIARIO.forEach(c=>{ const d=parseBR(c.data); if(d) marca(d.getFullYear(), d.getMonth()+1); });
+  COMPRAS.forEach(c=> marca(+c.ano, +c.mes));
+  DESPESAS_FIXAS.forEach(d=> marca(+d.ano, +d.mes));
+  GENTE.forEach(g=> marca(+g.ano, +g.mes));
+  return [...set].sort((a,b)=>a-b);
+}
+
+/* Liga o que é lançado no painel ao resto: receita e despesa por loja alimentam
+   a Visão geral, a projeção, a margem e tudo que lê FINANCEIRO. */
 function aplicarDespesasDoPainel(){
-  const meses = (FINANCEIRO && FINANCEIRO.meses) || [];
-  meses.forEach((lab,i)=>{
+  if(!FINANCEIRO || !FINANCEIRO.meses) return;
+
+  // 1) cria as competências do painel que ainda não existem, em ordem cronológica
+  const rotulo = k => MES_ABREV[k%100] + '/' + String(Math.floor(k/100)).slice(2);
+  const chave  = lab => { const p=String(lab).split('/'); return (2000+(+p[1]))*100 + MES_ABREV.indexOf(p[0]); };
+  competenciasDoPainel().forEach(k=>{
+    const lab = rotulo(k);
+    if(FINANCEIRO.meses.includes(lab)) return;
+    let pos = FINANCEIRO.meses.findIndex(m => chave(m) > k);
+    if(pos < 0) pos = FINANCEIRO.meses.length;
+    FINANCEIRO.meses.splice(pos, 0, lab);
+    STORES.forEach(l=>{
+      if(!FINANCEIRO[l]) FINANCEIRO[l] = {receita:[], despesa:[]};
+      FINANCEIRO[l].receita.splice(pos, 0, 0);
+      FINANCEIRO[l].despesa.splice(pos, 0, 0);
+    });
+  });
+
+  // 2) nas competências do painel, os números vêm dos lançamentos daqui
+  FINANCEIRO.meses.forEach((lab,i)=>{
     const p = String(lab).split('/');
     const mes = MES_ABREV.indexOf(p[0]), ano = 2000 + (+p[1]);
     if(!mes || !ano) return;
     const noPainel = ano > FIXAS_CORTE.ano || (ano===FIXAS_CORTE.ano && mes >= FIXAS_CORTE.mes);
     if(!noPainel) return;                       // meses antigos seguem com o valor da planilha
-    STORES.forEach(l=>{ if(FINANCEIRO[l] && FINANCEIRO[l].despesa) FINANCEIRO[l].despesa[i] = despesaPainelLoja(ano, mes, l); });
+    STORES.forEach(l=>{
+      if(!FINANCEIRO[l]) return;
+      if(FINANCEIRO[l].despesa) FINANCEIRO[l].despesa[i] = despesaPainelLoja(ano, mes, l);
+      if(FINANCEIRO[l].receita) FINANCEIRO[l].receita[i] = receitaPainelLoja(ano, mes, l);
+    });
   });
 }
 function periodoLabel(){
