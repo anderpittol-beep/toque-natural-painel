@@ -408,7 +408,8 @@ window.TN_CONFIG = {
 
         <div style="margin-top:26px;border-top:1px solid rgba(245,236,214,0.12);padding-top:20px;">
         <h3 class="section-title" style="font-size:16px;">Patrimônio &amp; manutenção</h3>
-        <p class="section-desc">Controle de compras de patrimônio (impressora, freezer, prateleira, balança...) e de manutenções da loja (pintura, reparos, dedetização...). Registre data, descrição e valor; acompanhe quanto foi investido, o que está pendente de pagamento e as manutenções agendadas.</p>
+        <p class="section-desc">Controle de compras de patrimônio (impressora, freezer, prateleira, balança...) e de manutenções da loja (pintura, reparos, dedetização...). Serve como histórico do que foi feito, com quem, por quanto e quando — para consultar na hora de contratar de novo ou negociar preço.</p>
+        <p class="hint" style="border-left:3px solid var(--warning,#d9a441);padding:8px 12px;margin:0 0 14px 0;background:rgba(217,164,65,0.07);"><strong>O valor aqui é só referência de contratação e histórico.</strong> Ele não entra no caixa nem nas despesas do mês. Para o gasto contar no resultado, lance em <strong>Compras do mês</strong> (nota cheia, impacta o lucro) ou em <strong>Boletos pagos no mês</strong> (o que efetivamente saiu do caixa), conforme o caso.</p>
         <div class="grid grid-4" id="patrimonio-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Novo lançamento</h3>
@@ -2383,8 +2384,8 @@ function renderPatrimonio(){
   const pendente = soma(list.filter(p=>p.status==='Pendente'));
   const agendadas = list.filter(p=>p.status==='Agendado').length;
   document.getElementById('patrimonio-kpis').innerHTML = `
-    <div class="card stat-tile"><div class="label">Investido em patrimônio</div><div class="value">${BRL(totPatr)}</div></div>
-    <div class="card stat-tile"><div class="label">Gasto em manutenção</div><div class="value">${BRL(totManut)}</div></div>
+    <div class="card stat-tile"><div class="label">Patrimônio (referência)</div><div class="value">${BRL(totPatr)}</div></div>
+    <div class="card stat-tile"><div class="label">Manutenção (referência)</div><div class="value">${BRL(totManut)}</div></div>
     <div class="card stat-tile ${pendente>0?'accent-warning':''}"><div class="label">Pendente de pagamento</div><div class="value">${BRL(pendente)}</div></div>
     <div class="card stat-tile"><div class="label">Manutenções agendadas</div><div class="value">${agendadas}</div></div>
   `;
@@ -2393,7 +2394,7 @@ function renderPatrimonio(){
   const stBadge = {'Pago':'good','Pendente':'warning','Agendado':'muted'};
   const tipoBadge = t => t==='Patrimônio' ? 'b-good' : 'b-serious';
   document.getElementById('tbl-patrimonio').innerHTML = `
-    <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Loja</th><th>Fornecedor</th><th>Contato</th><th>Valor</th><th>Status</th></tr></thead>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Loja</th><th>Fornecedor</th><th>Contato</th><th>Valor (referência)</th><th>Status</th></tr></thead>
     <tbody>${rows.map(p=>`
       <tr>
         <td>${esc(p.data)}</td>
@@ -2405,7 +2406,7 @@ function renderPatrimonio(){
         <td class="strong">${BRL(p.valor)}</td>
         <td><span class="badge ${badgeClass(stBadge[p.status]||'muted')}"><span class="dot"></span>${esc(p.status)}</span></td>
       </tr>`).join('') || '<tr><td colspan="8" class="hint">Nenhum lançamento para este filtro.</td></tr>'}
-      ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido</td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
+      ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido <span class="hint" style="font-weight:400;">(referência — não entra no caixa nem nas despesas)</span></td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
 }
 
 /* ===== COMPRAS DO MÊS (NF cheia) — regime de competência, impacta o lucro =====
