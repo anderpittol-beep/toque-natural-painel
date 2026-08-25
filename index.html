@@ -918,13 +918,18 @@ window.TN_CONFIG = {
 
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas".</p>
+          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas". O <strong>cargo define o acesso</strong>: Sócio/Sócia entra como perfil Sócio, os demais como Colaboradora.</p>
           <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
             <input type="text" id="eq-nome" placeholder="Nome" required>
+            <input type="email" id="eq-email" placeholder="E-mail de acesso">
             <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
             <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <button class="btn primary" type="submit">Adicionar</button>
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
           </form>
+          <p class="hint" style="margin:10px 0 0 0;border-left:3px solid var(--warning,#d9a441);padding:8px 12px;background:rgba(217,164,65,0.07);">
+            O cadastro aqui <strong>define o perfil</strong> de quem entrar com esse e-mail. Criar a senha em si é feito uma vez pelo Supabase
+            (Authentication → Invite user), por segurança: a chave que cria login não pode ficar no navegador.
+            Depois do convite, o acesso já vem com o perfil deste cadastro.</p>
           <div id="equipe-list" style="margin-top:12px;"></div>
         </div>
 
@@ -2048,19 +2053,52 @@ function populateEquipeSelects(){
   document.getElementById('tk-colaborador').innerHTML = opts;
   renderEquipeCad();
 }
-/* Lista do cadastro da equipe, com opção de remover */
+let equipeEditando = null;
+/* Lista do cadastro da equipe: e-mail, cargo e o perfil de acesso que ele gera */
 function renderEquipeCad(){
   const box = document.getElementById('equipe-list');
   if(!box) return;
   const ordem = {'Sócia':0,'Sócio':0,'Colaboradora':1};
   const rows = EQUIPE.map((e,i)=>({e,i})).sort((a,b)=> (ordem[a.e.cargo]??2)-(ordem[b.e.cargo]??2) || String(a.e.nome).localeCompare(b.e.nome));
-  box.innerHTML = `<table><thead><tr><th>Nome</th><th>Cargo</th><th>Loja</th><th></th></tr></thead>
-    <tbody>${rows.map(({e,i})=>`<tr>
+  const acesso = c => (['Sócio','Sócia'].includes(c) ? 'Sócio' : 'Colaboradora');
+  box.innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail de acesso</th><th>Cargo</th><th>Perfil no painel</th><th>Loja</th><th></th></tr></thead>
+    <tbody>${rows.map(({e,i})=>{
+      if(equipeEditando===i){
+        return `<tr>
+          <td><input type="text" data-ee="nome" value="${esc(e.nome)}" style="width:120px;"></td>
+          <td><input type="email" data-ee="email" value="${esc(e.email||'')}" style="width:200px;"></td>
+          <td><select data-ee="cargo">${['Colaboradora','Sócia','Sócio'].map(c=>`<option ${c===e.cargo?'selected':''}>${c}</option>`).join('')}</select></td>
+          <td class="hint">segue o cargo</td>
+          <td><select data-ee="loja">${['Todas','Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option ${l===e.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td style="white-space:nowrap;"><button class="btn primary" data-eqsalvar="${i}" style="padding:2px 8px;">salvar</button>
+              <button class="btn ghost" data-eqcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
+      return `<tr>
       <td class="strong">${esc(e.nome)}</td>
+      <td>${e.email ? esc(e.email) : '<span class="hint">sem e-mail</span>'}</td>
       <td>${esc(e.cargo)}</td>
+      <td><span class="badge ${acesso(e.cargo)==='Sócio'?'b-warning':'b-good'}"><span class="dot"></span>${acesso(e.cargo)}</span></td>
       <td>${esc(e.loja)}</td>
-      <td style="text-align:right;"><button class="btn ghost" data-eqdel="${i}">remover</button></td>
-    </tr>`).join('') || '<tr><td colspan="4" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn ghost" data-eqeditar="${i}" title="Editar" style="padding:2px 6px;">✏️</button>
+        <button class="btn ghost" data-eqdel="${i}" title="Remover" style="padding:2px 6px;">🗑️</button></td>
+    </tr>`;}).join('') || '<tr><td colspan="6" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
+
+  box.querySelectorAll('[data-eqeditar]').forEach(b=>{ b.onclick=()=>{ equipeEditando=+b.dataset.eqeditar; renderEquipeCad(); }; });
+  box.querySelectorAll('[data-eqcancelar]').forEach(b=>{ b.onclick=()=>{ equipeEditando=null; renderEquipeCad(); }; });
+  box.querySelectorAll('[data-eqsalvar]').forEach(b=>{
+    b.onclick=async ()=>{
+      const tr=b.closest('tr'), e=EQUIPE[+b.dataset.eqsalvar];
+      if(!e) return;
+      const get=k=>{ const el=tr.querySelector('[data-ee="'+k+'"]'); return el?el.value.trim():''; };
+      const nome=get('nome'); if(!nome){ alert('Informe o nome.'); return; }
+      Object.assign(e,{ nome, email:get('email')||null, cargo:get('cargo'), loja:get('loja') });
+      if(e.id) await tnUpdate('equipe',{id:e.id},{nome:e.nome,email:e.email,cargo:e.cargo,loja:e.loja});
+      await tnAplicarPerfil(e.email);
+      equipeEditando=null; populateEquipeSelects(); renderAll();
+    };
+  });
   box.querySelectorAll('[data-eqdel]').forEach(b=>{
     b.onclick = ()=>{
       const idx = +b.dataset.eqdel, pes = EQUIPE[idx];
@@ -3653,9 +3691,12 @@ document.getElementById('form-equipe').addEventListener('submit', e=>{
   const nome=document.getElementById('eq-nome').value.trim();
   if(!nome) return;
   const cargo=document.getElementById('eq-cargo').value, loja=document.getElementById('eq-loja').value;
+  const email=(document.getElementById('eq-email').value||'').trim().toLowerCase() || null;
   if(EQUIPE.some(x=>x.nome.toLowerCase()===nome.toLowerCase())){ alert('Já existe alguém com esse nome na equipe.'); return; }
-  EQUIPE.push({nome,cargo,loja});
-  tnInsert('equipe',{nome,cargo,loja});
+  if(email && EQUIPE.some(x=>(x.email||'').toLowerCase()===email)){ alert('Esse e-mail já está em outro cadastro.'); return; }
+  EQUIPE.push({nome,cargo,loja,email});
+  tnInsert('equipe',{nome,cargo,loja,email});
+  tnAplicarPerfil(email);
   e.target.reset();
   populateEquipeSelects(); renderAll();
 });
@@ -3732,7 +3773,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
   try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,aplicado:+r.aplicado,origem:r.origem})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
-  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja})); }catch(e){}
+  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial,entradas:+r.saldo_final,saidas:+r.saidas,conta:+r.saldo_conta})); }catch(e){}
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
@@ -3858,6 +3899,17 @@ async function tnUpsertMeta(loja, valor){
     if(window.TN && window.TN.sb){
       const {error} = await window.TN.sb.from('metas_mensais').upsert({loja, valor}, {onConflict:'loja'});
       if(error) console.warn('meta', error.message);
+    }
+  }catch(e){ console.warn(e); }
+}
+/* O cargo do cadastro manda no acesso. Se a pessoa já tem login, o banco realinha
+   o perfil na hora; se ainda não tem, o gatilho aplica quando o login for criado. */
+async function tnAplicarPerfil(email){
+  if(!email) return;
+  try{
+    if(window.TN && window.TN.sb){
+      const {error} = await window.TN.sb.rpc('tn_sincronizar_perfil', {p_email: email});
+      if(error) console.warn('perfil', error.message);
     }
   }catch(e){ console.warn(e); }
 }
