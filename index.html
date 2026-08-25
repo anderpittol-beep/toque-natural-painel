@@ -574,7 +574,7 @@ window.TN_CONFIG = {
         </div>
 
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Mural da equipe — desempenho da semana (% da meta)</h3>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Mural da equipe — <span id="mural-periodo">semana atual</span></h3>
           <p class="hint" style="margin:0 0 12px 0;">Comparação justa entre lojas: cada colaboradora medida pela % da própria meta. Clique em "trocar foto" para personalizar.</p>
           <div class="grid grid-3" id="mural"></div>
         </div>
@@ -1756,16 +1756,33 @@ function renderDesempenho(){
 
   // ===== Mural (semana mais recente, % da meta) =====
   const wAtual = semArr[0];
+  /* Última venda de cada uma: sem isso, quem não vendeu na semana aparece só como 0%,
+     e não dá para saber se é folga, loja fechada ou lançamento que não veio. */
+  const ultimaVenda = {};
+  vendas.forEach(v=>{
+    const d = parseBR(v.data);
+    if(!d || !(v.valor>0)) return;
+    if(!ultimaVenda[v.colab] || d > ultimaVenda[v.colab].d) ultimaVenda[v.colab] = {d, valor:v.valor};
+  });
+  const rotuloSemana = wAtual ? wAtual.label : '—';
+  const mrl = document.getElementById('mural-periodo');
+  if(mrl) mrl.textContent = wAtual ? rotuloSemana : 'sem vendas registradas';
+
   document.getElementById('mural').innerHTML = nomes.map(n=>{
     const val = wAtual ? (wAtual.tot[n]||0) : 0;
     const meta = metaSem(n);
     const pct = meta>0 ? (val/meta*100) : 0;
+    const ult = ultimaVenda[n];
+    const aviso = (val===0 && ult)
+      ? `<div class="hint" style="margin:2px 0 8px;">nada nesta semana · última venda ${esc(ult.d.toLocaleDateString('pt-BR'))}</div>`
+      : (val===0 ? '<div class="hint" style="margin:2px 0 8px;">sem venda registrada</div>' : '');
     return `<div class="card" style="text-align:center;">
       <div style="display:flex;justify-content:center;margin-bottom:8px;">${avatarHTML(n,64)}</div>
       <div class="strong" style="font-size:15px;">${esc(n)}</div>
       <div class="hint" style="margin-bottom:8px;">${esc(lojaOf(n))}</div>
       <div style="font-size:26px;font-weight:700;color:${pctColor(pct)};line-height:1;">${pct.toFixed(0)}%</div>
-      <div class="hint" style="margin:4px 0 8px;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
+      <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
+      ${aviso}
       <div class="hbar-track" style="height:8px;"><div class="hbar-fill" style="width:${Math.min(pct,100)}%;background:${pctColor(pct)};"></div></div>
       <label class="btn ghost" style="margin-top:8px;display:inline-block;cursor:pointer;">trocar foto<input type="file" accept="image/*" data-foto="${esc(n)}" style="display:none;"></label>
     </div>`;
