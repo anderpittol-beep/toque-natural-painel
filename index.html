@@ -315,17 +315,19 @@ window.TN_CONFIG = {
         <!-- DISPONIBILIDADE DE RECURSO — quanto há, quanto sai, o que sobra -->
         <div class="card" id="card-disponibilidade" style="margin-bottom:18px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Disponibilidade de recurso</h3>
-          <p class="hint" style="margin:0 0 12px 0;">Saldo em conta e valor aplicado de cada loja, menos o que ainda precisa ser pago. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
+          <p class="hint" style="margin:0 0 12px 0;">O que cada loja tem hoje: saldo em conta, o que a maquininha ainda vai repassar, o dinheiro em espécie e a reserva — menos o que ainda precisa ser pago. Vale sempre a <strong>última posição lançada</strong> de cada loja: cada registro é a fotografia de um dia, não uma soma. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
 
-          <form class="feedback-form" id="form-disp" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
+          <form class="feedback-form" id="form-disp" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px;">
             <input type="text" id="dp-data" placeholder="Data (dd/mm/aaaa)">
             <select id="dp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
             <input type="number" id="dp-conta" placeholder="Saldo em conta" step="0.01">
-            <input type="number" id="dp-aplicado" placeholder="Valor aplicado" step="0.01">
+            <input type="number" id="dp-maquininha" placeholder="A receber maquininha" step="0.01">
+            <input type="number" id="dp-especie" placeholder="Valor em espécie" step="0.01">
+            <input type="number" id="dp-reserva" placeholder="Reserva (aplicado)" step="0.01">
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar posição</button>
           </form>
 
-          <div class="grid grid-4" id="disp-kpis" style="margin-bottom:14px;"></div>
+          <div class="grid grid-3" id="disp-kpis" style="margin-bottom:14px;"></div>
 
           <h4 style="font-size:13px;margin:14px 0 6px 0;">Cenários</h4>
           <div style="overflow-x:auto;"><table id="tbl-cenarios"></table></div>
@@ -2671,7 +2673,15 @@ function renderPatrimonio(){
 let DISPONIBILIDADE = [];
 let dispEditando = null;
 
-/* Última posição registrada de cada loja: é ela que vale como saldo atual */
+/* O que uma posição representa: conta + o que a maquininha ainda repassa + o
+   dinheiro em caixa. */
+function dispTotal(p){
+  if(!p) return 0;
+  return (+p.saldo_conta||0) + (+p.a_receber_maquininha||0) + (+p.especie||0) + (+p.reserva||0);
+}
+/* Última posição registrada de cada loja: é ela que vale como saldo atual.
+   Não somamos as posições — cada registro é uma fotografia do dia, e entre um
+   e outro pode ter havido pagamento. */
 function dispAtualPorLoja(loja){
   const doLoja = DISPONIBILIDADE
     .filter(d => d.loja===loja)
@@ -2701,10 +2711,7 @@ function boletosAteData(limite, lojas){
 /* Um cenário = N meses à frente: o que entra pela meta, o que sai, o que sobra */
 function cenario(meses, rotulo){
   const lojas = selStores();
-  const disp = lojas.reduce((a,l)=>{
-    const p = dispAtualPorLoja(l);
-    return a + (p ? (+p.saldo_conta||0) + (+p.aplicado||0) : 0);
-  }, 0);
+  const disp = lojas.reduce((a,l)=> a + dispTotal(dispAtualPorLoja(l)), 0);   // inclui a reserva
 
   const limite = new Date(TODAY.getFullYear(), TODAY.getMonth()+meses, TODAY.getDate());
   let recorrente = 0, receita = 0;
@@ -2733,20 +2740,30 @@ function renderDisponibilidade(){
   if(!socia) return;
 
   const lojas = selStores();
-  const conta = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.saldo_conta||0) : 0); }, 0);
-  const aplicado = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.aplicado||0) : 0); }, 0);
+  const conta      = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.saldo_conta||0) : 0); }, 0);
+  const maquininha = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.a_receber_maquininha||0) : 0); }, 0);
+  const especie    = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.especie||0) : 0); }, 0);
+  const reserva    = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.reserva||0) : 0); }, 0);
+  /* Data da posição mais recente entre as lojas exibidas — é dela que sai tudo */
+  const ultimaPos = lojas.map(l=>dispAtualPorLoja(l)).filter(Boolean)
+    .map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
 
   // a pagar no mês corrente: recorrente do mês + boletos que vencem até o fim dele
   const fimMes = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0);
   const aPagarMes = lojas.reduce((a,l)=> a + compromissoMensal(TODAY.getFullYear(), TODAY.getMonth()+1, l), 0)
                   + boletosAteData(fimMes, lojas);
-  const sobra = conta + aplicado - aPagarMes;
+  const sobra = conta + maquininha + especie - aPagarMes;
 
+  const dataPos = ultimaPos ? ultimaPos.toLocaleDateString('pt-BR') : '—';
+  const disponivel = conta + maquininha + especie;
   document.getElementById('disp-kpis').innerHTML = `
-    <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div></div>
-    <div class="card stat-tile"><div class="label">Valor aplicado</div><div class="value">${BRL(aplicado)}</div></div>
+    <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div><div class="hint">posição de ${esc(dataPos)}</div></div>
+    <div class="card stat-tile"><div class="label">A receber maquininha</div><div class="value">${BRL(maquininha)}</div><div class="hint">ainda vai cair na conta</div></div>
+    <div class="card stat-tile"><div class="label">Em espécie</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro em caixa</div></div>
+    <div class="card stat-tile"><div class="label">Reserva</div><div class="value">${BRL(reserva)}</div><div class="hint">guardado, fora do dia a dia</div></div>
     <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div></div>
     <div class="card stat-tile ${sobra<0?'accent-critical':''}"><div class="label">Sobra do mês</div><div class="value" style="color:${sobra>=0?'var(--good)':'var(--critical)'};">${BRL(sobra)}</div></div>
+    <div class="card stat-tile" style="grid-column:1/-1;"><div class="label">Disponível hoje</div><div class="value">${BRL(disponivel)}</div><div class="hint">conta + maquininha + espécie · com a reserva: ${BRL(disponivel + reserva)}</div></div>
   `;
 
   const cenarios = [ cenario(3,'3 meses'), cenario(6,'6 meses'), cenario(12,'12 meses'),
@@ -2777,14 +2794,16 @@ function renderDisponibilidade(){
   }
   const tb = document.getElementById('tbl-disp');
   if(tb) tb.innerHTML = `
-    <thead><tr><th>Data</th><th>Loja</th><th>Saldo em conta</th><th>Aplicado</th><th>Total</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Loja</th><th>Saldo em conta</th><th>Maquininha</th><th>Espécie</th><th>Reserva</th><th>Total</th><th></th></tr></thead>
     <tbody>${lista.map(d=>{
       if(dispEditando && d.id===dispEditando){
         return `<tr>
           <td><input type="text" data-de="data" value="${esc(d.data)}" style="width:104px;"></td>
           <td><select data-de="loja">${['Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option ${l===d.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td><input type="number" data-de="saldo_conta" value="${+d.saldo_conta||0}" step="0.01" style="width:108px;"></td>
-          <td><input type="number" data-de="aplicado" value="${+d.aplicado||0}" step="0.01" style="width:108px;"></td>
+          <td><input type="number" data-de="a_receber_maquininha" value="${+d.a_receber_maquininha||0}" step="0.01" style="width:104px;"></td>
+          <td><input type="number" data-de="especie" value="${+d.especie||0}" step="0.01" style="width:104px;"></td>
+          <td><input type="number" data-de="reserva" value="${+d.reserva||0}" step="0.01" style="width:104px;"></td>
           <td>—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-dpsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-dpcancelar="1" style="padding:2px 8px;">cancelar</button></td>
@@ -2794,12 +2813,14 @@ function renderDisponibilidade(){
         <td>${esc(d.data)}</td>
         <td>${esc(d.loja)}</td>
         <td>${BRL(d.saldo_conta)}</td>
-        <td>${BRL(d.aplicado)}</td>
-        <td class="strong">${BRL((+d.saldo_conta||0)+(+d.aplicado||0))}</td>
+        <td>${BRL(d.a_receber_maquininha)}</td>
+        <td>${BRL(d.especie)}</td>
+        <td>${BRL(d.reserva)}</td>
+        <td class="strong">${BRL(dispTotal(d))}</td>
         <td style="text-align:right;white-space:nowrap;">
           <button class="btn ghost" data-dpeditar="${esc(d.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-dpexcluir="${esc(d.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>
-      </tr>`;}).join('') || '<tr><td colspan="6" class="hint">Nenhuma posição registrada.</td></tr>'}</tbody>`;
+      </tr>`;}).join('') || '<tr><td colspan="8" class="hint">Nenhuma posição registrada.</td></tr>'}</tbody>`;
 
   document.querySelectorAll('[data-dpeditar]').forEach(b=>{ b.onclick=()=>{ dispEditando=b.dataset.dpeditar; renderDisponibilidade(); }; });
   document.querySelectorAll('[data-dpcancelar]').forEach(b=>{ b.onclick=()=>{ dispEditando=null; renderDisponibilidade(); }; });
@@ -2810,8 +2831,10 @@ function renderDisponibilidade(){
       const get=k=>{ const el=tr.querySelector('[data-de="'+k+'"]'); return el?el.value.trim():''; };
       const nova=get('data');
       if(!dataBRNoPainel(nova)){ alert('O painel recebe lançamentos a partir de 01/09/2026.'); return; }
-      Object.assign(d,{ data:nova, loja:get('loja'), saldo_conta:num(get('saldo_conta'))||0, aplicado:num(get('aplicado'))||0 });
-      if(d.id) tnUpdate('disponibilidade',{id:d.id},{data:d.data,loja:d.loja,saldo_conta:d.saldo_conta,aplicado:d.aplicado});
+      Object.assign(d,{ data:nova, loja:get('loja'), saldo_conta:num(get('saldo_conta'))||0,
+        a_receber_maquininha:num(get('a_receber_maquininha'))||0, especie:num(get('especie'))||0, reserva:num(get('reserva'))||0 });
+      if(d.id) tnUpdate('disponibilidade',{id:d.id},{data:d.data,loja:d.loja,saldo_conta:d.saldo_conta,
+        a_receber_maquininha:d.a_receber_maquininha, especie:d.especie, reserva:d.reserva});
       dispEditando=null; renderDisponibilidade();
     };
   });
@@ -3671,7 +3694,9 @@ document.getElementById('form-disp').addEventListener('submit', async e=>{
   const reg = {
     data, loja: document.getElementById('dp-loja').value,
     saldo_conta: num(document.getElementById('dp-conta').value)||0,
-    aplicado: num(document.getElementById('dp-aplicado').value)||0,
+    a_receber_maquininha: num(document.getElementById('dp-maquininha').value)||0,
+    especie: num(document.getElementById('dp-especie').value)||0,
+    reserva: num(document.getElementById('dp-reserva').value)||0,
     origem: 'painel',
   };
   const id = await tnInsertRet('disponibilidade', reg);
@@ -3936,7 +3961,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
-  try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,aplicado:+r.aplicado,origem:r.origem})); }catch(e){}
+  try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
   try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
