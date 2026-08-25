@@ -3227,11 +3227,25 @@ function renderCaixa(){
       </tr>`;}).join('') || `<tr><td colspan="${ncols+1}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
 
   // Tabela despesas fixas (+ linha de folha vinda de Gente e Gestão)
-  const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>
-    `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td></tr>`).join('')
-    + Object.keys(provPorLoja).sort().map(l=>
-    `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td></tr>`).join('');
   const podeEditar = socia && fxGerenciavel();
+  /* A folha aparece aqui como uma linha por loja, e é aqui que se marca o
+     pagamento — em Gente e Gestão o check por pessoa confundia, porque lá não
+     há data nem vencimento. Marcar a linha marca todas as pessoas da loja. */
+  const folhaPagaLoja = {};
+  genteList.forEach(g=>{ if(folhaPagaLoja[g.loja]!==false) folhaPagaLoja[g.loja] = !!g.pago; });
+  const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>{
+    const paga = !!folhaPagaLoja[l];
+    const check = podeEditar
+      ? `<td style="text-align:center;">
+           <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+             <input type="checkbox" data-gfpago="1" data-gfloja="${esc(l)}" ${paga?'checked':''}>
+             ${paga?'<span class="hint" style="color:var(--good);">pago</span>':''}
+           </label></td><td></td>`
+      : '';
+    return `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${check}</tr>`;
+  }).join('')
+    + Object.keys(provPorLoja).sort().map(l=>
+    `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('');
   const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   document.getElementById('tbl-fixas').innerHTML = `
@@ -3262,12 +3276,32 @@ function renderCaixa(){
           <button class="btn ghost" data-fxeditar="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;}).join('')}
-    ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td><td></td></tr>' : '</tr>')}
+    ${folhaRows}
     <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?`<td class="hint" style="text-align:center;">${pagasQtd}/${fixas.length}</td><td></td>`:''}</tr></tbody>`;
 
   // ações de editar / excluir (materializa o mês herdado antes de alterar)
   /* Marcar como paga: a linha herdada do mês anterior ainda não existe no banco,
      então materializa antes de gravar — senão a marca se perderia na recarga. */
+  /* Marca a folha inteira daquela loja. Como a competência aqui é a das fixas,
+     materializa a folha desse mês antes de gravar. */
+  document.querySelectorAll('[data-gfpago]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const loja = chk.dataset.gfloja, marcado = chk.checked;
+      chk.disabled = true;
+      const gAnoAnt = gtAno, gMesAnt = gtMes;
+      gtAno = fxAno; gtMes = fxMes;
+      await gtMaterializar();
+      const quando = marcado ? new Date().toISOString() : null;
+      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
+      for(const g of alvos){
+        g.pago = marcado; g.pago_em = quando;
+        if(g.id) await tnUpdate('folha', {id:g.id}, {pago:g.pago, pago_em:g.pago_em});
+      }
+      gtAno = gAnoAnt; gtMes = gMesAnt;
+      chk.disabled = false;
+      renderCaixa(); renderGente();
+    };
+  });
   document.querySelectorAll('[data-fxpago]').forEach(chk=>{
     chk.onchange = async ()=>{
       const desc = chk.dataset.fxdesc, loja = chk.dataset.fxloja, marcado = chk.checked;
@@ -3513,7 +3547,7 @@ function renderGente(){
   const podeEd = (typeof perfil!=='undefined' && perfil==='socia') && gtGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
   document.getElementById('tbl-gente').innerHTML = `
-    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th>Pago</th><th></th>':''}</tr></thead>
+    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${rows.map(g=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
@@ -3525,7 +3559,6 @@ function renderGente(){
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:96px;"></td>
           <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:92px;"></td>
           <td class="strong">—</td>
-          <td class="hint">—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -3539,16 +3572,11 @@ function renderGente(){
         <td>${BRL(g.encargo)}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
-        ${podeEd?`<td style="text-align:center;">
-          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
-            <input type="checkbox" data-gpago="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" ${g.pago?'checked':''}>
-            ${g.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
-          </label></td>
-        <td style="white-space:nowrap;text-align:right;">
+        ${podeEd?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${podeEd?10:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
-    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?`<td class="hint" style="text-align:center;">${list.filter(x=>x.pago).length}/${list.length}</td><td></td>`:''}</tr></tbody>`;
+      </tr>`;}).join('') || `<tr><td colspan="${podeEd?9:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
+    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
 
   // ===== Retenção de 13º e férias (provisão do mês) =====
   const prov = rows.map(g=>({g, p:gProvisao(g)})).filter(x=>x.p.total>0);
@@ -3575,22 +3603,6 @@ function renderGente(){
     ${prov.length?`<tr><td colspan="4" class="strong" style="text-align:right;">Total</td><td class="strong">${BRL(t13)}</td><td class="strong">${BRL(tFer)}</td><td class="strong">${BRL(t13+tFer)}</td><td class="strong">${BRL((t13+tFer)*gtMes)}</td></tr>`:''}</tbody>`;
 
   // ===== ações de editar / excluir =====
-  /* Mesma regra das fixas: materializa a linha herdada antes de gravar a marca */
-  document.querySelectorAll('[data-gpago]').forEach(chk=>{
-    chk.onchange = async ()=>{
-      const pe=chk.dataset.gp, lo=chk.dataset.gl, pa=chk.dataset.gr, marcado=chk.checked;
-      chk.disabled = true;
-      await gtMaterializar();
-      const g = GENTE.find(x=> +x.ano===gtAno && +x.mes===gtMes && x.pessoa===pe && x.loja===lo && x.papel===pa);
-      if(g){
-        g.pago = marcado;
-        g.pago_em = marcado ? new Date().toISOString() : null;
-        if(g.id) await tnUpdate('folha', {id:g.id}, {pago:g.pago, pago_em:g.pago_em});
-      }
-      chk.disabled = false;
-      renderGente(); renderCaixa();
-    };
-  });
   document.querySelectorAll('[data-geditar]').forEach(b=>{
     b.onclick = async ()=>{
       const pe=b.dataset.gp, lo=b.dataset.gl, pa=b.dataset.gr;
