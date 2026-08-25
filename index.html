@@ -2982,14 +2982,16 @@ function fixasDaCompetencia(ano, mes, prof){
   const doMes = DESPESAS_FIXAS.filter(d=> +d.ano===ano && +d.mes===mes);
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
-  return fixasDaCompetencia(p.ano, p.mes, prof+1).map(d=> ({...d, id:null, herdada:true, ano, mes}));
+  return fixasDaCompetencia(p.ano, p.mes, prof+1)
+    .map(d=> ({...d, id:null, herdada:true, ano, mes, pago:false, pago_em:null}));
 }
 /* Materializa no banco as despesas herdadas, para poder editar/excluir o mês */
 async function fxMaterializar(){
   const herdadas = fixasDaCompetencia(fxAno, fxMes).filter(d=>d.herdada);
   if(!herdadas.length) return false;
   const regs = herdadas.map(d=>({ competencia: fxCompetencia(), ano: fxAno, mes: fxMes, loja: d.loja,
-                  descricao: d.descricao, valor: +d.valor||0, venc: d.venc||'', origem: 'painel' }));
+                  descricao: d.descricao, valor: +d.valor||0, venc: d.venc||'', origem: 'painel',
+                  pago: false, pago_em: null }));
   regs.forEach(r=>DESPESAS_FIXAS.push(r));
   // grava tudo de uma vez e devolve os ids gerados
   try{
@@ -3118,9 +3120,10 @@ function renderCaixa(){
     + Object.keys(provPorLoja).sort().map(l=>
     `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td></tr>`).join('');
   const podeEditar = socia && fxGerenciavel();
+  const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   document.getElementById('tbl-fixas').innerHTML = `
-    <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th>${podeEditar?'<th></th>':''}</tr></thead>
+    <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th>${podeEditar?'<th>Pago</th><th></th>':''}</tr></thead>
     <tbody>${fixas.map(f=>{
       if(podeEditar && fixaEditando && fxKey(f)===fixaEditando){
         return `<tr>
@@ -3128,6 +3131,7 @@ function renderCaixa(){
           <td><select data-fe="loja">${lojasOpt.map(l=>`<option ${l===f.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td><input type="number" data-fe="venc" value="${esc(f.venc||'')}" min="1" max="31" style="width:64px;"></td>
           <td><input type="number" data-fe="valor" value="${(+f.valor||0)}" step="0.01" style="width:104px;"></td>
+          <td class="hint">—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-fxsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-fxcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -3137,14 +3141,36 @@ function renderCaixa(){
         <td>${esc(f.loja)}</td>
         <td>dia ${esc(f.venc||'—')}</td>
         <td>${BRL(f.valor)}</td>
-        ${podeEditar?`<td style="white-space:nowrap;text-align:right;">
+        ${podeEditar?`<td style="text-align:center;">
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+            <input type="checkbox" data-fxpago="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" ${f.pago?'checked':''}>
+            ${f.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
+          </label></td>
+        <td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-fxeditar="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;}).join('')}
-    ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td></tr>' : '</tr>')}
-    <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?'<td></td>':''}</tr></tbody>`;
+    ${folhaRows.replace(/<\/tr>/g, podeEditar ? '<td></td><td></td></tr>' : '</tr>')}
+    <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?`<td class="hint" style="text-align:center;">${pagasQtd}/${fixas.length}</td><td></td>`:''}</tr></tbody>`;
 
   // ações de editar / excluir (materializa o mês herdado antes de alterar)
+  /* Marcar como paga: a linha herdada do mês anterior ainda não existe no banco,
+     então materializa antes de gravar — senão a marca se perderia na recarga. */
+  document.querySelectorAll('[data-fxpago]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const desc = chk.dataset.fxdesc, loja = chk.dataset.fxloja, marcado = chk.checked;
+      chk.disabled = true;
+      await fxMaterializar();
+      const d = DESPESAS_FIXAS.find(x=> +x.ano===fxAno && +x.mes===fxMes && x.loja===loja && x.descricao===desc);
+      if(d){
+        d.pago = marcado;
+        d.pago_em = marcado ? new Date().toISOString() : null;
+        if(d.id) await tnUpdate('despesas_fixas', {id:d.id}, {pago:d.pago, pago_em:d.pago_em});
+      }
+      chk.disabled = false;
+      renderCaixa();
+    };
+  });
   document.querySelectorAll('[data-fxeditar]').forEach(b=>{
     b.onclick = async ()=>{
       const desc = b.dataset.fxdesc, loja = b.dataset.fxloja;
@@ -3902,7 +3928,7 @@ async function tnLoadAll(sb){
      Como o painel filtra por ano/mês, elas sumiriam da tela — então derivamos. */
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
-  try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||''})); }catch(e){}
+  try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||''})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||''})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
