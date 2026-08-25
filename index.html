@@ -465,8 +465,8 @@ window.TN_CONFIG = {
 
       <!-- PROJEÇÃO -->
       <section class="view" id="view-projecao">
-        <h2 class="section-title">Projeção — próximos 12 meses (Ago/26 → Jul/27)</h2>
-        <p class="section-desc">Base de cálculo: média mensal por loja na janela escolhida (últimos 3/6/12 meses ou ano civil), projetada com crescimento composto configurável. Meses reais aparecem sólidos; a projeção aparece em tom mais claro. Ajuste a janela e as premissas abaixo — o cenário recalcula na hora.</p>
+        <h2 class="section-title">Projeção — próximos 12 meses (<span id="proj-titulo">—</span>)</h2>
+        <p class="section-desc">Base de cálculo: média mensal por loja nos <strong>meses fechados</strong> da janela escolhida, projetada com crescimento composto configurável. O mês em curso e os meses sem receita lançada ficam de fora da média — se entrassem, a projeção inteira ficaria negativa. Meses reais aparecem sólidos; a projeção aparece em tom mais claro. Ajuste a janela e as premissas abaixo — o cenário recalcula na hora.</p>
         <div class="toolbar">
           <div class="filters">
             <label class="hint" for="baseJanela">Base da média</label>
@@ -1476,23 +1476,33 @@ function renderProjecao(){
   const lojas = selStores();
   const gR = (num(document.getElementById('growReceita').value) ?? 0)/100;
   const gD = (num(document.getElementById('growDespesa').value) ?? 0)/100;
-  // janela da média: últimos N meses (ou ano civil = todos os disponíveis)
-  const nAvail = FINANCEIRO.meses.length;
+  /* Só mês fechado serve de base: mês sem receita lançada (o próximo, que já tem
+     despesa fixa herdada) e mês ainda em curso puxariam a média para baixo e
+     jogariam a projeção inteira para o negativo. */
+  const totalReceitaMes = i => STORES.reduce((a,l)=> a + ((FINANCEIRO[l] && FINANCEIRO[l].receita[i]) || 0), 0);
+  const parcial = i => !!(FINANCEIRO.parcialPorMes || {})[FINANCEIRO.meses[i]];
+  const fechados = FINANCEIRO.meses.map((_,i)=>i).filter(i => totalReceitaMes(i) > 0 && !parcial(i));
+  const ignorados = FINANCEIRO.meses.map((m,i)=>({m,i}))
+    .filter(x => !fechados.includes(x.i))
+    .map(x => x.m + (parcial(x.i) ? ' (em curso)' : ' (sem receita lançada)'));
+
   const jv = document.getElementById('baseJanela').value;
+  const nAvail = fechados.length;
   const nJanela = (jv==='ano') ? nAvail : Math.min(parseInt(jv,10), nAvail);
-  const ini = nAvail - nJanela; // índice inicial da janela
+  const idxJanela = fechados.slice(Math.max(0, nAvail - nJanela));   // índices dos meses usados
   const mediaJanela = (l, campo)=>{
-    const arr = FINANCEIRO[l][campo].slice(ini);
-    return arr.reduce((a,b)=>a+b,0)/arr.length;
+    if(!idxJanela.length || !FINANCEIRO[l]) return 0;
+    return idxJanela.reduce((a,i)=> a + (FINANCEIRO[l][campo][i]||0), 0) / idxJanela.length;
   };
-  const jLabel = (jv==='ano') ? `(ano civil — ${nAvail} ${nAvail>1?'meses':'mês'} disponíveis)` : `(últimos ${nJanela} ${nJanela>1?'meses':'mês'}${nJanela<parseInt(jv,10)?' — só há '+nAvail+' disponíveis':''})`;
+  const ini = idxJanela.length ? idxJanela[0] : 0;
+  const jLabel = (jv==='ano') ? `(ano civil — ${nAvail} ${nAvail>1?'meses fechados':'mês fechado'})` : `(últimos ${nJanela} ${nJanela>1?'meses fechados':'mês fechado'}${nJanela<parseInt(jv,10)?' — só há '+nAvail+' fechado'+(nAvail>1?'s':''):''})`;
   document.getElementById('media-janela-label').textContent = jLabel;
   // base = média por loja na janela escolhida
   const base = {};
   lojas.forEach(l=>{ base[l] = { receita:mediaJanela(l,'receita'), despesa:mediaJanela(l,'despesa') }; });
 
   // tabela: média mensal por loja (todas as lojas + rede)
-  const mesesJanela = FINANCEIRO.meses.slice(ini).join(', ');
+  const mesesJanela = idxJanela.map(i=>FINANCEIRO.meses[i]).join(', ');
   const medRows = STORES.map(l=>{
     const mr=mediaJanela(l,'receita'), md=mediaJanela(l,'despesa');
     return `<tr><td class="strong"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${STORE_PIE_COLOR[l]};margin-right:7px;"></span>${esc(l)}</td><td>${BRL(mr)}</td><td>${BRL(md)}</td><td>${BRL(mr-md)}</td></tr>`;
@@ -1501,13 +1511,26 @@ function renderProjecao(){
   document.getElementById('tbl-media').innerHTML = `
     <thead><tr><th>Loja</th><th>Receita média/mês</th><th>Despesa média/mês</th><th>Líquido médio/mês</th></tr></thead>
     <tbody>${medRows}<tr><td class="strong">Rede (todas)</td><td class="strong">${BRL(totMR)}</td><td class="strong">${BRL(totMD)}</td><td class="strong">${BRL(totMR-totMD)}</td></tr></tbody>`;
-  document.getElementById('media-janela-label').textContent = jLabel + ' · meses: ' + mesesJanela;
+  document.getElementById('media-janela-label').textContent = jLabel + ' · meses: ' + (mesesJanela || '—') +
+    (ignorados.length ? ' · fora da conta: ' + ignorados.join(', ') : '');
 
-  // meses reais (Abr–Jul)
-  const realLabels = FINANCEIRO.meses.slice();
-  const realLucro = realLabels.map((_,i)=> lojas.reduce((a,l)=> a + (FINANCEIRO[l].receita[i]-FINANCEIRO[l].despesa[i]),0));
-  // meses projetados
-  const projLabels = ["Ago/26","Set/26","Out/26","Nov/26","Dez/26","Jan/27","Fev/27","Mar/27","Abr/27","Mai/27","Jun/27","Jul/27"];
+  // meses reais: só os fechados entram no gráfico como realizado
+  const realIdx = fechados;
+  const realLabels = realIdx.map(i=>FINANCEIRO.meses[i]);
+  const realLucro = realIdx.map(i=> lojas.reduce((a,l)=> a + ((FINANCEIRO[l].receita[i]||0)-(FINANCEIRO[l].despesa[i]||0)),0));
+
+  /* A projeção começa no mês seguinte ao último fechado — nada de rótulo fixo,
+     senão ela se sobrepõe aos meses que já aconteceram. */
+  const ultimo = realLabels.length ? realLabels[realLabels.length-1] : (FINANCEIRO.meses[FINANCEIRO.meses.length-1] || 'Dez/25');
+  const pUlt = String(ultimo).split('/');
+  let pm = MES_ABREV.indexOf(pUlt[0]), pa = 2000 + (+pUlt[1]);
+  const projLabels = [];
+  for(let k=0;k<12;k++){
+    pm++; if(pm>12){ pm=1; pa++; }
+    projLabels.push(MES_ABREV[pm] + '/' + String(pa).slice(2));
+  }
+  const tituloProj = document.getElementById('proj-titulo');
+  if(tituloProj && projLabels.length) tituloProj.textContent = projLabels[0] + ' → ' + projLabels[11];
   let projReceita=[], projDespesa=[], projLucro=[];
   projLabels.forEach((_,k)=>{
     const kk=k+1;
@@ -3484,7 +3507,7 @@ const VIEW_TITLES = {
   'visao-geral':['Visão geral','Consolidado das lojas selecionadas'],
   'caixa':['Despesas & compras','Fixas, compras do mês, boletos e patrimônio'],
   'gente':['Gente e Gestão','Folha confidencial: salários, comissões e encargos'],
-  'projecao':['Projeção 12 meses','Cenário Ago/26 → Jul/27 com base nos dados reais'],
+  'projecao':['Projeção 12 meses','Cenário dos próximos 12 meses, com base nos meses fechados'],
   'produtos':['Produtos mais vendidos','Ranking por unidades no mês'],
   'desempenho':['Vendas & caixa diário','Fechamento do dia, meta diária e desempenho da equipe'],
   'margem':['Margem por produto','Prioridade #1: preços e custos corretos'],
