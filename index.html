@@ -310,10 +310,8 @@ window.TN_CONFIG = {
       <section class="view" id="view-caixa">
         <h2 class="section-title">Despesas &amp; compras</h2>
         <p class="section-desc">Tudo o que sai: despesas fixas do mês, compras do mês (nota cheia, impacta o lucro), boletos pagos e a pagar, e o histórico de patrimônio &amp; manutenção. O disponível do dia fica em <strong>Caixa diário</strong>.</p>
-        <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:16px;">
-          <div class="grid grid-3" id="caixa-kpis" style="flex:1 1 560px;"></div>
-          <div id="disp-financeira" style="flex:0 1 320px;min-width:280px;"></div>
-        </div>
+        <div class="grid grid-3" id="caixa-kpis" style="margin-bottom:14px;"></div>
+        <div class="grid grid-3" id="disp-financeira" style="margin-bottom:16px;"></div>
 
         <!-- DISPONIBILIDADE DE RECURSO — quanto há, quanto sai, o que sobra -->
         <div class="card" id="card-disponibilidade" style="margin-bottom:18px;">
@@ -3127,10 +3125,9 @@ function renderCaixa(){
     <div class="card stat-tile ${boletosAPagarKpi>0?'accent-warning':''}"><div class="label">A pagar no mês</div><div class="value">${BRL(boletosAPagarKpi)}</div><div class="hint">${esc(fxCompetencia())} · ainda vai sair</div></div>
     <div class="card stat-tile accent-good"><div class="label">Total em boletos</div><div class="value">${BRL(boletosPagosKpi + boletosAPagarKpi)}</div><div class="hint">pagos + a pagar</div></div>
   ` : '';
-  /* Disponibilidade financeira: o que sobra de recurso depois dos boletos.
-     A conta pedida é conta + espécie − boletos; ao lado mostramos o que ela
-     deixa de fora (maquininha a receber e fixas ainda em aberto), porque são
-     valores certos que mudam a leitura. */
+  /* Disponibilidade financeira, mês a mês. O primeiro card parte do que existe
+     hoje; os seguintes começam com o que sobrou do anterior. Assim dá para ver
+     até quando o caixa se sustenta, não só a foto do mês. */
   const posLojas   = selStores().map(l=>dispAtualPorLoja(l)).filter(Boolean);
   const contaDf    = posLojas.reduce((a,p)=>a+(+p.saldo_conta||0),0);
   const especieDf  = posLojas.reduce((a,p)=>a+(+p.especie||0),0);
@@ -3138,66 +3135,93 @@ function renderCaixa(){
   const reservaDf  = posLojas.reduce((a,p)=>a+(+p.reserva||0),0);
   const dataDf     = posLojas.map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
 
-  const boletosTodos = boletos.reduce((a,b)=> a + (b.status==='Pendente' ? (+b.valor||0) : 0), 0);
-
-  /* Despesas fixas entram na conta, mas só as que o saldo ainda não reflete:
-     - em aberto: vão sair, então pesam;
-     - pagas depois da data da posição: o dinheiro saiu depois da foto do saldo,
-       então também pesam — é o que faz o check de pago descontar na hora;
-     - pagas antes da posição: já estão embutidas no saldo lançado, não descontam
-       de novo. */
-  const fixasMes = fixasDaCompetencia(fxAno, fxMes)
-    .filter(d=> selStores().includes(d.loja) || d.loja==='Todas');
   const refletida = d => {
     if(!d.pago) return false;                    // ainda vai sair
-    if(!dataDf) return true;                     // sem posição, assume que o saldo já é posterior
+    if(!dataDf) return true;
     const q = d.pago_em ? new Date(d.pago_em) : null;
     return q ? q <= dataDf : true;               // paga antes da foto do saldo
   };
-  const fixasAbertas   = fixasMes.filter(d=>!d.pago).reduce((a,d)=>a+(+d.valor||0),0);
-  const fixasPagasFora = fixasMes.filter(d=> d.pago && !refletida(d)).reduce((a,d)=>a+(+d.valor||0),0);
-  const fixasDescontar = fixasAbertas + fixasPagasFora;
 
-  /* Folha segue a mesma lógica: salário, encargos e vale saem do caixa no mês.
-     A provisão de 13º e férias fica de fora — é retenção, não pagamento. */
-  const folhaMes = folhaDaCompetencia(fxAno, fxMes).filter(g=> inStore(g.loja));
-  const folhaDescontar = folhaMes
-    .filter(g=> !g.pago || !refletida(g))
-    .reduce((a,g)=> a + gTotal(g), 0);
-  const provisaoMes = folhaMes.reduce((a,g)=> a + gProvisao(g).total, 0);
+  /* Receita esperada: média dos meses fechados de cada loja — mesma base da
+     projeção. Sem ela, todo mês futuro fecharia no vermelho por construção. */
+  const mesesFechadosDf = (FINANCEIRO.meses||[]).map((m,i)=>i).filter(i=>{
+    const parc = (FINANCEIRO.parcialPorMes||{})[FINANCEIRO.meses[i]];
+    const tot  = STORES.reduce((a,l)=> a + ((FINANCEIRO[l] && FINANCEIRO[l].receita[i])||0), 0);
+    return tot > 0 && !parc;
+  });
+  const receitaEsperada = !mesesFechadosDf.length ? 0 : selStores().reduce((a,l)=>{
+    if(!FINANCEIRO[l]) return a;
+    const soma = mesesFechadosDf.reduce((x,i)=> x + (FINANCEIRO[l].receita[i]||0), 0);
+    return a + soma/mesesFechadosDf.length;
+  }, 0);
 
-  const dispFin   = contaDf + especieDf - boletosTodos - fixasDescontar - folhaDescontar;
-  const dispAmpla = dispFin + maqDf;                      // contando o que a maquininha ainda repassa
+  /* Compromissos de um mês: boletos que vencem nele + fixas e folha ainda não
+     refletidas no saldo. Para meses futuros vale tudo, pago ou não. */
+  function compromissosDoMes(ano, mes, ehMesBase){
+    const noMes = b => { const d = parseBR(b.data); return d && d.getFullYear()===ano && d.getMonth()+1===mes; };
+    const bol = boletos.filter(b=> b.status==='Pendente' && noMes(b)).reduce((a,b)=>a+(+b.valor||0),0);
 
-  const boxDf = document.getElementById('disp-financeira');
-  if(boxDf) boxDf.innerHTML = !socia ? '' : `
-    <div class="card" style="height:100%;display:flex;flex-direction:column;justify-content:center;
-         border:1px solid ${dispFin>=0?'rgba(63,125,79,.35)':'rgba(190,70,60,.35)'};">
-      <div class="label" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;">Disponibilidade financeira</div>
-      <div style="font-size:30px;font-weight:700;line-height:1.1;margin:6px 0 2px;color:${dispFin>=0?'var(--good)':'var(--critical)'};">${BRL(dispFin)}</div>
-      <div class="hint" style="margin-bottom:10px;">o que há, menos o que ainda vai sair${dataDf?' · posição de '+esc(dataDf.toLocaleDateString('pt-BR')):''}</div>
+    const fx = fixasDaCompetencia(ano, mes)
+      .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
+      .filter(d=> ehMesBase ? (!d.pago || !refletida(d)) : true)
+      .reduce((a,d)=>a+(+d.valor||0),0);
 
+    const fl = folhaDaCompetencia(ano, mes).filter(g=> inStore(g.loja))
+      .filter(g=> ehMesBase ? (!g.pago || !refletida(g)) : true)
+      .reduce((a,g)=>a+gTotal(g),0);
+
+    return { boletos: bol, fixas: fx, folha: fl, total: bol + fx + fl };
+  }
+
+  const cardMes = (ano, mes, saldoInicial, ehMesBase) => {
+    const c = compromissosDoMes(ano, mes, ehMesBase);
+    const entra = ehMesBase ? 0 : receitaEsperada;
+    const fim = saldoInicial + entra - c.total;
+    const rotulo = MES_ABREV[mes] + '/' + String(ano).slice(2);
+    return { ano, mes, rotulo, saldoInicial, entra, c, fim };
+  };
+
+  // mês base: o exibido nas fixas; depois, os dois seguintes
+  const m1 = cardMes(fxAno, fxMes, contaDf + especieDf, true);
+  const p2 = fxMes===12 ? {ano:fxAno+1, mes:1} : {ano:fxAno, mes:fxMes+1};
+  const m2 = cardMes(p2.ano, p2.mes, m1.fim, false);
+  const p3 = p2.mes===12 ? {ano:p2.ano+1, mes:1} : {ano:p2.ano, mes:p2.mes+1};
+  const m3 = cardMes(p3.ano, p3.mes, m2.fim, false);
+
+  const dispFin = m1.fim;                          // o número do mês corrente
+  const dispAmpla = dispFin + maqDf;
+
+  const linha = (rot, val, neg) =>
+    `<tr><td>${rot}</td><td style="text-align:right;${neg?'color:var(--critical);':''}">${neg?'− ':''}${BRL(Math.abs(val))}</td></tr>`;
+
+  const cardHTML = (m, principal) => `
+    <div class="card" style="height:100%;display:flex;flex-direction:column;
+         border:1px solid ${m.fim>=0?'rgba(63,125,79,.35)':'rgba(190,70,60,.35)'};">
+      <div class="label" style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;">
+        Disponibilidade ${esc(m.rotulo)}${principal?'':' <span style="opacity:.7;">· projetado</span>'}</div>
+      <div style="font-size:26px;font-weight:700;line-height:1.1;margin:6px 0 2px;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</div>
+      <div class="hint" style="margin-bottom:9px;">${principal
+        ? 'o que há, menos o que ainda vai sair' + (dataDf?' · posição de '+esc(dataDf.toLocaleDateString('pt-BR')):'')
+        : 'parte do saldo de ' + esc(m.rotulo===m2.rotulo ? m1.rotulo : m2.rotulo)}</div>
       <table style="font-size:12.5px;">
         <tbody>
-          <tr><td>Saldo em conta</td><td style="text-align:right;">${BRL(contaDf)}</td></tr>
-          <tr><td>Em espécie</td><td style="text-align:right;">${BRL(especieDf)}</td></tr>
-          <tr><td>Boletos em aberto</td><td style="text-align:right;color:var(--critical);">− ${BRL(boletosTodos)}</td></tr>
-          <tr><td>Despesas fixas${fixasPagasFora?' <span class="hint">(inclui pagas após a posição)</span>':''}</td>
-              <td style="text-align:right;color:var(--critical);">− ${BRL(fixasDescontar)}</td></tr>
-          <tr><td>Folha do mês <span class="hint">Gente e Gestão</span></td>
-              <td style="text-align:right;color:var(--critical);">− ${BRL(folhaDescontar)}</td></tr>
-          <tr><td class="strong">Disponibilidade</td><td class="strong" style="text-align:right;">${BRL(dispFin)}</td></tr>
+          ${principal
+            ? linha('Saldo em conta', contaDf) + linha('Em espécie', especieDf)
+            : linha('Saldo que entra do mês anterior', m.saldoInicial) + linha('Receita esperada', m.entra)}
+          ${linha('Boletos do mês', m.c.boletos, true)}
+          ${linha('Despesas fixas', m.c.fixas, true)}
+          ${linha('Folha', m.c.folha, true)}
+          <tr><td class="strong">Fecha o mês com</td><td class="strong" style="text-align:right;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</td></tr>
         </tbody>
       </table>
-
-      <div class="hint" style="margin-top:10px;padding-top:9px;border-top:1px solid rgba(245,236,214,0.12);">
-        Com a maquininha a receber (+ ${BRL(maqDf)}):
-        <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong><br>
-        <span style="display:inline-block;margin-top:4px;">Somando a reserva de ${BRL(reservaDf)}:
-          <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla + reservaDf)}</strong></span><br>
-        <span style="opacity:.8;display:inline-block;margin-top:6px;">Fixas e folha já pagas antes da posição não descontam de novo — o saldo lançado já as reflete. A retenção de 13º e férias (${BRL(provisaoMes)}) fica fora: é provisão, não pagamento do mês.</span>
-      </div>
+      ${principal ? `<div class="hint" style="margin-top:9px;padding-top:8px;border-top:1px solid rgba(245,236,214,0.12);">
+        Com a maquininha (+ ${BRL(maqDf)}): <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong><br>
+        Com a reserva de ${BRL(reservaDf)}: <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla+reservaDf)}</strong></div>` : ''}
     </div>`;
+
+  const boxDf = document.getElementById('disp-financeira');
+  if(boxDf) boxDf.innerHTML = !socia ? '' : cardHTML(m1,true) + cardHTML(m2,false) + cardHTML(m3,false)
+    + `<p class="hint" style="grid-column:1/-1;margin:2px 0 0;">Os dois meses à frente partem do saldo que sobra do anterior e somam a receita esperada de ${BRL(receitaEsperada)}/mês (média dos meses fechados). Fixas e folha desses meses entram inteiras, e a retenção de 13º e férias fica fora — é provisão.</p>`;
 
   const cardFixas = document.getElementById('card-fixas');
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
