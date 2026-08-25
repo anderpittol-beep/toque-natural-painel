@@ -225,7 +225,8 @@ window.TN_CONFIG = {
       <div class="nav-group">Gerencial</div>
       <button data-view="visao-geral" class="active"><span class="navicon">◆</span>Visão geral</button>
       <button data-view="projecao"><span class="navicon">↗</span>Projeção 12 meses</button>
-      <button data-view="caixa"><span class="navicon">▦</span>Caixa diário &amp; despesas</button>
+      <button data-view="caixa-diario"><span class="navicon">◱</span>Caixa diário</button>
+      <button data-view="caixa"><span class="navicon">▦</span>Despesas &amp; compras</button>
       <button data-view="margem"><span class="navicon">%</span>Margem por produto</button>
       <button data-view="produtos"><span class="navicon">▲</span>Produtos mais vendidos</button>
       <button data-view="desempenho"><span class="navicon">★</span>Desempenho de vendas</button>
@@ -307,12 +308,13 @@ window.TN_CONFIG = {
       </section>
 
       <!-- CAIXA DIÁRIO & DESPESAS -->
-      <section class="view" id="view-caixa">
-        <h2 class="section-title">Caixa diário &amp; despesas</h2>
-        <p class="section-desc">Controle diário dos recursos de cada loja: fechamento do caixa e saldo em conta por dia, além das despesas fixas do mês, dos boletos, das compras do mês e do patrimônio &amp; manutenção. Selecione a loja no topo para ver isolado. É aqui que você enxerga, dia a dia, quanto há disponível em cada loja.</p>
-        <div class="grid grid-4" id="caixa-kpis" style="margin-bottom:16px;"></div>
+      <!-- CAIXA DIÁRIO — disponibilidade de recurso no dia -->
+      <section class="view" id="view-caixa-diario">
+        <h2 class="section-title">Caixa diário</h2>
+        <p class="section-desc">Quanto há disponível em cada loja, dia a dia: fechamento do caixa e saldo em conta. Selecione a loja no topo para ver isolado. As despesas do mês ficam em <strong>Despesas &amp; compras</strong>.</p>
+        <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
-        <div class="card" style="margin-bottom:18px;">
+        <div class="card" >
           <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; saldo em conta</h3>
           <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). O saldo em conta é o que está no banco ao fim do dia.</p>
           <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
@@ -327,6 +329,13 @@ window.TN_CONFIG = {
           </form>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
         </div>
+
+      </section>
+
+      <section class="view" id="view-caixa">
+        <h2 class="section-title">Despesas &amp; compras</h2>
+        <p class="section-desc">Tudo o que sai: despesas fixas do mês, compras do mês (nota cheia, impacta o lucro), boletos pagos e a pagar, e o histórico de patrimônio &amp; manutenção. O disponível do dia fica em <strong>Caixa diário</strong>.</p>
+        <div class="grid grid-4" id="caixa-kpis" style="margin-bottom:16px;"></div>
 
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card" id="card-fixas">
@@ -2560,12 +2569,14 @@ function renderCaixa(){
     const dias = caixa.filter(c=>c.loja===l).sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
     if(dias[0]) saldoConta += (dias[0].conta||0);
   });
-  document.getElementById('caixa-kpis').innerHTML = `
+  document.getElementById('caixadia-kpis').innerHTML = `
     ${socia?`<div class="card stat-tile accent-good"><div class="label">Saldo em conta (último dia)</div><div class="value">${BRL(saldoConta)}</div></div>`:''}
     <div class="card stat-tile"><div class="label">Entradas registradas (mês)</div><div class="value">${BRL(entradasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
-    ${socia?`<div class="card stat-tile accent-warning"><div class="label">Despesas fixas / mês</div><div class="value">${BRL(totFixas)}</div></div>`:''}
   `;
+  document.getElementById('caixa-kpis').innerHTML = socia ? `
+    <div class="card stat-tile accent-warning"><div class="label">Despesas fixas / mês</div><div class="value">${BRL(totFixas)}</div></div>
+  ` : '';
   const cardFixas = document.getElementById('card-fixas');
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
   const cxConta = document.getElementById('cx-conta');
@@ -3040,7 +3051,8 @@ wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
 /* ============ NAV / VIEW SWITCH ============ */
 const VIEW_TITLES = {
   'visao-geral':['Visão geral','Consolidado das lojas selecionadas'],
-  'caixa':['Caixa diário & despesas','Recursos disponíveis, fechamento e despesas por loja'],
+  'caixa-diario':['Caixa diário','Disponibilidade de recurso no dia, por loja'],
+  'caixa':['Despesas & compras','Fixas, compras do mês, boletos e patrimônio'],
   'gente':['Gente e Gestão','Folha confidencial: salários, comissões e encargos'],
   'projecao':['Projeção 12 meses','Cenário Ago/26 → Jul/27 com base nos dados reais'],
   'produtos':['Produtos mais vendidos','Ranking por unidades no mês'],
