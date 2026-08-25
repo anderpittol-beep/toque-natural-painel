@@ -225,11 +225,10 @@ window.TN_CONFIG = {
       <div class="nav-group">Gerencial</div>
       <button data-view="visao-geral" class="active"><span class="navicon">◆</span>Visão geral</button>
       <button data-view="projecao"><span class="navicon">↗</span>Projeção 12 meses</button>
-      <button data-view="caixa-diario"><span class="navicon">◱</span>Caixa diário</button>
       <button data-view="caixa"><span class="navicon">▦</span>Despesas &amp; compras</button>
       <button data-view="margem"><span class="navicon">%</span>Margem por produto</button>
       <button data-view="produtos"><span class="navicon">▲</span>Produtos mais vendidos</button>
-      <button data-view="desempenho"><span class="navicon">★</span>Desempenho de vendas</button>
+      <button data-view="desempenho"><span class="navicon">★</span>Vendas &amp; caixa diário</button>
       <button data-view="gente" id="nav-gente"><span class="navicon">◈</span>Gente e Gestão <span class="lock">🔒</span></button>
       <div class="nav-group">Clientes</div>
       <button data-view="clientes"><span class="navicon">◐</span>Clientes &amp; CRM</button>
@@ -308,29 +307,6 @@ window.TN_CONFIG = {
       </section>
 
       <!-- CAIXA DIÁRIO & DESPESAS -->
-      <!-- CAIXA DIÁRIO — disponibilidade de recurso no dia -->
-      <section class="view" id="view-caixa-diario">
-        <h2 class="section-title">Caixa diário</h2>
-        <p class="section-desc">Quanto há disponível em cada loja, dia a dia, e como as vendas do dia ficaram diante da meta. Selecione a loja no topo para ver isolado. As despesas do mês ficam em <strong>Despesas &amp; compras</strong>.</p>
-        <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
-
-        <div class="card" >
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
-          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia vem da meta mensal da loja, dividida pelos dias do mês.</p>
-          <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
-            <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
-            <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
-            <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
-            <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
-          </form>
-          <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
-        </div>
-
-      </section>
-
       <section class="view" id="view-caixa">
         <h2 class="section-title">Despesas &amp; compras</h2>
         <p class="section-desc">Tudo o que sai: despesas fixas do mês, compras do mês (nota cheia, impacta o lucro), boletos pagos e a pagar, e o histórico de patrimônio &amp; manutenção. O disponível do dia fica em <strong>Caixa diário</strong>.</p>
@@ -522,8 +498,25 @@ window.TN_CONFIG = {
 
       <!-- DESEMPENHO DE VENDAS -->
       <section class="view" id="view-desempenho">
-        <h2 class="section-title">Desempenho de vendas — colaboradoras</h2>
-        <p class="section-desc">Vendas diárias por colaboradora, compiladas por semana e comparadas à meta. O painel de reconhecimento premia automaticamente os destaques: almoço para quem superou a meta da semana, café para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <h2 class="section-title">Vendas &amp; caixa diário</h2>
+        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: almoço para quem superou a meta da semana, café para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
+
+        <div class="card" >
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
+          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia vem da meta mensal da loja, dividida pelos dias do mês.</p>
+          <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
+            <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
+            <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+            <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
+            <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
+            <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
+            <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
+          </form>
+          <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
+        </div>
+
         <div class="grid grid-4" id="premios" style="margin-bottom:18px;"></div>
 
         <div class="card" style="margin-bottom:16px;">
@@ -998,14 +991,23 @@ let TAREFAS = [
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
 let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 };
 const SEMANAS_MES = 4.345; // p/ derivar meta semanal a partir da mensal
-/* Meta do dia = meta mensal da loja dividida pelos dias daquele mês.
-   Mesma base do Desempenho de vendas, só que por dia em vez de por semana. */
+/* Meta do dia = o que ainda falta da meta mensal da loja, dividido pelos dias úteis
+   que restam no mês (seg–sáb) contando o próprio dia. Como o realizado entra na conta,
+   a meta sobe quando o mês atrasa e cai quando adianta. */
 function metaDoDia(loja, dataBR){
   const mensal = METAS_MENSAIS[loja] || 0;
   const d = parseBR(dataBR);
   if(!mensal || !d) return 0;
-  const diasNoMes = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-  return mensal / diasNoMes;
+  const vendidoAntes = vendasCompiladas()
+    .filter(v=>{
+      const dv = parseBR(v.data);
+      return v.loja===loja && dv && dv.getFullYear()===d.getFullYear()
+             && dv.getMonth()===d.getMonth() && dv < d;
+    })
+    .reduce((a,v)=>a+(+v.valor||0),0);
+  const falta = Math.max(0, mensal - vendidoAntes);
+  const dias = diasUteisRestantes(d, true);
+  return dias ? falta/dias : 0;
 }
 let VENDAS_DIARIAS = [];
 /* Histórico de destaque mensal (quem foi o destaque em cada mês) — base para 3 meses seguidos e anual */
@@ -1611,9 +1613,9 @@ function diasUteisNoMes(ano,mes){ // conta seg–sáb (exclui domingo)
   while(d.getMonth()===mes){ if(d.getDay()!==0) c++; d.setDate(d.getDate()+1); }
   return c;
 }
-function diasUteisRestantes(ref){ // de ref (inclusive) até o fim do mês, seg–sáb
+function diasUteisRestantes(ref, incluirRef){ // até o fim do mês, seg–sáb (domingo a loja fecha)
   const m=ref.getMonth();
-  let d=new Date(ref.getFullYear(),m,ref.getDate()), c=0;
+  let d=new Date(ref.getFullYear(),m,ref.getDate()+(incluirRef?0:1)), c=0;
   while(d.getMonth()===m){ if(d.getDay()!==0) c++; d.setDate(d.getDate()+1); }
   return c;
 }
@@ -1631,16 +1633,16 @@ function renderDesempenho(){
   // ===== Meta diária por loja =====
   const lojasShow = [...new Set(nomes.map(lojaOf))];
   const duMes = diasUteisNoMes(TODAY.getFullYear(), TODAY.getMonth());
-  const duRest = diasUteisRestantes(TODAY);
+  const duRest = diasUteisRestantes(TODAY, false);   // a partir de amanhã
   const prodLoja = {};
   vendas.forEach(v=>{ const dt=parseBR(v.data); if(dt && dt.getMonth()===TODAY.getMonth() && dt.getFullYear()===TODAY.getFullYear()) prodLoja[v.loja]=(prodLoja[v.loja]||0)+v.valor; });
   const mdBox = document.getElementById('tbl-meta-diaria');
   if(mdBox){
     mdBox.innerHTML = `
-      <thead><tr><th>Loja</th><th>Meta mensal</th><th>Meta diária</th><th>Produzido no mês</th><th>% da meta</th><th>Necessário/dia restante</th></tr></thead>
+      <thead><tr><th>Loja</th><th>Meta mensal</th><th>Produzido no mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th></tr></thead>
       <tbody>${lojasShow.map(l=>{
         const mm=METAS_MENSAIS[l]||0;
-        const md=duMes?mm/duMes:0;
+        const mdBase=duMes?mm/duMes:0;      // ritmo médio, só para colorir o esforço extra
         const prod=prodLoja[l]||0;
         const pct=mm?prod/mm*100:0;
         const falta=Math.max(0,mm-prod);
@@ -1648,13 +1650,13 @@ function renderDesempenho(){
         return `<tr>
           <td class="strong">${esc(l)}</td>
           <td>${BRL(mm)}</td>
-          <td class="strong">${BRL(md)}</td>
           <td>${BRL(prod)}</td>
           <td style="color:${pctColor(pct)};font-weight:600;">${pct.toFixed(0)}%</td>
-          <td class="strong" style="color:${need>md*1.5?'var(--critical)':'var(--text)'};">${BRL(need)}</td>
+          <td>${BRL(falta)}</td>
+          <td class="strong" style="color:${need>mdBase*1.5?'var(--critical)':'var(--text)'};">${BRL(need)}</td>
         </tr>`;
       }).join('') || `<tr><td colspan="6" class="hint">Sem loja para exibir.</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="6" class="hint">Dias úteis no mês: ${duMes} · restantes (a partir de hoje): ${duRest}</td></tr></tfoot>`;
+      <tfoot><tr><td colspan="6" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.</td></tr></tfoot>`;
   }
 
   // agrupa por semana
@@ -3074,12 +3076,11 @@ wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
 /* ============ NAV / VIEW SWITCH ============ */
 const VIEW_TITLES = {
   'visao-geral':['Visão geral','Consolidado das lojas selecionadas'],
-  'caixa-diario':['Caixa diário','Disponibilidade de recurso no dia e meta diária, por loja'],
   'caixa':['Despesas & compras','Fixas, compras do mês, boletos e patrimônio'],
   'gente':['Gente e Gestão','Folha confidencial: salários, comissões e encargos'],
   'projecao':['Projeção 12 meses','Cenário Ago/26 → Jul/27 com base nos dados reais'],
   'produtos':['Produtos mais vendidos','Ranking por unidades no mês'],
-  'desempenho':['Desempenho de vendas','Compilado semanal e reconhecimento das colaboradoras'],
+  'desempenho':['Vendas & caixa diário','Fechamento do dia, meta diária e desempenho da equipe'],
   'margem':['Margem por produto','Prioridade #1: preços e custos corretos'],
   'estoque':['Estoque & pedidos','Prioridade #2: o que comprar e quando'],
   'validade':['Validade','Prioridade #3: evitar perda por vencimento'],
