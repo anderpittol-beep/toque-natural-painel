@@ -379,26 +379,30 @@ window.TN_CONFIG = {
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-compras"></table></div>
             </div>
 
-            <!-- BLOCO 2: BOLETOS PAGOS NO MÊS — caixa, impacta a disponibilidade -->
-            <div class="card">
+            <!-- BLOCO 2: BOLETOS PAGOS NO MÊS — caixa realizado -->
+            <div class="card" style="margin-bottom:16px;">
               <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
                 <div>
-                  <h3 style="font-size:14px;margin:0 0 4px 0;">Boletos pagos no mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>impacta o caixa</span></h3>
-                  <p class="hint" style="margin:0;">Parcelas efetivamente pagas no mês, referentes às compras lançadas acima. É o que sai do caixa e define a disponibilidade de recurso.</p>
+                  <h3 style="font-size:14px;margin:0 0 4px 0;">Boletos pagos no mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>saiu do caixa</span></h3>
+                  <p class="hint" style="margin:0;">Parcelas efetivamente pagas, referentes às compras lançadas acima. É o que já saiu do caixa.</p>
                 </div>
               </div>
               <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
-                <input type="date" id="bl-data" title="Data do pagamento">
+                <input type="date" id="bl-data" title="Data do pagamento / vencimento">
                 <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
                 <select id="bl-status"><option>Pago</option><option>Pendente</option></select>
                 <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
                 <input type="number" id="bl-valor" placeholder="Valor da parcela" step="0.01">
-                <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar pagamento</button>
+                <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar</button>
               </form>
-              <div class="toolbar filters" style="margin:10px 0 0 0;">
-                <select id="boletoStatusFilter"><option value="">Todos</option><option value="Pago">Pagos</option><option value="Pendente">Pendentes</option></select>
-              </div>
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-boletos"></table></div>
+            </div>
+
+            <!-- BLOCO 3: A PAGAR — previsão de desembolso -->
+            <div class="card">
+              <h3 style="font-size:14px;margin:0 0 4px 0;">A pagar <span class="badge b-serious" style="vertical-align:middle;"><span class="dot"></span>previsão de desembolso</span></h3>
+              <p class="hint" style="margin:0 0 8px 0;">Parcelas ainda em aberto, agrupadas pelo mês de vencimento. Serve para planejar o caixa dos próximos meses. Vencidas aparecem em destaque.</p>
+              <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-apagar"></table></div>
             </div>
           </div>
         </div>
@@ -913,7 +917,9 @@ window.TN_CONFIG = {
 
 <script>
 /* ============ CONFIG / HELPERS ============ */
-const TODAY = new Date('2026-08-14T00:00:00');
+/* Data de hoje, do próprio dispositivo — usada em vencimentos, metas diárias,
+   validade, clientes inativos e na competência inicial dos lançamentos. */
+const TODAY = (()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; })();
 /* Atualize esta data a cada alteração do painel — aparece no canto superior direito. Formato por extenso + hora. */
 const LAST_UPDATE = "20 de agosto de 2026, 22:13";
 const STORES = ["Itaipulândia","Ouro Verde","Toledo"];
@@ -2675,22 +2681,73 @@ function renderCaixa(){
     };
   });
 
-  // Tabela boletos/variáveis
-  const bf = document.getElementById('boletoStatusFilter').value;
-  let bl = bf ? boletos.filter(b=>b.status===bf) : boletos;
-  bl = bl.slice().sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
-  const pagos = boletos.filter(b=>b.status==='Pago').reduce((a,b)=>a+(b.valor||0),0);
-  const pend = boletos.filter(b=>b.status==='Pendente').reduce((a,b)=>a+(b.valor||0),0);
+  // ===== BLOCO 2: pagos no mês (caixa realizado) =====
+  const socia2 = (typeof perfil!=='undefined' && perfil==='socia');
+  const pagosMes = boletos.filter(b=> b.status==='Pago' && (b.ano ? (+b.ano===fxAno && +b.mes===fxMes) : true))
+                          .sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
+  const totPagos = pagosMes.reduce((a,b)=>a+(+b.valor||0),0);
   document.getElementById('tbl-boletos').innerHTML = `
-    <thead><tr><th>Data</th><th>Descrição</th><th>Loja</th><th>Valor</th><th>Status</th></tr></thead>
-    <tbody>${bl.map(b=>`<tr>
+    <thead><tr><th>Data</th><th>Descrição</th><th>Loja</th><th>Valor</th>${socia2?'<th></th>':''}</tr></thead>
+    <tbody>${pagosMes.map(b=>`<tr>
         <td>${esc(b.data)}</td>
         <td class="strong">${esc(b.descricao)}</td>
         <td>${esc(b.loja)}</td>
-        <td>${BRL(b.valor)}</td>
-        <td><span class="badge ${b.status==='Pago'?'b-good':'b-warning'}"><span class="dot"></span>${esc(b.status)}</span></td>
-      </tr>`).join('') || '<tr><td colspan="5" class="hint">Sem lançamentos.</td></tr>'}
-    <tr><td colspan="3" class="strong" style="text-align:right;">Pagos / Pendentes</td><td colspan="2" class="strong">${BRL(pagos)} / ${BRL(pend)}</td></tr></tbody>`;
+        <td class="strong">${BRL(b.valor)}</td>
+        ${socia2?`<td style="text-align:right;white-space:nowrap;"><button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+      </tr>`).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())}.</td></tr>`}
+    <tr><td colspan="3" class="strong" style="text-align:right;">Total pago no mês</td><td class="strong">${BRL(totPagos)}</td>${socia2?'<td></td>':''}</tr></tbody>`;
+
+  // ===== BLOCO 3: a pagar (previsão de desembolso), agrupado por vencimento =====
+  const abertos = boletos.filter(b=> b.status==='Pendente');
+  const grupos = {};
+  abertos.forEach(b=>{
+    const d = parseBR(b.data);
+    const chave = d ? (MES_ABREV[d.getMonth()+1] + '/' + String(d.getFullYear()).slice(2)) : 'Sem vencimento';
+    (grupos[chave] = grupos[chave] || {itens:[], ord: d ? d.getFullYear()*100+d.getMonth()+1 : 999999}).itens.push(b);
+  });
+  const ordenados = Object.keys(grupos).sort((a,b)=>grupos[a].ord-grupos[b].ord);
+  const totAberto = abertos.reduce((a,b)=>a+(+b.valor||0),0);
+  const hojeMs = TODAY.getTime();
+  document.getElementById('tbl-apagar').innerHTML = `
+    <thead><tr><th>Vencimento</th><th>Descrição</th><th>Loja</th><th>Valor</th>${socia2?'<th></th>':''}</tr></thead>
+    <tbody>${ordenados.map(k=>{
+      const soma = grupos[k].itens.reduce((a,b)=>a+(+b.valor||0),0);
+      const linhas = grupos[k].itens.sort((a,b)=>(parseBR(a.data)||0)-(parseBR(b.data)||0)).map(b=>{
+        const d = parseBR(b.data), venceu = d && d.getTime() < hojeMs;
+        return `<tr>
+          <td>${esc(b.data)}${venceu?' <span class="badge b-critical" style="vertical-align:middle;"><span class="dot"></span>vencido</span>':''}</td>
+          <td class="strong">${esc(b.descricao)}</td>
+          <td>${esc(b.loja)}</td>
+          <td>${BRL(b.valor)}</td>
+          ${socia2?`<td style="text-align:right;white-space:nowrap;">
+            <button class="btn ghost" data-blpagar="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Marcar como pago" style="padding:2px 6px;">✓ pago</button>
+            <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+        </tr>`;}).join('');
+      return `<tr><td colspan="${socia2?5:4}" style="background:var(--surface-2,transparent);"><strong>${esc(k)}</strong> <span class="hint">· ${BRL(soma)}</span></td></tr>` + linhas;
+    }).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nada em aberto.</td></tr>`}
+    ${abertos.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total a pagar</td><td class="strong">${BRL(totAberto)}</td>${socia2?'<td></td>':''}</tr>`:''}</tbody>`;
+
+  // ações dos boletos
+  document.querySelectorAll('[data-blpagar]').forEach(b=>{
+    b.onclick = ()=>{
+      const alvo = BOLETOS.find(x=> (b.dataset.blpagar && x.id===b.dataset.blpagar) || (!b.dataset.blpagar && x.descricao===b.dataset.bldesc && x.status==='Pendente'));
+      if(!alvo) return;
+      alvo.status = 'Pago';
+      if(alvo.id) tnUpdate('boletos',{id:alvo.id},{status:'Pago'});
+      renderCaixa();
+    };
+  });
+  document.querySelectorAll('[data-blexcluir]').forEach(b=>{
+    b.onclick = ()=>{
+      const i = BOLETOS.findIndex(x=> (b.dataset.blexcluir && x.id===b.dataset.blexcluir) || (!b.dataset.blexcluir && x.descricao===b.dataset.bldesc));
+      if(i<0) return;
+      if(!confirm('Excluir "'+BOLETOS[i].descricao+'"?')) return;
+      const id = BOLETOS[i].id;
+      BOLETOS.splice(i,1);
+      if(id) tnDelete('boletos',{id});
+      renderCaixa();
+    };
+  });
 }
 
 /* ===== FOLHA POR COMPETÊNCIA (mesma lógica das despesas fixas) ===== */
@@ -3009,7 +3066,6 @@ document.getElementById('growDespesa').onchange = renderProjecao;
 document.getElementById('baseJanela').onchange = renderProjecao;
 document.getElementById('crmResultadoFilter').onchange = renderCRM;
 document.getElementById('patrimonioTipoFilter').onchange = renderPatrimonio;
-document.getElementById('boletoStatusFilter').onchange = renderCaixa;
 document.getElementById('perfil-btn').onclick = async ()=>{
   // Sair: encerra a sessão do Supabase e volta para a tela de login
   try{ if(window.TN&&window.TN.sb){ await window.TN.sb.auth.signOut(); } }catch(_){}
