@@ -312,6 +312,32 @@ window.TN_CONFIG = {
         <p class="section-desc">Tudo o que sai: despesas fixas do mês, compras do mês (nota cheia, impacta o lucro), boletos pagos e a pagar, e o histórico de patrimônio &amp; manutenção. O disponível do dia fica em <strong>Caixa diário</strong>.</p>
         <div class="grid grid-4" id="caixa-kpis" style="margin-bottom:16px;"></div>
 
+        <!-- DISPONIBILIDADE DE RECURSO — quanto há, quanto sai, o que sobra -->
+        <div class="card" id="card-disponibilidade" style="margin-bottom:18px;">
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Disponibilidade de recurso</h3>
+          <p class="hint" style="margin:0 0 12px 0;">Saldo em conta e valor aplicado de cada loja, menos o que ainda precisa ser pago. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
+
+          <form class="feedback-form" id="form-disp" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
+            <input type="text" id="dp-data" placeholder="Data (dd/mm/aaaa)">
+            <select id="dp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+            <input type="number" id="dp-conta" placeholder="Saldo em conta" step="0.01">
+            <input type="number" id="dp-aplicado" placeholder="Valor aplicado" step="0.01">
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar posição</button>
+          </form>
+
+          <div class="grid grid-4" id="disp-kpis" style="margin-bottom:14px;"></div>
+
+          <h4 style="font-size:13px;margin:14px 0 6px 0;">Cenários</h4>
+          <div style="overflow-x:auto;"><table id="tbl-cenarios"></table></div>
+
+          <details id="det-disp" style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
+              <span id="det-disp-label">posições registradas</span>
+            </summary>
+            <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-disp"></table></div>
+          </details>
+        </div>
+
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card" id="card-fixas">
             <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
@@ -2480,6 +2506,168 @@ function renderPatrimonio(){
       ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido <span class="hint" style="font-weight:400;">(referência — não entra no caixa nem nas despesas)</span></td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
 }
 
+/* ===== DISPONIBILIDADE DE RECURSO =====
+   Quanto a empresa tem hoje (conta + aplicado), quanto ainda precisa pagar e o que
+   sobra — projetado para 3, 6 e 12 meses e para o restante do ano civil. */
+let DISPONIBILIDADE = [];
+let dispEditando = null;
+
+/* Última posição registrada de cada loja: é ela que vale como saldo atual */
+function dispAtualPorLoja(loja){
+  const doLoja = DISPONIBILIDADE
+    .filter(d => d.loja===loja)
+    .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0));
+  return doLoja[0] || null;
+}
+
+/* Compromisso recorrente de um mês: fixas + folha + provisões da loja */
+function compromissoMensal(ano, mes, loja){
+  const fixas = fixasDaCompetencia(ano, mes).reduce((a,d)=>
+    a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0)), 0);
+  const doMes = folhaDaCompetencia(ano, mes).filter(g=>g.loja===loja);
+  return fixas + doMes.reduce((a,g)=>a+gTotal(g),0) + doMes.reduce((a,g)=>a+gProvisao(g).total,0);
+}
+
+/* Boletos ainda em aberto com vencimento dentro do horizonte */
+function boletosAteData(limite, lojas){
+  return BOLETOS.reduce((a,b)=>{
+    if(b.status!=='Pendente') return a;
+    if(!lojas.includes(b.loja) && b.loja!=='Todas') return a;
+    const d = parseBR(b.data);
+    if(!d || d > limite) return a;
+    return a + (+b.valor||0);
+  }, 0);
+}
+
+/* Um cenário = N meses à frente: o que entra pela meta, o que sai, o que sobra */
+function cenario(meses, rotulo){
+  const lojas = selStores();
+  const disp = lojas.reduce((a,l)=>{
+    const p = dispAtualPorLoja(l);
+    return a + (p ? (+p.saldo_conta||0) + (+p.aplicado||0) : 0);
+  }, 0);
+
+  const limite = new Date(TODAY.getFullYear(), TODAY.getMonth()+meses, TODAY.getDate());
+  let recorrente = 0, receita = 0;
+  for(let k=0; k<meses; k++){
+    const d = new Date(TODAY.getFullYear(), TODAY.getMonth()+k, 1);
+    const ano = d.getFullYear(), mes = d.getMonth()+1;
+    lojas.forEach(l=>{
+      recorrente += compromissoMensal(ano, mes, l);
+      receita    += (METAS_MENSAIS[l]||0);
+    });
+  }
+  const boletos = boletosAteData(limite, lojas);
+  const saida = recorrente + boletos;
+  return { rotulo, meses, disp, boletos, recorrente, saida, receita,
+           semReceita: disp - saida, comReceita: disp - saida + receita };
+}
+
+/* Meses que faltam para fechar o ano civil, contando o mês corrente */
+function mesesAteFimDoAno(){ return 12 - TODAY.getMonth(); }
+
+function renderDisponibilidade(){
+  const card = document.getElementById('card-disponibilidade');
+  if(!card) return;
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  card.style.display = socia ? '' : 'none';   // posição de caixa é informação de sócio
+  if(!socia) return;
+
+  const lojas = selStores();
+  const conta = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.saldo_conta||0) : 0); }, 0);
+  const aplicado = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.aplicado||0) : 0); }, 0);
+
+  // a pagar no mês corrente: recorrente do mês + boletos que vencem até o fim dele
+  const fimMes = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0);
+  const aPagarMes = lojas.reduce((a,l)=> a + compromissoMensal(TODAY.getFullYear(), TODAY.getMonth()+1, l), 0)
+                  + boletosAteData(fimMes, lojas);
+  const sobra = conta + aplicado - aPagarMes;
+
+  document.getElementById('disp-kpis').innerHTML = `
+    <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div></div>
+    <div class="card stat-tile"><div class="label">Valor aplicado</div><div class="value">${BRL(aplicado)}</div></div>
+    <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div></div>
+    <div class="card stat-tile ${sobra<0?'accent-critical':''}"><div class="label">Sobra do mês</div><div class="value" style="color:${sobra>=0?'var(--good)':'var(--critical)'};">${BRL(sobra)}</div></div>
+  `;
+
+  const cenarios = [ cenario(3,'3 meses'), cenario(6,'6 meses'), cenario(12,'12 meses'),
+                     cenario(mesesAteFimDoAno(), 'Ano civil ('+TODAY.getFullYear()+')') ];
+  document.getElementById('tbl-cenarios').innerHTML = `
+    <thead><tr><th>Cenário</th><th>Disponível hoje</th><th>Boletos a pagar</th><th>Fixas + folha</th><th>Total a pagar</th><th>Sem faturar nada</th><th>Batendo a meta</th></tr></thead>
+    <tbody>${cenarios.map(c=>`
+      <tr>
+        <td class="strong">${esc(c.rotulo)}${/^\d/.test(c.rotulo)?'':` <span class="hint">${c.meses} ${c.meses===1?'mês':'meses'}</span>`}</td>
+        <td>${BRL(c.disp)}</td>
+        <td>${BRL(c.boletos)}</td>
+        <td>${BRL(c.recorrente)}</td>
+        <td class="strong">${BRL(c.saida)}</td>
+        <td class="strong" style="color:${c.semReceita>=0?'var(--good)':'var(--critical)'};">${BRL(c.semReceita)}</td>
+        <td class="strong" style="color:${c.comReceita>=0?'var(--good)':'var(--critical)'};">${BRL(c.comReceita)}</td>
+      </tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="7" class="hint">"Sem faturar nada" é o pior caso: só o que há em caixa contra os compromissos. "Batendo a meta" soma a meta mensal de cada loja no período. Fixas, folha e provisões de 13º e férias repetem o valor do mês corrente.</td></tr></tfoot>`;
+
+  // posições registradas
+  const lista = DISPONIBILIDADE.filter(d=>lojas.includes(d.loja))
+    .sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || String(a.loja).localeCompare(b.loja));
+  const det = document.getElementById('det-disp'), lbl = document.getElementById('det-disp-label');
+  if(det){
+    det.style.display = lista.length ? '' : 'none';
+    const texto = ()=> (det.open?'▾ ':'▸ ') + lista.length + (lista.length===1?' posição registrada':' posições registradas');
+    if(lbl) lbl.textContent = texto();
+    det.ontoggle = ()=>{ if(lbl) lbl.textContent = texto(); };
+  }
+  const tb = document.getElementById('tbl-disp');
+  if(tb) tb.innerHTML = `
+    <thead><tr><th>Data</th><th>Loja</th><th>Saldo em conta</th><th>Aplicado</th><th>Total</th><th></th></tr></thead>
+    <tbody>${lista.map(d=>{
+      if(dispEditando && d.id===dispEditando){
+        return `<tr>
+          <td><input type="text" data-de="data" value="${esc(d.data)}" style="width:104px;"></td>
+          <td><select data-de="loja">${['Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option ${l===d.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td><input type="number" data-de="saldo_conta" value="${+d.saldo_conta||0}" step="0.01" style="width:108px;"></td>
+          <td><input type="number" data-de="aplicado" value="${+d.aplicado||0}" step="0.01" style="width:108px;"></td>
+          <td>—</td>
+          <td style="white-space:nowrap;"><button class="btn primary" data-dpsalvar="1" style="padding:2px 8px;">salvar</button>
+              <button class="btn ghost" data-dpcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${esc(d.data)}</td>
+        <td>${esc(d.loja)}</td>
+        <td>${BRL(d.saldo_conta)}</td>
+        <td>${BRL(d.aplicado)}</td>
+        <td class="strong">${BRL((+d.saldo_conta||0)+(+d.aplicado||0))}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn ghost" data-dpeditar="${esc(d.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-dpexcluir="${esc(d.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>
+      </tr>`;}).join('') || '<tr><td colspan="6" class="hint">Nenhuma posição registrada.</td></tr>'}</tbody>`;
+
+  document.querySelectorAll('[data-dpeditar]').forEach(b=>{ b.onclick=()=>{ dispEditando=b.dataset.dpeditar; renderDisponibilidade(); }; });
+  document.querySelectorAll('[data-dpcancelar]').forEach(b=>{ b.onclick=()=>{ dispEditando=null; renderDisponibilidade(); }; });
+  document.querySelectorAll('[data-dpsalvar]').forEach(b=>{
+    b.onclick=()=>{
+      const tr=b.closest('tr'), d=DISPONIBILIDADE.find(x=>x.id===dispEditando);
+      if(!d) return;
+      const get=k=>{ const el=tr.querySelector('[data-de="'+k+'"]'); return el?el.value.trim():''; };
+      const nova=get('data');
+      if(!dataBRNoPainel(nova)){ alert('O painel recebe lançamentos a partir de 01/09/2026.'); return; }
+      Object.assign(d,{ data:nova, loja:get('loja'), saldo_conta:num(get('saldo_conta'))||0, aplicado:num(get('aplicado'))||0 });
+      if(d.id) tnUpdate('disponibilidade',{id:d.id},{data:d.data,loja:d.loja,saldo_conta:d.saldo_conta,aplicado:d.aplicado});
+      dispEditando=null; renderDisponibilidade();
+    };
+  });
+  document.querySelectorAll('[data-dpexcluir]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.dataset.dpexcluir, i=DISPONIBILIDADE.findIndex(x=>x.id===id);
+      if(i<0) return;
+      if(!confirm('Excluir a posição de '+DISPONIBILIDADE[i].loja+' em '+DISPONIBILIDADE[i].data+'?')) return;
+      DISPONIBILIDADE.splice(i,1);
+      if(id) tnDelete('disponibilidade',{id});
+      renderDisponibilidade();
+    };
+  });
+}
+
 /* ===== COMPRAS DO MÊS (NF cheia) — regime de competência, impacta o lucro =====
    A nota entra inteira no mês da compra; o pagamento (parcelas) é registrado
    separadamente nos boletos e afeta o caixa, não o lucro. */
@@ -3257,6 +3445,24 @@ document.getElementById('form-gente').addEventListener('submit', async e=>{
   e.target.reset();
   renderGente(); renderCaixa();
 });
+document.getElementById('form-disp').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const data = document.getElementById('dp-data').value || TODAY.toLocaleDateString('pt-BR');
+  if(!dataBRNoPainel(data)){
+    alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
+    return;
+  }
+  const reg = {
+    data, loja: document.getElementById('dp-loja').value,
+    saldo_conta: num(document.getElementById('dp-conta').value)||0,
+    aplicado: num(document.getElementById('dp-aplicado').value)||0,
+    origem: 'painel',
+  };
+  const id = await tnInsertRet('disponibilidade', reg);
+  DISPONIBILIDADE.push(id ? {...reg, id} : reg);
+  e.target.reset();
+  renderDisponibilidade();
+});
 document.getElementById('form-caixa').addEventListener('submit', e=>{
   e.preventDefault();
   const cxData = document.getElementById('cx-data').value || TODAY.toLocaleDateString('pt-BR');
@@ -3348,6 +3554,7 @@ document.getElementById('form-patrimonio').addEventListener('submit', e=>{
   tnInsert('patrimonio',{data:ptData,tipo:document.getElementById('pt-tipo').value,loja:document.getElementById('pt-loja').value,descricao:document.getElementById('pt-descricao').value,valor:num(document.getElementById('pt-valor').value)||0,fornecedor:document.getElementById('pt-fornecedor').value,contato:document.getElementById('pt-contato').value,status:document.getElementById('pt-status').value});
   e.target.reset();
   renderPatrimonio();
+  renderDisponibilidade();
 });
 document.getElementById('form-crm').addEventListener('submit', e=>{
   e.preventDefault();
@@ -3494,7 +3701,7 @@ function tnMapFinanceiro(rows){
 }
 
 async function tnLoadAll(sb){
-  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta'];
+  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta','disponibilidade'];
   const res={};
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
@@ -3506,6 +3713,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
+  try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,aplicado:+r.aplicado,origem:r.origem})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
   try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
