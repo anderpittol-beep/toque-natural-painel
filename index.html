@@ -3139,12 +3139,27 @@ function renderCaixa(){
   const dataDf     = posLojas.map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
 
   const boletosTodos = boletos.reduce((a,b)=> a + (b.status==='Pendente' ? (+b.valor||0) : 0), 0);
-  const fixasAbertas = fixasDaCompetencia(fxAno, fxMes)
-    .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
-    .reduce((a,d)=> a + (d.pago ? 0 : (+d.valor||0)), 0);
 
-  const dispFin   = contaDf + especieDf - boletosTodos;          // a conta pedida
-  const dispAmpla = dispFin + maqDf - fixasAbertas;              // considerando o que falta
+  /* Despesas fixas entram na conta, mas só as que o saldo ainda não reflete:
+     - em aberto: vão sair, então pesam;
+     - pagas depois da data da posição: o dinheiro saiu depois da foto do saldo,
+       então também pesam — é o que faz o check de pago descontar na hora;
+     - pagas antes da posição: já estão embutidas no saldo lançado, não descontam
+       de novo. */
+  const fixasMes = fixasDaCompetencia(fxAno, fxMes)
+    .filter(d=> selStores().includes(d.loja) || d.loja==='Todas');
+  const refletida = d => {
+    if(!d.pago) return false;                    // ainda vai sair
+    if(!dataDf) return true;                     // sem posição, assume que o saldo já é posterior
+    const q = d.pago_em ? new Date(d.pago_em) : null;
+    return q ? q <= dataDf : true;               // paga antes da foto do saldo
+  };
+  const fixasAbertas   = fixasMes.filter(d=>!d.pago).reduce((a,d)=>a+(+d.valor||0),0);
+  const fixasPagasFora = fixasMes.filter(d=> d.pago && !refletida(d)).reduce((a,d)=>a+(+d.valor||0),0);
+  const fixasDescontar = fixasAbertas + fixasPagasFora;
+
+  const dispFin   = contaDf + especieDf - boletosTodos - fixasDescontar;
+  const dispAmpla = dispFin + maqDf;                      // contando o que a maquininha ainda repassa
 
   const boxDf = document.getElementById('disp-financeira');
   if(boxDf) boxDf.innerHTML = !socia ? '' : `
@@ -3152,24 +3167,25 @@ function renderCaixa(){
          border:1px solid ${dispFin>=0?'rgba(63,125,79,.35)':'rgba(190,70,60,.35)'};">
       <div class="label" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;">Disponibilidade financeira</div>
       <div style="font-size:30px;font-weight:700;line-height:1.1;margin:6px 0 2px;color:${dispFin>=0?'var(--good)':'var(--critical)'};">${BRL(dispFin)}</div>
-      <div class="hint" style="margin-bottom:10px;">saldo em conta + espécie − boletos em aberto${dataDf?' · posição de '+esc(dataDf.toLocaleDateString('pt-BR')):''}</div>
+      <div class="hint" style="margin-bottom:10px;">o que há, menos o que ainda vai sair${dataDf?' · posição de '+esc(dataDf.toLocaleDateString('pt-BR')):''}</div>
 
       <table style="font-size:12.5px;">
         <tbody>
           <tr><td>Saldo em conta</td><td style="text-align:right;">${BRL(contaDf)}</td></tr>
           <tr><td>Em espécie</td><td style="text-align:right;">${BRL(especieDf)}</td></tr>
           <tr><td>Boletos em aberto</td><td style="text-align:right;color:var(--critical);">− ${BRL(boletosTodos)}</td></tr>
-          <tr><td class="strong">Resultado</td><td class="strong" style="text-align:right;">${BRL(dispFin)}</td></tr>
+          <tr><td>Despesas fixas${fixasPagasFora?' <span class="hint">(inclui pagas após a posição)</span>':''}</td>
+              <td style="text-align:right;color:var(--critical);">− ${BRL(fixasDescontar)}</td></tr>
+          <tr><td class="strong">Disponibilidade</td><td class="strong" style="text-align:right;">${BRL(dispFin)}</td></tr>
         </tbody>
       </table>
 
       <div class="hint" style="margin-top:10px;padding-top:9px;border-top:1px solid rgba(245,236,214,0.12);">
-        <strong>Fora dessa conta:</strong><br>
-        maquininha a receber <strong>+ ${BRL(maqDf)}</strong><br>
-        fixas do mês ainda em aberto <strong>− ${BRL(fixasAbertas)}</strong><br>
-        <span style="display:inline-block;margin-top:6px;">Com os dois: <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong></span><br>
+        Com a maquininha a receber (+ ${BRL(maqDf)}):
+        <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong><br>
         <span style="display:inline-block;margin-top:4px;">Somando a reserva de ${BRL(reservaDf)}:
-          <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla + reservaDf)}</strong></span>
+          <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla + reservaDf)}</strong></span><br>
+        <span style="opacity:.8;display:inline-block;margin-top:6px;">Fixas já pagas antes da posição não descontam de novo — o saldo lançado já as reflete.</span>
       </div>
     </div>`;
 
