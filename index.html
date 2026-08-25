@@ -560,8 +560,15 @@ window.TN_CONFIG = {
         </div>
 
         <div class="card">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Compilado semanal</h3>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Compilado semanal</h3>
+          <p class="hint" style="margin:0 0 10px 0;">Cada colaboradora medida pela % da própria meta semanal.</p>
           <div style="overflow-x:auto;"><table id="tbl-semanal"></table></div>
+          <details id="det-semanal" style="margin-top:10px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
+              <span id="det-semanal-label">semanas anteriores</span>
+            </summary>
+            <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-semanal-hist"></table></div>
+          </details>
         </div>
       </section>
 
@@ -1743,17 +1750,32 @@ function renderDesempenho(){
   });
 
   // ===== Compilado semanal (% da meta semanal) =====
-  document.getElementById('tbl-semanal').innerHTML = `
-    <thead><tr><th>Semana</th>${nomes.map(n=>`<th>${esc(n)} <span class="hint">(${esc(lojaOf(n))})</span></th>`).join('')}<th>Destaque (% meta)</th></tr></thead>
-    <tbody>${semArr.map(w=>{
-      let best=null;
-      const cells = nomes.map(n=>{
-        const val=w.tot[n]||0; const meta=metaSem(n); const pct=meta>0?val/meta*100:0;
-        if(val>0 && (!best || pct>best.pct)) best={n, pct};
-        return `<td style="color:${pctColor(pct)};font-weight:600;">${pct.toFixed(0)}% <span class="hint" style="font-weight:400;">${val?BRL(val):''}</span></td>`;
-      }).join('');
-      return `<tr><td class="strong">${esc(w.label)}</td>${cells}<td>${best?esc(best.n)+' ('+best.pct.toFixed(0)+'%)':'<span class="hint">—</span>'}</td></tr>`;
-    }).join('') || `<tr><td colspan="${nomes.length+2}" class="hint">Sem vendas (registre ou lance no Caixa diário).</td></tr>`}</tbody>`;
+  // A semana corrente fica à vista; o histórico abre ao clicar, para a tela não crescer sem fim.
+  const cabecSem = `<thead><tr><th>Semana</th>${nomes.map(n=>`<th>${esc(n)} <span class="hint">(${esc(lojaOf(n))})</span></th>`).join('')}<th>Destaque (% meta)</th></tr></thead>`;
+  const linhaSem = w=>{
+    let best=null;
+    const cells = nomes.map(n=>{
+      const val=w.tot[n]||0; const meta=metaSem(n); const pct=meta>0?val/meta*100:0;
+      if(val>0 && (!best || pct>best.pct)) best={n, pct};
+      return `<td style="color:${pctColor(pct)};font-weight:600;">${pct.toFixed(0)}% <span class="hint" style="font-weight:400;">${val?BRL(val):''}</span></td>`;
+    }).join('');
+    return `<tr><td class="strong">${esc(w.label)}</td>${cells}<td>${best?esc(best.n)+' ('+best.pct.toFixed(0)+'%)':'<span class="hint">—</span>'}</td></tr>`;
+  };
+  document.getElementById('tbl-semanal').innerHTML = cabecSem +
+    `<tbody>${semArr.length ? linhaSem(semArr[0])
+      : `<tr><td colspan="${nomes.length+2}" class="hint">Sem vendas (registre no Caixa diário).</td></tr>`}</tbody>`;
+
+  const anteriores = semArr.slice(1);
+  const det = document.getElementById('det-semanal');
+  if(det){
+    det.style.display = anteriores.length ? '' : 'none';
+    const lbl = document.getElementById('det-semanal-label');
+    if(lbl) lbl.textContent = (det.open ? '▾ ' : '▸ ') + anteriores.length +
+      (anteriores.length===1 ? ' semana anterior' : ' semanas anteriores');
+    det.ontoggle = ()=>{ if(lbl) lbl.textContent = (det.open ? '▾ ' : '▸ ') + anteriores.length +
+      (anteriores.length===1 ? ' semana anterior' : ' semanas anteriores'); };
+    document.getElementById('tbl-semanal-hist').innerHTML = cabecSem + `<tbody>${anteriores.map(linhaSem).join('')}</tbody>`;
+  }
 
   // ===== Histórico de faturamento por loja (planilha do Drive) =====
   const hb = document.getElementById('tbl-hist-faturamento');
