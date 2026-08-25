@@ -311,12 +311,12 @@ window.TN_CONFIG = {
       <!-- CAIXA DIÁRIO — disponibilidade de recurso no dia -->
       <section class="view" id="view-caixa-diario">
         <h2 class="section-title">Caixa diário</h2>
-        <p class="section-desc">Quanto há disponível em cada loja, dia a dia: fechamento do caixa e saldo em conta. Selecione a loja no topo para ver isolado. As despesas do mês ficam em <strong>Despesas &amp; compras</strong>.</p>
+        <p class="section-desc">Quanto há disponível em cada loja, dia a dia, e como as vendas do dia ficaram diante da meta. Selecione a loja no topo para ver isolado. As despesas do mês ficam em <strong>Despesas &amp; compras</strong>.</p>
         <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
         <div class="card" >
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; saldo em conta</h3>
-          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). O saldo em conta é o que está no banco ao fim do dia.</p>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
+          <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia vem da meta mensal da loja, dividida pelos dias do mês.</p>
           <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
             <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
             <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
@@ -324,7 +324,6 @@ window.TN_CONFIG = {
             <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
             <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
             <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
-            <input type="number" id="cx-conta" placeholder="Saldo em conta" step="0.01">
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
           </form>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
@@ -999,6 +998,15 @@ let TAREFAS = [
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
 let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 };
 const SEMANAS_MES = 4.345; // p/ derivar meta semanal a partir da mensal
+/* Meta do dia = meta mensal da loja dividida pelos dias daquele mês.
+   Mesma base do Desempenho de vendas, só que por dia em vez de por semana. */
+function metaDoDia(loja, dataBR){
+  const mensal = METAS_MENSAIS[loja] || 0;
+  const d = parseBR(dataBR);
+  if(!mensal || !d) return 0;
+  const diasNoMes = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  return mensal / diasNoMes;
+}
 let VENDAS_DIARIAS = [];
 /* Histórico de destaque mensal (quem foi o destaque em cada mês) — base para 3 meses seguidos e anual */
 let HISTORICO_DESTAQUE = [
@@ -2562,16 +2570,20 @@ function renderCaixa(){
   const provTotal = Object.values(provPorLoja).reduce((a,b)=>a+b,0);
   const totFixas = totFixasBase + folhaTotal + provTotal;
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
-  // saldo em conta: último dia registrado por loja (soma das lojas exibidas)
-  const lojasCx = [...new Set(caixa.map(c=>c.loja))];
-  let saldoConta = 0;
-  lojasCx.forEach(l=>{
-    const dias = caixa.filter(c=>c.loja===l).sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
-    if(dias[0]) saldoConta += (dias[0].conta||0);
-  });
+  /* Meta do mês corrente: quanto foi vendido contra o que estava planejado até aqui */
+  const metaMesLojas = selStores().reduce((a,l)=> a + (METAS_MENSAIS[l]||0), 0);
+  /* Referência é o mês do último dia registrado — senão o mês corrente aparece zerado
+     enquanto os lançamentos estão em outro mês. */
+  const datasCx = caixa.map(c=>parseBR(c.data)).filter(Boolean).sort((a,b)=>b-a);
+  const refMes = datasCx[0] || TODAY;
+  const vendasMes = caixa.filter(c=>{ const d=parseBR(c.data); return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth(); })
+                         .reduce((a,c)=>a+(+c.vendas||0),0);
+  const refLabel = MES_ABREV[refMes.getMonth()+1] + '/' + String(refMes.getFullYear()).slice(2);
+  const pctMes = metaMesLojas>0 ? vendasMes/metaMesLojas*100 : 0;
   document.getElementById('caixadia-kpis').innerHTML = `
-    ${socia?`<div class="card stat-tile accent-good"><div class="label">Saldo em conta (último dia)</div><div class="value">${BRL(saldoConta)}</div></div>`:''}
-    <div class="card stat-tile"><div class="label">Entradas registradas (mês)</div><div class="value">${BRL(entradasMes)}</div></div>
+    <div class="card stat-tile"><div class="label">Vendas de ${esc(refLabel)}</div><div class="value">${BRL(vendasMes)}</div></div>
+    <div class="card stat-tile"><div class="label">Meta de ${esc(refLabel)}</div><div class="value">${BRL(metaMesLojas)}</div></div>
+    <div class="card stat-tile" style="color:${pctColor(pctMes)};"><div class="label">% da meta de ${esc(refLabel)}</div><div class="value">${pctMes.toFixed(0)}%</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
   `;
   document.getElementById('caixa-kpis').innerHTML = socia ? `
@@ -2579,26 +2591,30 @@ function renderCaixa(){
   ` : '';
   const cardFixas = document.getElementById('card-fixas');
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
-  const cxConta = document.getElementById('cx-conta');
-  if(cxConta) cxConta.style.display = socia ? '' : 'none';
 
   // Tabela caixa diário
   const cxSorted = caixa.slice().sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || a.loja.localeCompare(b.loja));
-  const ncols = socia ? 8 : 7;
+  const ncols = 9;
   document.getElementById('tbl-caixa').innerHTML = `
-    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th>${socia?'<th>Saldo em conta</th>':''}</tr></thead>
+    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Meta do dia</th><th>Faltou / superou</th><th>% da meta</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th></tr></thead>
     <tbody>${cxSorted.map(c=>{
       const f=fech(c);
+      const vendas = +c.vendas||0;
+      const meta = metaDoDia(c.loja, c.data);
+      const dif = vendas - meta;             // negativo = faltou
+      const pct = meta>0 ? vendas/meta*100 : 0;
       return `<tr>
         <td>${esc(c.data)}</td>
         <td>${esc(c.loja)}</td>
-        <td class="strong">${BRL(c.vendas||0)}</td>
+        <td class="strong">${BRL(vendas)}</td>
+        <td>${meta>0?BRL(meta):'<span class="hint">—</span>'}</td>
+        <td style="color:${dif>=0?'var(--good)':'var(--critical)'};font-weight:600;">${meta>0?(dif>=0?'+'+BRL(dif):'−'+BRL(-dif)):'<span class="hint">—</span>'}</td>
+        <td style="color:${pctColor(pct)};font-weight:600;">${meta>0?pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
         <td>${BRL(c.inicial)}</td>
         <td>${BRL(c.entradas)}</td>
         <td>${BRL(c.saidas)}</td>
         <td class="strong" style="color:${f>=0?'var(--good)':'var(--critical)'};">${BRL(f)}</td>
-        ${socia?`<td class="strong">${BRL(c.conta)}</td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${ncols}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
+      </tr>`;}).join('') || `<tr><td colspan="${ncols+1}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
 
   // Tabela despesas fixas (+ linha de folha vinda de Gente e Gestão)
   const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>
@@ -3051,7 +3067,7 @@ wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
 /* ============ NAV / VIEW SWITCH ============ */
 const VIEW_TITLES = {
   'visao-geral':['Visão geral','Consolidado das lojas selecionadas'],
-  'caixa-diario':['Caixa diário','Disponibilidade de recurso no dia, por loja'],
+  'caixa-diario':['Caixa diário','Disponibilidade de recurso no dia e meta diária, por loja'],
   'caixa':['Despesas & compras','Fixas, compras do mês, boletos e patrimônio'],
   'gente':['Gente e Gestão','Folha confidencial: salários, comissões e encargos'],
   'projecao':['Projeção 12 meses','Cenário Ago/26 → Jul/27 com base nos dados reais'],
@@ -3145,9 +3161,9 @@ document.getElementById('form-caixa').addEventListener('submit', e=>{
     inicial: num(document.getElementById('cx-inicial').value)||0,
     entradas: num(document.getElementById('cx-entradas').value)||0,
     saidas: num(document.getElementById('cx-saidas').value)||0,
-    conta: num(document.getElementById('cx-conta').value)||0,
+    conta: 0,
   });
-  tnInsert('caixa_diario',{data:document.getElementById('cx-data').value||TODAY.toLocaleDateString('pt-BR'),loja:document.getElementById('cx-loja').value,vendas:num(document.getElementById('cx-vendas').value)||0,saldo_inicial:num(document.getElementById('cx-inicial').value)||0,saldo_final:num(document.getElementById('cx-entradas').value)||0,saidas:num(document.getElementById('cx-saidas').value)||0,saldo_conta:num(document.getElementById('cx-conta').value)||0});
+  tnInsert('caixa_diario',{data:document.getElementById('cx-data').value||TODAY.toLocaleDateString('pt-BR'),loja:document.getElementById('cx-loja').value,vendas:num(document.getElementById('cx-vendas').value)||0,saldo_inicial:num(document.getElementById('cx-inicial').value)||0,saldo_final:num(document.getElementById('cx-entradas').value)||0,saidas:num(document.getElementById('cx-saidas').value)||0,saldo_conta:0});
   e.target.reset(); renderCaixa(); renderDesempenho();
 });
 document.getElementById('form-fixa').addEventListener('submit', async e=>{
