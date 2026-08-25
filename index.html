@@ -926,10 +926,7 @@ window.TN_CONFIG = {
             <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
           </form>
-          <p class="hint" style="margin:10px 0 0 0;border-left:3px solid var(--warning,#d9a441);padding:8px 12px;background:rgba(217,164,65,0.07);">
-            O cadastro aqui <strong>define o perfil</strong> de quem entrar com esse e-mail. Criar a senha em si é feito uma vez pelo Supabase
-            (Authentication → Invite user), por segurança: a chave que cria login não pode ficar no navegador.
-            Depois do convite, o acesso já vem com o perfil deste cadastro.</p>
+          <p class="hint" style="margin:10px 0 0 0;">Depois de cadastrar, use <strong>convidar</strong> na linha da pessoa: ela recebe um e-mail para criar a senha e entra já com o perfil do cargo. Reenviar o convite para quem já tem acesso não faz nada.</p>
           <div id="equipe-list" style="margin-top:12px;"></div>
         </div>
 
@@ -2081,10 +2078,22 @@ function renderEquipeCad(){
       <td><span class="badge ${acesso(e.cargo)==='Sócio'?'b-warning':'b-good'}"><span class="dot"></span>${acesso(e.cargo)}</span></td>
       <td>${esc(e.loja)}</td>
       <td style="text-align:right;white-space:nowrap;">
+        ${e.email?`<button class="btn ghost" data-eqconvite="${esc(e.email)}" title="Enviar convite de acesso" style="padding:2px 8px;">convidar</button>`:''}
         <button class="btn ghost" data-eqeditar="${i}" title="Editar" style="padding:2px 6px;">✏️</button>
         <button class="btn ghost" data-eqdel="${i}" title="Remover" style="padding:2px 6px;">🗑️</button></td>
     </tr>`;}).join('') || '<tr><td colspan="6" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
 
+  box.querySelectorAll('[data-eqconvite]').forEach(b=>{
+    b.onclick = async ()=>{
+      const email = b.dataset.eqconvite;
+      if(!confirm('Enviar convite de acesso para '+email+'?')) return;
+      const txt = b.textContent;
+      b.disabled = true; b.textContent = 'enviando...';
+      const r = await tnConvidar(email);
+      b.disabled = false; b.textContent = txt;
+      alert(r.ok ? r.mensagem : ('Não foi possível convidar: ' + r.erro));
+    };
+  });
   box.querySelectorAll('[data-eqeditar]').forEach(b=>{ b.onclick=()=>{ equipeEditando=+b.dataset.eqeditar; renderEquipeCad(); }; });
   box.querySelectorAll('[data-eqcancelar]').forEach(b=>{ b.onclick=()=>{ equipeEditando=null; renderEquipeCad(); }; });
   box.querySelectorAll('[data-eqsalvar]').forEach(b=>{
@@ -3904,6 +3913,22 @@ async function tnUpsertMeta(loja, valor){
 }
 /* O cargo do cadastro manda no acesso. Se a pessoa já tem login, o banco realinha
    o perfil na hora; se ainda não tem, o gatilho aplica quando o login for criado. */
+/* Convite de acesso: a Edge Function guarda a chave de administrador e confere,
+   no servidor, se quem pediu é sócio. O navegador só manda o e-mail. */
+async function tnConvidar(email){
+  try{
+    if(!window.TN || !window.TN.sb) return {ok:false, erro:'sem conexão com o Supabase.'};
+    const {data, error} = await window.TN.sb.functions.invoke('convidar', { body:{ email } });
+    if(error){
+      let detalhe = error.message || 'erro desconhecido.';
+      try{ const j = await error.context?.json?.(); if(j && j.error) detalhe = j.error; }catch(_){}
+      return {ok:false, erro:detalhe};
+    }
+    if(data && data.error) return {ok:false, erro:data.error};
+    return {ok:true, mensagem:(data && data.mensagem) || 'Convite enviado.'};
+  }catch(e){ return {ok:false, erro:String(e.message||e)}; }
+}
+
 async function tnAplicarPerfil(email){
   if(!email) return;
   try{
