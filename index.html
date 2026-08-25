@@ -388,7 +388,12 @@ window.TN_CONFIG = {
                 <input type="text" id="cp-fornecedor" placeholder="Fornecedor" required style="grid-column:1/-1;">
                 <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
                 <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
-                <button class="btn primary" type="submit">Lançar compra</button>
+                <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
+                <label class="hint" style="grid-column:1/-1;display:flex;align-items:center;gap:7px;cursor:pointer;">
+                  <input type="checkbox" id="cp-gerar" checked>
+                  Gerar os boletos das parcelas automaticamente (vencimento mensal a partir da 1ª)
+                </label>
+                <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar compra</button>
               </form>
               <p class="hint" id="cp-aviso" style="margin:8px 0 0 0;"></p>
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-compras"></table></div>
@@ -2981,9 +2986,18 @@ function renderCompras(){
     b.onclick=()=>{
       const id=b.dataset.cpexcluir, i=COMPRAS.findIndex(x=>x.id===id);
       if(i<0) return;
-      if(!confirm('Excluir a compra de "'+(COMPRAS[i].fornecedor||'')+'"?')) return;
+      // as parcelas geradas por esta nota vão junto, senão viram boleto órfão
+      const parcelas = id ? BOLETOS.filter(x=>x.compra_id===id) : [];
+      const aviso = parcelas.length
+        ? '\n\nOs ' + parcelas.length + ' boletos gerados por ela também serão excluídos.' : '';
+      if(!confirm('Excluir a compra de "'+(COMPRAS[i].fornecedor||'')+'"?'+aviso)) return;
       COMPRAS.splice(i,1);
       if(id) tnDelete('compras_nf',{id});
+      parcelas.forEach(pb=>{
+        const j = BOLETOS.indexOf(pb);
+        if(j>=0) BOLETOS.splice(j,1);
+        if(pb.id) tnDelete('boletos',{id:pb.id});
+      });
       renderCaixa();
     };
   });
@@ -3154,7 +3168,8 @@ function renderCaixa(){
         maquininha a receber <strong>+ ${BRL(maqDf)}</strong><br>
         fixas do mês ainda em aberto <strong>− ${BRL(fixasAbertas)}</strong><br>
         <span style="display:inline-block;margin-top:6px;">Com os dois: <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong></span><br>
-        <span style="opacity:.8;">Reserva de ${BRL(reservaDf)} não entra em nenhuma das duas.</span>
+        <span style="display:inline-block;margin-top:4px;">Somando a reserva de ${BRL(reservaDf)}:
+          <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla + reservaDf)}</strong></span>
       </div>
     </div>`;
 
@@ -3803,12 +3818,55 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
     parcelas: parseInt(document.getElementById('cp-parcelas').value)||1,
     origem: 'painel' };
   COMPRAS.push(reg);
-  await tnInsertRet('compras_nf', reg);
+  await tnInsertRet('compras_nf', reg);   // devolve a linha e já preenche reg.id
+
+  /* Parcelas viram boletos na hora: sem isso, uma nota em 3x só mostrava o
+     compromisso da 1ª e o que vence nos meses seguintes ficava invisível. */
+  if(document.getElementById('cp-gerar').checked && reg.parcelas >= 1){
+    const criados = await gerarParcelas(reg, document.getElementById('cp-venc1').value);
+    if(criados) alert(criados + (criados===1 ? ' boleto gerado' : ' boletos gerados') + ' a partir desta nota.');
+  }
+
   e.target.reset();
   document.getElementById('cp-parcelas').value = 1;
+  document.getElementById('cp-gerar').checked = true;
   cpAno = reg.ano; cpMes = reg.mes;      // mostra o mês da compra lançada
   renderCaixa();
 });
+
+/* Divide a nota em parcelas mensais. A 1ª vence na data informada ou 30 dias
+   depois da compra; a última recebe a sobra dos centavos para fechar o total. */
+async function gerarParcelas(compra, venc1){
+  const n = Math.max(1, parseInt(compra.parcelas)||1);
+  const total = Math.round((+compra.valor||0)*100);
+  if(!total) return 0;
+
+  const base = venc1 ? new Date(venc1+'T00:00:00')
+                     : (()=>{ const d=new Date(compra.data+'T00:00:00'); d.setMonth(d.getMonth()+1); return d; })();
+  const parcela = Math.floor(total/n);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  let criados = 0;
+
+  for(let i=0;i<n;i++){
+    const venc = new Date(base.getFullYear(), base.getMonth()+i, base.getDate());
+    const iso = venc.toISOString().slice(0,10);
+    const centavos = (i===n-1) ? (total - parcela*(n-1)) : parcela;
+    const reg = {
+      data_pgto: iso, ano: venc.getFullYear(), mes: venc.getMonth()+1,
+      competencia: MES_ABREV[venc.getMonth()+1] + '/' + String(venc.getFullYear()).slice(2),
+      loja: compra.loja,
+      descricao: (compra.fornecedor||'Compra') + ' ' + (i+1) + '/' + n + (compra.nf ? ' · NF ' + compra.nf : ''),
+      valor: centavos/100,
+      status: venc <= hoje ? 'Pago' : 'Pendente',
+      origem: 'painel',
+      compra_id: compra.id || null,
+    };
+    await tnInsertRet('boletos', reg);    // preenche reg.id quando grava
+    BOLETOS.push({...reg, data: dataBR(iso)});
+    criados++;
+  }
+  return criados;
+}
 document.getElementById('form-boleto').addEventListener('submit', e=>{
   e.preventDefault();
   const _bd = document.getElementById('bl-data').value || new Date().toISOString().slice(0,10);
@@ -4003,7 +4061,7 @@ async function tnLoadAll(sb){
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||''})); }catch(e){}
-  try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||''})); }catch(e){}
+  try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
