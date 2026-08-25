@@ -9,8 +9,6 @@ const {
   SUPABASE_SERVICE_ROLE_KEY,
   GOOGLE_CREDENTIALS,
   PLANILHA_FILE_ID = '1RsdYiCFjzlEJkX1E8J3z_IZ0FFmyAIQs',
-  DESPESAS_ABA = 'Despesas de Ago',
-  COMPETENCIA = 'Ago/26',
   ANO = '2026',
 } = process.env;
 
@@ -63,42 +61,52 @@ async function main() {
 
   console.log('→ Parseando abas...');
   const financeiro = parseFinanceiro(wb, Number(ANO));
-  const { despesasFixas, folha, boletos, comprasNf } = parseDespesas(wb, DESPESAS_ABA, COMPETENCIA);
   const estoque = parseEstoque(wb);
-
   console.log(`   financeiro_mensal: ${financeiro.length}`);
-  console.log(`   despesas_fixas:    ${despesasFixas.length}`);
-  console.log(`   folha:             ${folha.length}`);
-  console.log(`   boletos:           ${boletos.length}`);
-  console.log(`   compras_nf:        ${comprasNf.length}`);
   console.log(`   estoque:           ${estoque.length}`);
 
   // financeiro: upsert por (ano,mes,loja)
   await upsert('financeiro_mensal', financeiro, 'ano,mes,loja');
 
-  // despesas/folha/boletos: substitui a competência inteira (evita órfãos)
-  // A partir de Set/2026 as despesas fixas passam a ser gerenciadas no painel
-  // (com recorrência e edição própria), então o sync deixa de sobrescrevê-las.
-  if (fixasNoPainel(COMPETENCIA)) {
-    console.log('   despesas_fixas:    geridas no painel a partir de Set/2026 — sync ignorado');
-  } else {
-    await delWhere('despesas_fixas', 'competencia', COMPETENCIA);
+  /* Cada mês tem sua própria aba de despesas na planilha ("Despesas de jul",
+     "Despesas de Ago"...). Sincronizamos todas: antes só a do mês corrente ia
+     para o banco, e os meses anteriores ficavam sem detalhamento. */
+  const MES_ABA = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
+  const ABREV = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const abasDespesa = wb.SheetNames
+    .map(nome => {
+      const m = String(nome).match(/^\s*despesas\s+de\s+([a-zç]{3})/i);
+      if (!m) return null;
+      const mes = MES_ABA[m[1].toLowerCase()];
+      return mes ? { nome, mes, competencia: ABREV[mes] + '/' + String(ANO).slice(2) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.mes - b.mes);
+
+  console.log(`→ Abas de despesa encontradas: ${abasDespesa.map(a => a.nome).join(', ') || 'nenhuma'}`);
+
+  for (const aba of abasDespesa) {
+    const { despesasFixas, folha, boletos, comprasNf } = parseDespesas(wb, aba.nome, aba.competencia);
+    if (fixasNoPainel(aba.competencia)) {
+      console.log(`   ${aba.competencia}: gerido no painel a partir de Set/2026 — sync ignorado`);
+      continue;
+    }
+    console.log(`   ${aba.competencia}: fixas ${despesasFixas.length}, folha ${folha.length}, boletos ${boletos.length}, compras ${comprasNf.length}`);
+
+    // substitui a competência inteira, uma de cada vez (não mexe nas outras)
+    await delWhere('despesas_fixas', 'competencia', aba.competencia);
     await insert('despesas_fixas', despesasFixas);
-  }
-  if (fixasNoPainel(COMPETENCIA)) {
-    console.log('   folha:             gerida no painel a partir de Set/2026 — sync ignorado');
-  } else {
-    await delWhere('folha', 'competencia', COMPETENCIA);
+
+    await delWhere('folha', 'competencia', aba.competencia);
     await insert('folha', folha);
-  }
-  if (fixasNoPainel(COMPETENCIA)) {
-    console.log('   boletos/compras:   geridos no painel a partir de Set/2026 — sync ignorado');
-  } else {
-    await delWhere('boletos', 'competencia', COMPETENCIA);
+
+    await delWhere('boletos', 'competencia', aba.competencia);
     await insert('boletos', boletos);
-    // compras da planilha (nota cheia por dia) alimentam compras_nf
-    const { error: eDel } = await db.from('compras_nf').delete().eq('origem','planilha').eq('ano', Number(ANO));
-    if (eDel) throw new Error(`delete compras_nf: ${eDel.message}`);
+
+    // compras da planilha: apaga só o mês desta aba, senão os outros meses somem
+    const { error: eDel } = await db.from('compras_nf')
+      .delete().eq('origem', 'planilha').eq('ano', Number(ANO)).eq('mes', aba.mes);
+    if (eDel) throw new Error(`delete compras_nf ${aba.competencia}: ${eDel.message}`);
     await insert('compras_nf', comprasNf);
   }
 
