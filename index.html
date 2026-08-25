@@ -2415,6 +2415,25 @@ let COMPRAS = [];
 let cpAno = TODAY.getFullYear(), cpMes = TODAY.getMonth()+1;
 let compraEditando = null;
 let boletoEditando = null;
+
+/* O que veio da planilha do Drive (até Ago/26) fica recolhido numa linha de total;
+   a caixa de seleção abre o detalhe. De Set/26 em diante tudo é lançado no painel. */
+const planilhaAberta = {};
+function ehDaPlanilha(x){ return String(x && x.origem || '') === 'planilha'; }
+function linhaPlanilha(chave, rotulo, itens, colsAntes, temAcoes){
+  const total = itens.reduce((a,x)=>a+(+x.valor||0),0);
+  return `<tr>
+    <td colspan="${colsAntes}">
+      <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" data-plabrir="${esc(chave)}" ${planilhaAberta[chave]?'checked':''}>
+        <span class="strong">${esc(rotulo)}</span>
+        <span class="hint">· ${itens.length} lançamento${itens.length===1?'':'s'} da planilha do Drive</span>
+      </label>
+    </td>
+    <td class="strong">${BRL(total)}</td>
+    ${temAcoes?'<td></td>':''}
+  </tr>`;
+}
 /* Só aceita lançamento a partir do corte (01/09/2026); antes disso a fonte é a planilha */
 function dataNoPainel(iso){
   if(!iso) return false;
@@ -2449,7 +2468,13 @@ function renderCompras(){
   if(!tb) return;
   tb.innerHTML = `
     <thead><tr><th>Data</th><th>Fornecedor</th><th>NF</th><th>Loja</th><th>Parc.</th><th>Valor da NF</th>${podeEd?'<th></th>':''}</tr></thead>
-    <tbody>${lista.map(c=>{
+    <tbody>${(()=>{
+      const dePlanilha = lista.filter(ehDaPlanilha);
+      const cabecalho  = dePlanilha.length
+        ? linhaPlanilha('compras', 'Compras da planilha ('+cpCompetencia()+')', dePlanilha, 5, podeEd) : '';
+      const visiveis   = (dePlanilha.length && !planilhaAberta['compras'])
+        ? lista.filter(c=>!ehDaPlanilha(c)) : lista;
+      return cabecalho + visiveis.map(c=>{
       if(editavel(c) && compraEditando && c.id===compraEditando){
         return `<tr>
           <td><input type="date" data-ce="data" value="${esc(String(c.data).slice(0,10))}"></td>
@@ -2472,7 +2497,8 @@ function renderCompras(){
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">${editavel(c)?`
           <button class="btn ghost" data-cpeditar="${esc(c.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-cpexcluir="${esc(c.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button>`:'<span class="hint">planilha</span>'}</td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`}
+      </tr>`;}).join('') || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`);
+    })()}
     <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
 
   tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; renderCaixa(); }; });
@@ -2711,14 +2737,21 @@ function renderCaixa(){
         <td class="strong">${esc(b.descricao)}</td>
         <td>${esc(b.loja)}</td>
         <td class="strong">${BRL(b.valor)}</td>
-        ${socia2?`<td style="text-align:right;white-space:nowrap;">
+        ${socia2?`<td style="text-align:right;white-space:nowrap;">${ehDaPlanilha(b)?'<span class="hint">planilha</span>':`
           <button class="btn ghost" data-bleditar="${esc(b.id||b.descricao)}" title="Editar" style="padding:2px 6px;">✏️</button>
-          <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+          <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button>`}</td>`:''}
       </tr>`;
   };
   document.getElementById('tbl-boletos').innerHTML = `
     <thead><tr><th>Data</th><th>Descrição</th><th>Loja</th><th>Valor</th>${socia2?'<th></th>':''}</tr></thead>
-    <tbody>${pagosMes.map(linhaBoleto).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())}.</td></tr>`}
+    <tbody>${(()=>{
+      const dePlanilha = pagosMes.filter(ehDaPlanilha);
+      const cabecalho  = dePlanilha.length
+        ? linhaPlanilha('bl-pagos', 'Pagamentos da planilha ('+fxCompetencia()+')', dePlanilha, 3, socia2) : '';
+      const visiveis   = (dePlanilha.length && !planilhaAberta['bl-pagos'])
+        ? pagosMes.filter(b=>!ehDaPlanilha(b)) : pagosMes;
+      return cabecalho + visiveis.map(linhaBoleto).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())}.</td></tr>`;
+    })()}
     <tr><td colspan="3" class="strong" style="text-align:right;">Total pago no mês</td><td class="strong">${BRL(totPagos)}</td>${socia2?'<td></td>':''}</tr></tbody>`;
 
   // ===== BLOCO 3: a pagar (previsão de desembolso), agrupado por vencimento =====
@@ -2736,21 +2769,31 @@ function renderCaixa(){
     <thead><tr><th>Vencimento</th><th>Descrição</th><th>Loja</th><th>Valor</th>${socia2?'<th></th>':''}</tr></thead>
     <tbody>${ordenados.map(k=>{
       const soma = grupos[k].itens.reduce((a,b)=>a+(+b.valor||0),0);
-      const linhas = grupos[k].itens.sort((a,b)=>(parseBR(a.data)||0)-(parseBR(b.data)||0)).map(b=>{
+      const ordem = grupos[k].itens.sort((a,b)=>(parseBR(a.data)||0)-(parseBR(b.data)||0));
+      const dePlan = ordem.filter(ehDaPlanilha);
+      const chaveP = 'bl-apagar-'+k;
+      const resumoP = dePlan.length
+        ? linhaPlanilha(chaveP, 'A pagar da planilha', dePlan, 3, socia2) : '';
+      const linhas = resumoP + ((dePlan.length && !planilhaAberta[chaveP]) ? ordem.filter(b=>!ehDaPlanilha(b)) : ordem).map(b=>{
         const d = parseBR(b.data), venceu = d && d.getTime() < hojeMs;
         return `<tr>
           <td>${esc(b.data)}${venceu?' <span class="badge b-critical" style="vertical-align:middle;"><span class="dot"></span>vencido</span>':''}</td>
           <td class="strong">${esc(b.descricao)}</td>
           <td>${esc(b.loja)}</td>
           <td>${BRL(b.valor)}</td>
-          ${socia2?`<td style="text-align:right;white-space:nowrap;">
+          ${socia2?`<td style="text-align:right;white-space:nowrap;">${ehDaPlanilha(b)?'<span class="hint">planilha</span>':`
             <button class="btn ghost" data-blpagar="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Marcar como pago" style="padding:2px 6px;">✓ pago</button>
             <button class="btn ghost" data-bleditar="${esc(b.id||b.descricao)}" title="Editar" style="padding:2px 6px;">✏️</button>
-            <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+            <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button>`}</td>`:''}
         </tr>`;}).join('');
       return `<tr><td colspan="${socia2?5:4}" style="background:var(--surface-2,transparent);"><strong>${esc(k)}</strong> <span class="hint">· ${BRL(soma)}</span></td></tr>` + linhas;
     }).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nada em aberto.</td></tr>`}
     ${abertos.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total a pagar</td><td class="strong">${BRL(totAberto)}</td>${socia2?'<td></td>':''}</tr>`:''}</tbody>`;
+
+  // abrir/fechar o detalhe do que veio da planilha
+  document.querySelectorAll('[data-plabrir]').forEach(el=>{
+    el.onchange=()=>{ planilhaAberta[el.dataset.plabrir] = el.checked; renderCaixa(); };
+  });
 
   // ações dos boletos
   document.querySelectorAll('[data-bleditar]').forEach(b=>{ b.onclick=()=>{ boletoEditando=b.dataset.bleditar; renderCaixa(); }; });
