@@ -926,7 +926,7 @@ window.TN_CONFIG = {
             <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
           </form>
-          <p class="hint" style="margin:10px 0 0 0;">Depois de cadastrar, use <strong>convidar</strong> na linha da pessoa: ela recebe um e-mail para criar a senha e entra já com o perfil do cargo. Reenviar o convite para quem já tem acesso não faz nada.</p>
+          <p class="hint" style="margin:10px 0 0 0;"><strong>convidar</strong> envia o e-mail de primeiro acesso — a pessoa cria a senha e entra já com o perfil do cargo. <strong>zerar senha</strong> manda o e-mail de nova senha para quem esqueceu a dela; a senha antiga continua valendo até ela criar a nova. Ninguém no painel vê a senha de ninguém.</p>
           <div id="equipe-list" style="margin-top:12px;"></div>
         </div>
 
@@ -2051,6 +2051,25 @@ function populateEquipeSelects(){
   renderEquipeCad();
 }
 let equipeEditando = null;
+/* Situação de acesso por e-mail (tem login? quando trocou a senha?), vinda do banco.
+   O painel só lê essas datas — a senha em si ninguém vê. */
+let ACESSOS = {};
+async function tnCarregarAcessos(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    const {data, error} = await window.TN.sb.rpc('tn_status_acesso');
+    if(error || !data) return;
+    const mapa = {};
+    data.forEach(r=>{ mapa[String(r.email||'').toLowerCase()] = r; });
+    ACESSOS = mapa;
+    renderEquipeCad();
+  }catch(e){ console.warn('acessos', e); }
+}
+function dataCurta(iso){
+  if(!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d) ? null : d.toLocaleDateString('pt-BR');
+}
 /* Lista do cadastro da equipe: e-mail, cargo e o perfil de acesso que ele gera */
 function renderEquipeCad(){
   const box = document.getElementById('equipe-list');
@@ -2058,7 +2077,16 @@ function renderEquipeCad(){
   const ordem = {'Sócia':0,'Sócio':0,'Colaboradora':1};
   const rows = EQUIPE.map((e,i)=>({e,i})).sort((a,b)=> (ordem[a.e.cargo]??2)-(ordem[b.e.cargo]??2) || String(a.e.nome).localeCompare(b.e.nome));
   const acesso = c => (['Sócio','Sócia'].includes(c) ? 'Sócio' : 'Colaboradora');
-  box.innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail de acesso</th><th>Cargo</th><th>Perfil no painel</th><th>Loja</th><th></th></tr></thead>
+  const situacao = e=>{
+    const a = ACESSOS[String(e.email||'').toLowerCase()];
+    if(!e.email) return '<span class="hint">—</span>';
+    if(!a || !a.tem_login) return '<span class="hint">sem acesso ainda</span>';
+    const troca = dataCurta(a.senha_alterada_em);
+    return troca
+      ? `senha de <strong>${esc(troca)}</strong>`
+      : '<span class="hint">senha ainda não criada</span>';
+  };
+  box.innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail de acesso</th><th>Cargo</th><th>Perfil no painel</th><th>Loja</th><th>Acesso</th><th></th></tr></thead>
     <tbody>${rows.map(({e,i})=>{
       if(equipeEditando===i){
         return `<tr>
@@ -2067,6 +2095,7 @@ function renderEquipeCad(){
           <td><select data-ee="cargo">${['Colaboradora','Sócia','Sócio'].map(c=>`<option ${c===e.cargo?'selected':''}>${c}</option>`).join('')}</select></td>
           <td class="hint">segue o cargo</td>
           <td><select data-ee="loja">${['Todas','Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option ${l===e.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td class="hint">—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-eqsalvar="${i}" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-eqcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -2077,12 +2106,26 @@ function renderEquipeCad(){
       <td>${esc(e.cargo)}</td>
       <td><span class="badge ${acesso(e.cargo)==='Sócio'?'b-warning':'b-good'}"><span class="dot"></span>${acesso(e.cargo)}</span></td>
       <td>${esc(e.loja)}</td>
+      <td>${situacao(e)}</td>
       <td style="text-align:right;white-space:nowrap;">
-        ${e.email?`<button class="btn ghost" data-eqconvite="${esc(e.email)}" title="Enviar convite de acesso" style="padding:2px 8px;">convidar</button>`:''}
+        ${e.email?`<button class="btn ghost" data-eqconvite="${esc(e.email)}" title="Enviar convite de primeiro acesso" style="padding:2px 8px;">convidar</button>
+        <button class="btn ghost" data-eqsenha="${esc(e.email)}" title="Enviar e-mail para a pessoa criar uma nova senha" style="padding:2px 8px;">zerar senha</button>`:''}
         <button class="btn ghost" data-eqeditar="${i}" title="Editar" style="padding:2px 6px;">✏️</button>
         <button class="btn ghost" data-eqdel="${i}" title="Remover" style="padding:2px 6px;">🗑️</button></td>
-    </tr>`;}).join('') || '<tr><td colspan="6" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
+    </tr>`;}).join('') || '<tr><td colspan="7" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
 
+  box.querySelectorAll('[data-eqsenha]').forEach(b=>{
+    b.onclick = async ()=>{
+      const email = b.dataset.eqsenha;
+      if(!confirm('Enviar para '+email+' o e-mail de nova senha?\n\nA senha atual continua valendo até ela criar a nova.')) return;
+      const txt = b.textContent;
+      b.disabled = true; b.textContent = 'enviando...';
+      const r = await tnConvidar(email, 'reset');
+      b.disabled = false; b.textContent = txt;
+      alert(r.ok ? r.mensagem : ('Não foi possível: ' + r.erro));
+      tnCarregarAcessos();
+    };
+  });
   box.querySelectorAll('[data-eqconvite]').forEach(b=>{
     b.onclick = async ()=>{
       const email = b.dataset.eqconvite;
@@ -2092,6 +2135,7 @@ function renderEquipeCad(){
       const r = await tnConvidar(email);
       b.disabled = false; b.textContent = txt;
       alert(r.ok ? r.mensagem : ('Não foi possível convidar: ' + r.erro));
+      tnCarregarAcessos();
     };
   });
   box.querySelectorAll('[data-eqeditar]').forEach(b=>{ b.onclick=()=>{ equipeEditando=+b.dataset.eqeditar; renderEquipeCad(); }; });
@@ -3806,6 +3850,7 @@ async function tnAfterLogin(sb){
     if(prof&&prof.papel==='socia'){ perfil='socia'; perfilReal='socia'; applyPerfil(); }
   }catch(_){}
   await tnLoadAll(sb);
+  tnCarregarAcessos();
 }
 
 async function tnInitApp(){
@@ -3913,12 +3958,12 @@ async function tnUpsertMeta(loja, valor){
 }
 /* O cargo do cadastro manda no acesso. Se a pessoa já tem login, o banco realinha
    o perfil na hora; se ainda não tem, o gatilho aplica quando o login for criado. */
-/* Convite de acesso: a Edge Function guarda a chave de administrador e confere,
-   no servidor, se quem pediu é sócio. O navegador só manda o e-mail. */
-async function tnConvidar(email){
+/* Acesso da equipe (convite de entrada ou nova senha): a Edge Function guarda a
+   chave de administrador e confere, no servidor, se quem pediu é sócio. */
+async function tnConvidar(email, acao){
   try{
     if(!window.TN || !window.TN.sb) return {ok:false, erro:'sem conexão com o Supabase.'};
-    const {data, error} = await window.TN.sb.functions.invoke('convidar', { body:{ email } });
+    const {data, error} = await window.TN.sb.functions.invoke('convidar', { body:{ email, acao: acao||'convite' } });
     if(error){
       let detalhe = error.message || 'erro desconhecido.';
       try{ const j = await error.context?.json?.(); if(j && j.error) detalhe = j.error; }catch(_){}

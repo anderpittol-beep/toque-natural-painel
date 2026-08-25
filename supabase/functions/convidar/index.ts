@@ -1,8 +1,8 @@
-// Envia o convite de acesso ao painel.
+// Acesso ao painel: envia o convite inicial ou zera a senha de quem já tem login.
 //
 // A chave de administrador nunca sai daqui: o navegador só manda o e-mail e o
 // próprio token de quem está logado. A função confere se esse alguém é sócio
-// antes de criar qualquer login.
+// antes de mexer em qualquer login.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const CORS = {
@@ -37,34 +37,53 @@ Deno.serve(async (req) => {
   const { data: { user }, error: erroUser } = await comoUsuario.auth.getUser();
   if (erroUser || !user) return json({ error: 'Sessão inválida.' }, 401);
 
-  // 2) só sócio convida
+  // 2) só sócio mexe em acesso
   const { data: perfil } = await comoUsuario
     .from('profiles').select('papel').eq('id', user.id).maybeSingle();
   if (!perfil || perfil.papel !== 'socia') {
-    return json({ error: 'Apenas o perfil Sócio pode enviar convites.' }, 403);
+    return json({ error: 'Apenas o perfil Sócio pode alterar acessos.' }, 403);
   }
 
   // 3) o e-mail precisa estar no cadastro da equipe — é ele que define o perfil
   let email = '';
+  let acao = 'convite';
   try {
     const body = await req.json();
     email = String(body?.email ?? '').trim().toLowerCase();
+    acao = String(body?.acao ?? 'convite');
   } catch {
     return json({ error: 'Informe o e-mail.' }, 400);
   }
   if (!email || !email.includes('@')) return json({ error: 'E-mail inválido.' }, 400);
+  if (acao !== 'convite' && acao !== 'reset') return json({ error: 'Ação desconhecida.' }, 400);
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
 
   const { data: pessoa } = await admin
     .from('equipe').select('nome, cargo').ilike('email', email).maybeSingle();
   if (!pessoa) {
-    return json({ error: 'Cadastre a pessoa na equipe com esse e-mail antes de convidar.' }, 400);
+    return json({ error: 'Cadastre a pessoa na equipe com esse e-mail antes.' }, 400);
   }
 
-  // 4) já tem login? então não convida de novo
   const { data: lista } = await admin.auth.admin.listUsers();
   const existe = lista?.users?.find((u) => (u.email ?? '').toLowerCase() === email);
+
+  // 4a) zerar a senha de quem já tem login
+  if (acao === 'reset') {
+    if (!existe) {
+      return json({ error: 'Essa pessoa ainda não tem acesso. Envie o convite primeiro.' }, 400);
+    }
+    const { error } = await comoUsuario.auth.resetPasswordForEmail(email, {
+      redirectTo: destino,
+    });
+    if (error) return json({ error: error.message }, 400);
+    return json({
+      ok: true,
+      mensagem: `E-mail de redefinição enviado para ${email}. A senha atual continua valendo até ela criar a nova.`,
+    });
+  }
+
+  // 4b) convite de primeiro acesso
   if (existe) {
     return json({ ok: true, jaExistia: true, mensagem: 'Essa pessoa já tem acesso.' });
   }
