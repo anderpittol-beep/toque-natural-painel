@@ -352,21 +352,54 @@ window.TN_CONFIG = {
             <p class="hint" id="fx-aviso" style="margin:8px 0 0 0;"></p>
             <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-fixas"></table></div>
           </div>
-          <div class="card">
-            <h3 style="font-size:14px;margin:0 0 4px 0;">Boletos &amp; despesas variáveis pagas no mês</h3>
-            <p class="hint" style="margin:0 0 12px 0;">Pagamentos avulsos: fornecedores, boletos, compras pontuais.</p>
-            <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;">
-              <input type="text" id="bl-data" placeholder="Data (dd/mm/aaaa)">
-              <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
-              <select id="bl-status"><option>Pago</option><option>Pendente</option></select>
-              <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
-              <input type="number" id="bl-valor" placeholder="Valor" step="0.01">
-              <button class="btn primary" type="submit" style="grid-column:2/-1;">Adicionar boleto/variável</button>
-            </form>
-            <div class="toolbar filters" style="margin:10px 0 0 0;">
-              <select id="boletoStatusFilter"><option value="">Todos</option><option value="Pago">Pagos</option><option value="Pendente">Pendentes</option></select>
+          <div>
+            <!-- BLOCO 1: COMPRAS DO MÊS (NF cheia) — competência, impacta o lucro -->
+            <div class="card" id="card-compras" style="margin-bottom:16px;">
+              <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div>
+                  <h3 style="font-size:14px;margin:0 0 4px 0;">Compras do mês (NF cheia) <span class="badge b-serious" style="vertical-align:middle;"><span class="dot"></span>impacta o lucro</span></h3>
+                  <p class="hint" style="margin:0;">Pedidos de produto por necessidade/falta de estoque. Lance a <strong>nota inteira</strong> na data da compra, mesmo que o pagamento seja parcelado nos próximos meses.</p>
+                </div>
+                <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+                  <button class="btn ghost" id="cp-mes-ant" title="Mês anterior" style="padding:3px 9px;">‹</button>
+                  <span class="strong" id="cp-competencia" style="font-size:13px;min-width:72px;text-align:center;">—</span>
+                  <button class="btn ghost" id="cp-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
+                </div>
+              </div>
+              <form class="feedback-form" id="form-compra" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
+                <input type="date" id="cp-data" title="Data da compra">
+                <select id="cp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+                <input type="text" id="cp-nf" placeholder="Nº da NF">
+                <input type="text" id="cp-fornecedor" placeholder="Fornecedor" required style="grid-column:1/-1;">
+                <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
+                <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
+                <button class="btn primary" type="submit">Lançar compra</button>
+              </form>
+              <p class="hint" id="cp-aviso" style="margin:8px 0 0 0;"></p>
+              <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-compras"></table></div>
             </div>
-            <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-boletos"></table></div>
+
+            <!-- BLOCO 2: BOLETOS PAGOS NO MÊS — caixa, impacta a disponibilidade -->
+            <div class="card">
+              <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div>
+                  <h3 style="font-size:14px;margin:0 0 4px 0;">Boletos pagos no mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>impacta o caixa</span></h3>
+                  <p class="hint" style="margin:0;">Parcelas efetivamente pagas no mês, referentes às compras lançadas acima. É o que sai do caixa e define a disponibilidade de recurso.</p>
+                </div>
+              </div>
+              <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
+                <input type="date" id="bl-data" title="Data do pagamento">
+                <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
+                <select id="bl-status"><option>Pago</option><option>Pendente</option></select>
+                <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
+                <input type="number" id="bl-valor" placeholder="Valor da parcela" step="0.01">
+                <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar pagamento</button>
+              </form>
+              <div class="toolbar filters" style="margin:10px 0 0 0;">
+                <select id="boletoStatusFilter"><option value="">Todos</option><option value="Pago">Pagos</option><option value="Pendente">Pendentes</option></select>
+              </div>
+              <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-boletos"></table></div>
+            </div>
           </div>
         </div>
         <p class="hint" style="margin-top:14px;">Quando conectarmos à sua planilha do Drive (abas "Despesas de..." e "Boletos"), estes lançamentos passam a carregar automaticamente, e o total de despesas alimenta o resultado de cada loja na aba Receitas &amp; despesas.</p>
@@ -1192,6 +1225,32 @@ function filteredClientes(){
 
 /* ============ RENDER: VISÃO GERAL ============ */
 /* Rótulo do período com base nos meses realmente carregados (ex.: "Abr–Ago/26") */
+/* ===== DESPESA DO MÊS PELO PAINEL (Set/26 em diante) =====
+   Antes o valor vinha pronto da planilha. A partir do corte, o painel é a fonte:
+   despesas fixas + folha (com encargos e vale) + retenção de 13º/férias + compras (NF cheia).
+   As compras entram pela nota inteira no mês da compra — o pagamento parcelado
+   aparece nos boletos e afeta só o caixa, não o lucro. */
+function despesaPainelLoja(ano, mes, loja){
+  const fixas = fixasDaCompetencia(ano, mes)
+    .reduce((a,d)=> a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0)), 0);
+  const doMes = folhaDaCompetencia(ano, mes).filter(g=>g.loja===loja);
+  const folha = doMes.reduce((a,g)=>a+gTotal(g),0);
+  const prov  = doMes.reduce((a,g)=>a+gProvisao(g).total,0);
+  const compras = COMPRAS.filter(c=> +c.ano===ano && +c.mes===mes && c.loja===loja)
+                         .reduce((a,c)=>a+(+c.valor||0),0);
+  return fixas + folha + prov + compras;
+}
+function aplicarDespesasDoPainel(){
+  const meses = (FINANCEIRO && FINANCEIRO.meses) || [];
+  meses.forEach((lab,i)=>{
+    const p = String(lab).split('/');
+    const mes = MES_ABREV.indexOf(p[0]), ano = 2000 + (+p[1]);
+    if(!mes || !ano) return;
+    const noPainel = ano > FIXAS_CORTE.ano || (ano===FIXAS_CORTE.ano && mes >= FIXAS_CORTE.mes);
+    if(!noPainel) return;                       // meses antigos seguem com o valor da planilha
+    STORES.forEach(l=>{ if(FINANCEIRO[l] && FINANCEIRO[l].despesa) FINANCEIRO[l].despesa[i] = despesaPainelLoja(ano, mes, l); });
+  });
+}
 function periodoLabel(){
   const m = (typeof mesesLabels==="function") ? mesesLabels() : ((FINANCEIRO && FINANCEIRO.meses) || []);
   if(!m.length) return "nenhum mês selecionado";
@@ -1199,10 +1258,9 @@ function periodoLabel(){
   if(m.length===1) base = m[0];
   else if(typeof mesesSel!=="undefined" && mesesSel!==null) base = m.join(", ");   // comparação avulsa
   else base = m[0].split("/")[0] + "–" + m[m.length-1];
-  const todos = (FINANCEIRO && FINANCEIRO.meses) || [];
-  const p = FINANCEIRO && FINANCEIRO.parcialAte;
-  const incluiUltimo = !m.length || !todos.length || m[m.length-1]===todos[todos.length-1];
-  return (p && incluiUltimo) ? (base + " \u00b7 at\u00e9 " + p) : base;
+  const mapa = (FINANCEIRO && FINANCEIRO.parcialPorMes) || {};
+  const parciais = m.map(x=>mapa[x]).filter(Boolean);
+  return parciais.length ? (base + " \u00b7 at\u00e9 " + parciais[parciais.length-1]) : base;
 }
 function atualizarPeriodo(){
   const txt = periodoLabel();
@@ -1373,8 +1431,8 @@ function renderFinanceiro(){
 
   document.getElementById('tbl-financeiro').innerHTML = `
     <table><thead><tr><th>Mês</th><th>Receita</th><th>Despesa</th><th>Lucro</th></tr></thead>
-    <tbody>${meses.map((m,i)=>{const parc = FINANCEIRO.parcialAte && m===FINANCEIRO.meses[FINANCEIRO.meses.length-1];
-      return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(FINANCEIRO.parcialAte)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`;}).join('')}</tbody></table>
+    <tbody>${meses.map((m,i)=>{const parc = (FINANCEIRO.parcialPorMes||{})[m];
+      return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(parc)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`;}).join('')}</tbody></table>
   `;
 }
 
@@ -2344,6 +2402,93 @@ function renderPatrimonio(){
       ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido</td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
 }
 
+/* ===== COMPRAS DO MÊS (NF cheia) — regime de competência, impacta o lucro =====
+   A nota entra inteira no mês da compra; o pagamento (parcelas) é registrado
+   separadamente nos boletos e afeta o caixa, não o lucro. */
+let COMPRAS = [];
+let cpAno = TODAY.getFullYear(), cpMes = TODAY.getMonth()+1;
+let compraEditando = null;
+function cpCompetencia(){ return MES_ABREV[cpMes] + '/' + String(cpAno).slice(2); }
+function cpGerenciavel(){ return cpAno > FIXAS_CORTE.ano || (cpAno===FIXAS_CORTE.ano && cpMes >= FIXAS_CORTE.mes); }
+function comprasDaCompetencia(ano, mes){ return COMPRAS.filter(c=> +c.ano===ano && +c.mes===mes); }
+function dataBR(iso){ if(!iso) return '—'; const p=String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
+
+function renderCompras(){
+  const lbl = document.getElementById('cp-competencia');
+  if(lbl) lbl.textContent = cpCompetencia();
+  const aviso = document.getElementById('cp-aviso');
+  if(aviso) aviso.textContent = cpGerenciavel() ? '' : 'Competência anterior a Set/26: as compras vinham da planilha e não são lançadas aqui.';
+  const ant=document.getElementById('cp-mes-ant'), prox=document.getElementById('cp-mes-prox');
+  if(ant) ant.onclick=()=>{ const p=fxMesAnterior(cpAno,cpMes); cpAno=p.ano; cpMes=p.mes; compraEditando=null; renderCaixa(); };
+  if(prox) prox.onclick=()=>{ if(cpMes===12){cpAno++;cpMes=1;} else cpMes++; compraEditando=null; renderCaixa(); };
+  const form=document.getElementById('form-compra');
+  if(form) form.style.display = cpGerenciavel() ? '' : 'none';
+
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  const podeEd = socia && cpGerenciavel();
+  const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
+  const lista = comprasDaCompetencia(cpAno, cpMes)
+    .filter(c=> selStores().includes(c.loja))
+    .sort((a,b)=> String(b.data).localeCompare(String(a.data)));
+  const total = lista.reduce((a,c)=>a+(+c.valor||0),0);
+  const tb = document.getElementById('tbl-compras');
+  if(!tb) return;
+  tb.innerHTML = `
+    <thead><tr><th>Data</th><th>Fornecedor</th><th>NF</th><th>Loja</th><th>Parc.</th><th>Valor da NF</th>${podeEd?'<th></th>':''}</tr></thead>
+    <tbody>${lista.map(c=>{
+      if(podeEd && compraEditando && c.id===compraEditando){
+        return `<tr>
+          <td><input type="date" data-ce="data" value="${esc(String(c.data).slice(0,10))}"></td>
+          <td><input type="text" data-ce="fornecedor" value="${esc(c.fornecedor||'')}" style="width:100%;box-sizing:border-box;"></td>
+          <td><input type="text" data-ce="nf" value="${esc(c.nf||'')}" style="width:76px;"></td>
+          <td><select data-ce="loja">${lojasOpt.map(l=>`<option ${l===c.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td><input type="number" data-ce="parcelas" value="${+c.parcelas||1}" min="1" style="width:56px;"></td>
+          <td><input type="number" data-ce="valor" value="${+c.valor||0}" step="0.01" style="width:108px;"></td>
+          <td style="white-space:nowrap;"><button class="btn primary" data-cpsalvar="1" style="padding:2px 8px;">salvar</button>
+              <button class="btn ghost" data-cpcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${dataBR(c.data)}</td>
+        <td class="strong">${esc(c.fornecedor||'—')}</td>
+        <td>${esc(c.nf||'—')}</td>
+        <td>${esc(c.loja)}</td>
+        <td>${(+c.parcelas||1)}x</td>
+        <td class="strong">${BRL(c.valor)}</td>
+        ${podeEd?`<td style="white-space:nowrap;text-align:right;">
+          <button class="btn ghost" data-cpeditar="${esc(c.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-cpexcluir="${esc(c.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+      </tr>`;}).join('') || `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`}
+    <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
+
+  tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; renderCaixa(); }; });
+  tb.querySelectorAll('[data-cpcancelar]').forEach(b=>{ b.onclick=()=>{ compraEditando=null; renderCaixa(); }; });
+  tb.querySelectorAll('[data-cpsalvar]').forEach(b=>{
+    b.onclick=()=>{
+      const tr=b.closest('tr'), c=COMPRAS.find(x=>x.id===compraEditando);
+      if(!c) return;
+      const get=k=>{ const el=tr.querySelector('[data-ce="'+k+'"]'); return el?el.value.trim():''; };
+      const forn=get('fornecedor');
+      if(!forn){ alert('Informe o fornecedor.'); return; }
+      const d=get('data')||c.data;
+      Object.assign(c,{ data:d, fornecedor:forn, nf:get('nf'), loja:get('loja'),
+        parcelas:parseInt(get('parcelas'))||1, valor:num(get('valor'))||0,
+        ano:+String(d).slice(0,4), mes:+String(d).slice(5,7) });
+      if(c.id) tnUpdate('compras_nf',{id:c.id},{data:c.data,ano:c.ano,mes:c.mes,fornecedor:c.fornecedor,nf:c.nf,loja:c.loja,parcelas:c.parcelas,valor:c.valor});
+      compraEditando=null; renderCaixa();
+    };
+  });
+  tb.querySelectorAll('[data-cpexcluir]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.dataset.cpexcluir, i=COMPRAS.findIndex(x=>x.id===id);
+      if(i<0) return;
+      if(!confirm('Excluir a compra de "'+(COMPRAS[i].fornecedor||'')+'"?')) return;
+      COMPRAS.splice(i,1);
+      if(id) tnDelete('compras_nf',{id});
+      renderCaixa();
+    };
+  });
+}
 /* ===== DESPESAS FIXAS RECORRENTES (competência mês/ano) =====
    Cada mês herda as despesas do mês anterior. Editar/excluir vale da competência
    em diante; o histórico dos meses já fechados não muda. */
@@ -2401,6 +2546,7 @@ function renderFixas(){
 /* ============ RENDER: CAIXA DIÁRIO & DESPESAS ============ */
 function renderCaixa(){
   renderFixas();
+  renderCompras();
   const s = currentStore();
   const inStore = (l)=> selStores().includes(l) || l==='Todas';
   const caixa = CAIXA_DIARIO.filter(x=>inStore(x.loja));
@@ -2923,10 +3069,33 @@ document.getElementById('form-fixa').addEventListener('submit', async e=>{
   await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
 });
+document.getElementById('form-compra').addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(!cpGerenciavel()){ alert('Escolha uma competência a partir de Set/26 para lançar compras.'); return; }
+  const forn = document.getElementById('cp-fornecedor').value.trim();
+  if(!forn) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  const d = document.getElementById('cp-data').value || hoje;
+  const reg = { data:d, ano:+d.slice(0,4), mes:+d.slice(5,7),
+    loja: document.getElementById('cp-loja').value,
+    fornecedor: forn, nf: document.getElementById('cp-nf').value.trim(),
+    descricao: forn,
+    valor: num(document.getElementById('cp-valor').value)||0,
+    parcelas: parseInt(document.getElementById('cp-parcelas').value)||1,
+    origem: 'painel' };
+  COMPRAS.push(reg);
+  await tnInsertRet('compras_nf', reg);
+  e.target.reset();
+  document.getElementById('cp-parcelas').value = 1;
+  cpAno = reg.ano; cpMes = reg.mes;      // mostra o mês da compra lançada
+  renderCaixa();
+});
 document.getElementById('form-boleto').addEventListener('submit', e=>{
   e.preventDefault();
+  const _bd = document.getElementById('bl-data').value || new Date().toISOString().slice(0,10);
   BOLETOS.push({
-    data: document.getElementById('bl-data').value || TODAY.toLocaleDateString('pt-BR'),
+    data_pgto: _bd, ano: +_bd.slice(0,4), mes: +_bd.slice(5,7),
+    data: dataBR(_bd),
     loja: document.getElementById('bl-loja').value,
     descricao: document.getElementById('bl-descricao').value,
     valor: num(document.getElementById('bl-valor').value)||0,
@@ -3048,6 +3217,7 @@ document.getElementById('form-tarefa').addEventListener('submit', e=>{
 
 /* ============ INIT ============ */
 function renderAll(){
+  aplicarDespesasDoPainel();
   renderMesFiltro();
   atualizarPeriodo();
   applyStoreTheme();
@@ -3078,9 +3248,9 @@ function tnMapFinanceiro(rows){
   if(!rows||!rows.length) return;
   const ab=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const byMes={};
-  let _parcial=null;
+  let _parcial=null; const _parcialMes={};
   // chave = ano*100+mes, para que Jul/26 e Jul/27 sejam períodos distintos
-  rows.forEach(r=>{ const k=(+r.ano)*100+(+r.mes); (byMes[k]=byMes[k]||{_ano:r.ano,_mes:r.mes}); byMes[k][r.loja]={receita:+r.receita,despesa:+r.despesa}; if(r.parcial_ate) _parcial=r.parcial_ate; });
+  rows.forEach(r=>{ const k=(+r.ano)*100+(+r.mes); (byMes[k]=byMes[k]||{_ano:r.ano,_mes:r.mes}); byMes[k][r.loja]={receita:+r.receita,despesa:+r.despesa}; if(r.parcial_ate){ _parcial=r.parcial_ate; _parcialMes[(+r.ano)*100+(+r.mes)]=r.parcial_ate; } });
   const nums=Object.keys(byMes).map(Number).sort((a,b)=>a-b);
   Object.keys(FINANCEIRO).forEach(k=>delete FINANCEIRO[k]);
   FINANCEIRO.meses=nums.map(k=>ab[byMes[k]._mes]+'/'+String(byMes[k]._ano).slice(2));
@@ -3088,16 +3258,20 @@ function tnMapFinanceiro(rows){
     FINANCEIRO[l]={receita:nums.map(k=>(byMes[k][l]?byMes[k][l].receita:0)),despesa:nums.map(k=>(byMes[k][l]?byMes[k][l].despesa:0))};
   });
   FINANCEIRO.parcialAte = _parcial;   // último mês ainda em andamento (ex.: "24/08/2026")
+  // qual rótulo de mês é o parcial (ex.: {"Ago/26":"24/08/2026"})
+  FINANCEIRO.parcialPorMes = {};
+  nums.forEach((k,i)=>{ if(_parcialMes[k]) FINANCEIRO.parcialPorMes[FINANCEIRO.meses[i]] = _parcialMes[k]; });
 }
 
 async function tnLoadAll(sb){
-  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','sync_meta'];
+  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta'];
   const res={};
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||''})); }catch(e){}
   try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:r.ano,mes:r.mes,competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||''})); }catch(e){}
-  try{ tnReplaceArray(BOLETOS,res.boletos,r=>({data:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status})); }catch(e){}
+  try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||''})); }catch(e){}
+  try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
