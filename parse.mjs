@@ -3,7 +3,7 @@
 import * as XLSX from 'xlsx';
 
 const LOJAS = ['Ouro Verde', 'Toledo', 'Itaipulândia'];
-const COLAB_POR_LOJA = { 'Ouro Verde': 'Eloisa', 'Itaipulândia': 'Tainara', 'Toledo': 'Mayara' };
+const COLAB_POR_LOJA = { 'Ouro Verde': 'Heloisa', 'Itaipulândia': 'Tainara', 'Toledo': 'Mayara' };
 
 const MESES = {
   jan: 1, janeiro: 1, fev: 2, fevereiro: 2, 'mar': 3, 'março': 3, marco: 3,

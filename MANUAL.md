@@ -16,7 +16,7 @@ Guia simples de como usar o painel no dia a dia. 💚
 
 **Perfis de acesso:**
 - **Sócio Proprietários** (Andreia, Anderson): veem tudo, inclusive salários (Gente e Gestão).
-- **Colaboradora** (Eloisa, Tainara, Mayara): veem tudo, **menos** salários/folha.
+- **Colaboradora** (Heloisa, Tainara, Mayara): veem tudo, **menos** salários/folha.
 
 Para **sair**, clique no botão **Sair** (canto superior direito).
 
