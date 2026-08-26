@@ -2510,12 +2510,90 @@ function renderDatasComemorativas(){
     const destaque = (m===atual);
     return `<div class="card" style="margin-bottom:12px;${destaque?'border:2px solid var(--accent,#1f7a4d);':''}">
       <h4 style="margin:0 0 8px 0;font-size:14px;">${esc(MESES_NOMES[m])}${destaque?' <span class="badge b-good" style="vertical-align:middle;"><span class="dot"></span>Este mês</span>':''}</h4>
-      ${itens.map(it=>`<div style="margin:0 0 8px 0;">
-        <div class="strong">${esc(it.data)} · ${esc(it.titulo)}</div>
+      ${itens.map((it,idx)=>`<div class="ig-data" data-igmes="${m}" data-igidx="${idx}"
+           style="margin:0 0 8px 0;padding:6px 8px;border-radius:7px;cursor:pointer;"
+           title="Clique para criar tarefas desta data">
+        <div class="strong">${esc(it.data)} · ${esc(it.titulo)} <span class="hint" style="font-weight:400;">— criar tarefa</span></div>
         <div class="hint">${esc(it.ideia)}</div>
       </div>`).join('') || '<div class="hint">Sem datas cadastradas.</div>'}
     </div>`;
   }).join('');
+
+  /* Cada data vira tarefa: escolhe quem faz, e sai uma tarefa por pessoa —
+     assim cada colaboradora vê a dela na própria lista. */
+  box.querySelectorAll('.ig-data').forEach(el=>{
+    el.onmouseenter = ()=>{ el.style.background = 'rgba(63,125,79,.12)'; };
+    el.onmouseleave = ()=>{ el.style.background = ''; };
+    el.onclick = ()=>{
+      const it = (DATAS_COMEMORATIVAS[+el.dataset.igmes]||[])[+el.dataset.igidx];
+      if(it) abrirTarefaDaData(it, +el.dataset.igmes);
+    };
+  });
+}
+
+/* Diálogo simples para transformar a data comemorativa em tarefas da equipe */
+function abrirTarefaDaData(it, mes){
+  const nomes = EQUIPE.map(e=>e.nome);
+  if(!nomes.length){ alert('Cadastre a equipe em Gente e Gestão antes de destinar tarefas.'); return; }
+
+  const ano = TODAY.getFullYear() + (mes < TODAY.getMonth() ? 1 : 0);
+  const dia = String(it.data).match(/^(\d{1,2})\//);
+  const prazoSugerido = dia ? `${dia[1].padStart(2,'0')}/${String(mes+1).padStart(2,'0')}/${ano}` : '';
+
+  const dlg = document.createElement('div');
+  dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  dlg.innerHTML = `
+    <div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto;">
+      <h3 style="margin:0 0 4px 0;font-size:15px;">${esc(it.titulo)}</h3>
+      <p class="hint" style="margin:0 0 12px 0;">${esc(it.data)} · ${esc(it.ideia)}</p>
+
+      <label class="hint">O que fazer</label>
+      <input type="text" id="dt-titulo" value="${esc(it.titulo)}" style="width:100%;box-sizing:border-box;margin:4px 0 10px;">
+
+      <label class="hint">Detalhe (opcional)</label>
+      <textarea id="dt-detalhe" rows="2" style="width:100%;box-sizing:border-box;margin:4px 0 10px;">${esc(it.ideia)}</textarea>
+
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
+        <div style="flex:1;"><label class="hint">Prazo</label>
+          <input type="text" id="dt-prazo" value="${esc(prazoSugerido)}" style="width:100%;box-sizing:border-box;margin-top:4px;"></div>
+        <div style="flex:1;"><label class="hint">Prioridade</label>
+          <select id="dt-prioridade" style="width:100%;margin-top:4px;"><option>Alta</option><option selected>Média</option><option>Baixa</option></select></div>
+      </div>
+
+      <label class="hint">Para quem</label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px;">
+        ${nomes.map(n=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" class="dt-quem" value="${esc(n)}"> ${esc(n)}</label>`).join('')}
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn ghost" id="dt-cancelar">cancelar</button>
+        <button class="btn primary" id="dt-criar">criar tarefas</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dlg);
+
+  const fechar = ()=> dlg.remove();
+  dlg.onclick = e => { if(e.target===dlg) fechar(); };
+  dlg.querySelector('#dt-cancelar').onclick = fechar;
+  dlg.querySelector('#dt-criar').onclick = ()=>{
+    const quem = [...dlg.querySelectorAll('.dt-quem:checked')].map(c=>c.value);
+    if(!quem.length){ alert('Escolha pelo menos uma pessoa.'); return; }
+    const titulo = dlg.querySelector('#dt-titulo').value.trim() || it.titulo;
+    const detalhe = dlg.querySelector('#dt-detalhe').value.trim();
+    const prazo = dlg.querySelector('#dt-prazo').value.trim();
+    const prioridade = dlg.querySelector('#dt-prioridade').value;
+    quem.forEach(n=>{
+      const t = { tipo:'tarefa', area:'Datas comemorativas', colaborador:n, titulo,
+                  prazo, prioridade, status:'pendente', detalhe };
+      TAREFAS.push(t);
+      tnInsert('tarefas', t);
+    });
+    fechar();
+    renderTarefas();
+    alert(quem.length===1 ? 'Tarefa criada para ' + quem[0] + '.'
+                          : quem.length + ' tarefas criadas: ' + quem.join(', ') + '.');
+  };
 }
 
 /* ============ RENDER: PARCERIAS ============ */
