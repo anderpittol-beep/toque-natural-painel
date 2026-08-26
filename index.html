@@ -1033,6 +1033,35 @@ window.TN_CONFIG = {
         <p class="section-desc">Como fechou cada mês e de onde veio a renda do ano.</p>
         <div id="pes-historico"></div>
 
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Safras — renda extra</h3>
+        <p class="section-desc">Soja, milho e peixe fecham por safra, não por mês: o que entra e o que sai fica aqui, com o resultado de cada uma. Estes valores <strong>não</strong> entram na disponibilidade mensal lá de cima.</p>
+        <div class="card" style="margin-bottom:12px;">
+          <form class="feedback-form" id="form-pes-safra" style="grid-template-columns:repeat(6,1fr);">
+            <input type="text" id="pess-safra" placeholder="Safra (ex.: 2025/26)" required>
+            <select id="pess-cultura"><option>Soja</option><option>Milho</option><option>Peixe</option><option>Outra</option></select>
+            <select id="pess-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+            <input type="date" id="pess-data" required>
+            <input type="text" id="pess-desc" placeholder="Descrição">
+            <input type="number" id="pess-valor" placeholder="Valor" step="0.01" required>
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar na safra</button>
+          </form>
+        </div>
+        <div id="pes-safras"></div>
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Recados da casa</h3>
+        <p class="section-desc">Tarefas particulares — os pontos de atenção dos próximos dias. Ficam aqui, e não no menu da equipe das lojas. O que está atrasado ou vence hoje aparece destacado.</p>
+        <div class="card" style="margin-bottom:12px;">
+          <form class="feedback-form" id="form-pes-pend" style="grid-template-columns:repeat(5,1fr);">
+            <input type="text" id="pesp-titulo" placeholder="O que resolver" required style="grid-column:span 2;">
+            <input type="text" id="pesp-resp" placeholder="Com quem / onde">
+            <input type="number" id="pesp-valor" placeholder="Valor (opcional)" step="0.01">
+            <input type="date" id="pesp-prazo" title="Para quando">
+            <button class="btn primary" type="submit">Anotar tarefa</button>
+          </form>
+        </div>
+        <div id="pes-pendencias"></div>
+
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Investimentos</h3>
         <p class="section-desc">Aportes e resgates, com o saldo aplicado acumulado.</p>
         <div class="card" style="margin-bottom:12px;">
@@ -4104,7 +4133,7 @@ function applyPerfil(){
    pes_acesso no banco (funcao is_casa()), nao pelo papel de socio — ha outros
    socios nas lojas que nao devem ver isto. A tela so aparece para quem passa
    nessa lista; o banco recusa leitura e escrita para todo o resto. */
-let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [];
+let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [], PES_SAFRAS = [], PES_PEND = [];
 let ACESSO_CASA = false;
 let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
 let pesEditando = null;
@@ -4128,16 +4157,20 @@ async function tnVerificarAcessoCasa(){
 async function tnCarregarPessoais(){
   if(!ACESSO_CASA || !window.TN || !window.TN.sb) return;
   const sb = window.TN.sb;
-  const [l, r, i, d] = await Promise.all([
+  const [l, r, i, d, sf, pd] = await Promise.all([
     sb.from('pes_lancamentos').select('*'),
     sb.from('pes_rendas').select('*'),
     sb.from('pes_investimentos').select('*').order('data',{ascending:false}),
-    sb.from('pes_documentos').select('*').order('criado_em',{ascending:false})
+    sb.from('pes_documentos').select('*').order('criado_em',{ascending:false}),
+    sb.from('pes_safras').select('*').order('data',{ascending:false}),
+    sb.from('pes_pendencias').select('*').order('criado_em')
   ]);
   PES_LANC   = l.data || [];
   PES_RENDAS = r.data || [];
   PES_INV    = i.data || [];
   PES_DOCS   = d.data || [];
+  PES_SAFRAS = sf.data || [];
+  PES_PEND   = pd.data || [];
   renderPessoais();
 }
 
@@ -4232,6 +4265,56 @@ function renderPessoais(){
         || '<tr><td colspan="2" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
       </tbody></table></div></div>`;
 
+  /* safras: cada uma fecha sozinha, por isso ficam fora dos indicadores do mes */
+  const porSafra = {};
+  PES_SAFRAS.forEach(x=>{
+    const k = x.safra + ' · ' + x.cultura;
+    (porSafra[k] = porSafra[k] || []).push(x);
+  });
+  const chaves = Object.keys(porSafra).sort().reverse();
+  el('pes-safras').innerHTML = chaves.map(k=>{
+    const itens = porSafra[k].slice().sort((a,b)=> String(b.data).localeCompare(String(a.data)));
+    const rec = itens.filter(x=>x.tipo==='receita').reduce((a,x)=>a+(+x.valor||0),0);
+    const des = itens.filter(x=>x.tipo==='despesa').reduce((a,x)=>a+(+x.valor||0),0);
+    const res = rec - des;
+    return `<div class="card" style="margin-bottom:12px;">
+      <div class="toolbar" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:14px;margin:0;">${esc(k)}</h3>
+        <span class="hint">receitas ${BRL(rec)} · despesas ${BRL(des)} · <span class="strong" style="color:${res<0?'var(--critical)':'var(--good)'};">resultado ${BRL(res)}</span></span>
+      </div>
+      <table class="table" style="margin-top:8px;"><thead><tr>
+        <th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
+        ${itens.map(x=>`<tr>
+          <td class="hint">${x.data?dataBR(x.data):'—'}</td>
+          <td>${x.tipo==='despesa'?'Despesa':'Receita'}</td>
+          <td>${esc(x.descricao||'—')}${x.obs?` <span class="hint">· ${esc(x.obs)}</span>`:''}</td>
+          <td class="strong">${BRL(+x.valor)}</td>
+          <td><button class="btn ghost" data-psexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')}
+      </tbody></table></div>`;
+  }).join('') || '<div class="card"><p class="hint" style="margin:0;">Nenhuma safra lançada ainda.</p></div>';
+
+  /* recados */
+  const hojeISO = new Date().toISOString().slice(0,10);
+  /* sem prazo vai para o fim da fila, nao no meio dos urgentes */
+  const ordemPrazo = (a,b) => String(a.prazo||'9999').localeCompare(String(b.prazo||'9999'));
+  const abertos = PES_PEND.filter(x=>!x.feito).sort(ordemPrazo), prontos = PES_PEND.filter(x=>x.feito);
+  const linhaPend = x => {
+    const venceu = !x.feito && x.prazo && x.prazo <= hojeISO;
+    return `<tr${x.feito?' style="opacity:.55;"':''}>
+    <td><label style="display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" data-ppfeito="${esc(x.id)}" ${x.feito?'checked':''}>
+      <span${x.feito?' style="text-decoration:line-through;"':''}>${esc(x.titulo)}</span></label></td>
+    <td class="hint">${esc(x.responsavel||'—')}</td>
+    <td class="strong">${x.valor!=null?BRL(+x.valor):'—'}</td>
+    <td${venceu?' class="strong" style="color:var(--critical);"':' class="hint"'}>${x.prazo?dataBR(x.prazo):'—'}</td>
+    <td><button class="btn ghost" data-ppexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`;
+  };
+  el('pes-pendencias').innerHTML = `<div class="card"><table class="table"><thead><tr>
+      <th>Tarefa</th><th>Com quem / onde</th><th>Valor</th><th>Para quando</th><th></th></tr></thead><tbody>
+      ${abertos.map(linhaPend).join('') || '<tr><td colspan="5" class="hint">Nada pendente.</td></tr>'}
+      ${prontos.map(linhaPend).join('')}
+    </tbody></table>${prontos.length?`<p class="hint" style="margin:8px 0 0 0;">${prontos.length} já resolvido(s).</p>`:''}</div>`;
+
   /* investimentos */
   const saldoInv = PES_INV.reduce((a,x)=> a + (x.movimento==='resgate' ? -(+x.valor||0) : (+x.valor||0)), 0);
   el('pes-investimentos').innerHTML = `<div class="card">
@@ -4319,6 +4402,31 @@ function ligarAcoesPessoais(){
       await recarregar();
     };
   });
+  document.querySelectorAll('[data-psexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este lançamento da safra?')) return;
+      const { error } = await sb().from('pes_safras').delete().eq('id', b.dataset.psexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-ppfeito]').forEach(c=>{
+    c.onchange = async ()=>{
+      const { error } = await sb().from('pes_pendencias')
+        .update({ feito: c.checked, feito_em: c.checked ? new Date().toISOString().slice(0,10) : null })
+        .eq('id', c.dataset.ppfeito);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-ppexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este recado?')) return;
+      const { error } = await sb().from('pes_pendencias').delete().eq('id', b.dataset.ppexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
   document.querySelectorAll('[data-pdabrir]').forEach(b=>{
     b.onclick = async ()=>{
       /* arquivo em area privada: abre por link temporario, valido por 1 minuto */
@@ -4401,6 +4509,29 @@ function ligarFormulariosPessoais(){
       descricao: val('pesi-desc')||null, valor: +val('pesi-valor')||0 });
     if(error) return erro(error);
     fi.reset(); await tnCarregarPessoais();
+  };
+
+  const fs = document.getElementById('form-pes-safra');
+  if(fs) fs.onsubmit = async ev=>{
+    ev.preventDefault();
+    const { error } = await sb().from('pes_safras').insert({ safra: val('pess-safra'),
+      cultura: val('pess-cultura'), tipo: val('pess-tipo'), data: val('pess-data'),
+      descricao: val('pess-desc')||null, valor: +val('pess-valor')||0 });
+    if(error) return erro(error);
+    const safra = val('pess-safra');
+    fs.reset();
+    document.getElementById('pess-safra').value = safra;   // a safra costuma repetir
+    await tnCarregarPessoais();
+  };
+
+  const fp = document.getElementById('form-pes-pend');
+  if(fp) fp.onsubmit = async ev=>{
+    ev.preventDefault();
+    const { error } = await sb().from('pes_pendencias').insert({ titulo: val('pesp-titulo'),
+      responsavel: val('pesp-resp')||null, valor: val('pesp-valor') ? +val('pesp-valor') : null,
+      prazo: val('pesp-prazo')||null });
+    if(error) return erro(error);
+    fp.reset(); await tnCarregarPessoais();
   };
 
   const fd = document.getElementById('form-pes-doc');
@@ -5063,4 +5194,3 @@ tnInitApp();
 </script>
 </body>
 </html>
-<!-- publicacao reenviada em 26/08/2026 -->
