@@ -804,6 +804,14 @@ window.TN_CONFIG = {
             <option value="Toledo">Toledo</option>
           </select>
         </div>
+        <div class="card" style="margin-bottom:12px;">
+          <label class="hint" for="ig-padrao">Material padrão das postagens — o link vai junto em toda tarefa criada aqui</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+            <input type="url" id="ig-padrao" placeholder="Cole o link do Drive, Canva, pasta de artes..." style="flex:1 1 320px;">
+            <button class="btn ghost" id="ig-padrao-salvar" style="padding:5px 12px;">salvar</button>
+            <a id="ig-padrao-abrir" href="#" target="_blank" rel="noopener" class="btn ghost" style="padding:5px 12px;display:none;">abrir material</a>
+          </div>
+        </div>
         <div class="ig-week" id="ig-week"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Calendário de datas comemorativas</h3>
@@ -2183,6 +2191,7 @@ function renderEquipeCad(){
       b.disabled = false; b.textContent = txt;
       alert(r.ok ? r.mensagem : ('Não foi possível: ' + r.erro));
       tnCarregarAcessos();
+  tnCarregarConfig();
     };
   });
   box.querySelectorAll('[data-eqconvite]').forEach(b=>{
@@ -2266,6 +2275,10 @@ function tarefaCard(t){
     <div>${esc(t.titulo)}</div>
     ${t.area?`<div style="margin-top:5px;"><span class="store-tag">${esc(t.area)}</span></div>`:''}
     <div class="meta">Prazo: ${esc(t.prazo||'—')} · ${esc(t.prioridade)}</div>
+    ${(()=>{ /* material anexado à tarefa: link à mão, sem precisar abrir os detalhes */
+      const m = String(t.detalhe||'').match(/https?:\/\/\S+/);
+      return m ? `<div style="margin-top:5px;"><a href="${esc(m[0])}" target="_blank" rel="noopener" class="btn ghost" style="padding:2px 8px;font-size:11.5px;">abrir material</a></div>` : '';
+    })()}
     ${t.detalhe?`<details style="margin-top:5px;"><summary class="hint" style="cursor:pointer;">detalhes</summary><div class="hint" style="margin-top:4px;white-space:pre-wrap;">${esc(t.detalhe)}</div></details>`:''}
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
       ${status!=='pendente' ? `<button class="btn ghost" data-move="${i}" data-to="pendente">← pendente</button>`:''}
@@ -2479,6 +2492,27 @@ function renderTarefas(){
 }
 
 /* ============ RENDER: INSTAGRAM ============ */
+/* Link do material padrão: fica no Supabase, então vale para a equipe toda */
+let IG_PADRAO_LINK = '';
+async function tnCarregarConfig(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    const {data} = await window.TN.sb.from('config_painel').select('chave,valor');
+    (data||[]).forEach(r=>{ if(r.chave==='ig_padrao_link') IG_PADRAO_LINK = r.valor||''; });
+    aplicarPadraoIG();
+  }catch(e){ console.warn('config', e); }
+}
+function aplicarPadraoIG(){
+  const inp = document.getElementById('ig-padrao');
+  const link = document.getElementById('ig-padrao-abrir');
+  if(inp && !inp.value) inp.value = IG_PADRAO_LINK;
+  if(link){
+    const v = (inp && inp.value) || IG_PADRAO_LINK;
+    link.style.display = v ? '' : 'none';
+    link.href = v || '#';
+  }
+}
+
 function renderInstagram(){
   const loja = document.getElementById('igStoreFilter').value;
   const sugestoes = IG_SUGESTOES[loja];
@@ -2493,11 +2527,42 @@ function renderInstagram(){
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary);">
         <input type="checkbox" data-ig="${key}" ${postado?'checked':''}> Postado
       </label>
+      <button class="btn ghost" data-igpauta="${i}" style="margin-top:6px;padding:3px 9px;font-size:11.5px;width:100%;">criar tarefa</button>
     </div>`;
   }).join('');
   document.querySelectorAll('[data-ig]').forEach(chk=>{
     chk.onchange = ()=>{ ig_state[chk.dataset.ig] = chk.checked; };
   });
+  /* Mesma distribuição das datas comemorativas, agora para a pauta da semana */
+  document.querySelectorAll('[data-igpauta]').forEach(b=>{
+    b.onclick = ()=>{
+      const i = +b.dataset.igpauta, d = IG_PILARES[i];
+      abrirTarefaDaData({
+        data: d.dia,
+        titulo: d.dia + ' · ' + d.pilar + ' (' + d.fmt + ')',
+        ideia: sugestoes[i]
+      }, TODAY.getMonth(), true);
+    };
+  });
+  aplicarPadraoIG();
+  const btn = document.getElementById('ig-padrao-salvar');
+  const inp = document.getElementById('ig-padrao');
+  if(btn && inp && !btn.dataset.pronto){
+    btn.dataset.pronto = '1';
+    inp.oninput = aplicarPadraoIG;
+    btn.onclick = async ()=>{
+      const v = inp.value.trim();
+      IG_PADRAO_LINK = v;
+      btn.disabled = true; const t = btn.textContent; btn.textContent = 'salvando...';
+      try{
+        if(window.TN && window.TN.sb){
+          const {error} = await window.TN.sb.from('config_painel')
+            .upsert({chave:'ig_padrao_link', valor:v, atualizado_em:new Date().toISOString()}, {onConflict:'chave'});
+          if(error) alert('Não foi possível salvar: ' + error.message);
+        }
+      }finally{ btn.disabled = false; btn.textContent = t; aplicarPadraoIG(); }
+    };
+  }
   renderDatasComemorativas();
 }
 function renderDatasComemorativas(){
@@ -2532,13 +2597,14 @@ function renderDatasComemorativas(){
 }
 
 /* Diálogo simples para transformar a data comemorativa em tarefas da equipe */
-function abrirTarefaDaData(it, mes){
+function abrirTarefaDaData(it, mes, semPrazo){
   const nomes = EQUIPE.map(e=>e.nome);
   if(!nomes.length){ alert('Cadastre a equipe em Gente e Gestão antes de destinar tarefas.'); return; }
 
   const ano = TODAY.getFullYear() + (mes < TODAY.getMonth() ? 1 : 0);
-  const dia = String(it.data).match(/^(\d{1,2})\//);
+  const dia = semPrazo ? null : String(it.data).match(/^(\d{1,2})\//);
   const prazoSugerido = dia ? `${dia[1].padStart(2,'0')}/${String(mes+1).padStart(2,'0')}/${ano}` : '';
+  const material = (document.getElementById('ig-padrao')||{}).value || '';
 
   const dlg = document.createElement('div');
   dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
@@ -2552,6 +2618,9 @@ function abrirTarefaDaData(it, mes){
 
       <label class="hint">Detalhe (opcional)</label>
       <textarea id="dt-detalhe" rows="2" style="width:100%;box-sizing:border-box;margin:4px 0 10px;">${esc(it.ideia)}</textarea>
+
+      <label class="hint">Material de referência (link)</label>
+      <input type="url" id="dt-material" value="${esc(material)}" placeholder="Drive, Canva, pasta de artes..." style="width:100%;box-sizing:border-box;margin:4px 0 10px;">
 
       <div style="display:flex;gap:10px;margin-bottom:10px;">
         <div style="flex:1;"><label class="hint">Prazo</label>
@@ -2581,11 +2650,13 @@ function abrirTarefaDaData(it, mes){
     if(!quem.length){ alert('Escolha pelo menos uma pessoa.'); return; }
     const titulo = dlg.querySelector('#dt-titulo').value.trim() || it.titulo;
     const detalhe = dlg.querySelector('#dt-detalhe').value.trim();
+    const link = dlg.querySelector('#dt-material').value.trim();
+    const detalheFinal = link ? (detalhe ? detalhe + '\n\nMaterial: ' + link : 'Material: ' + link) : detalhe;
     const prazo = dlg.querySelector('#dt-prazo').value.trim();
     const prioridade = dlg.querySelector('#dt-prioridade').value;
     quem.forEach(n=>{
       const t = { tipo:'tarefa', area:'Datas comemorativas', colaborador:n, titulo,
-                  prazo, prioridade, status:'pendente', detalhe };
+                  prazo, prioridade, status:'pendente', detalhe: detalheFinal };
       TAREFAS.push(t);
       tnInsert('tarefas', t);
     });
