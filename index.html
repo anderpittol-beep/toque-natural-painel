@@ -246,6 +246,7 @@ window.TN_CONFIG = {
       <button data-view="pedidos"><span class="navicon">▤</span>Pedidos &amp; entregas</button>
       <button data-view="equipe"><span class="navicon">◎</span>Equipe: tarefas</button>
       <button data-view="instagram"><span class="navicon">◫</span>Instagram — pautas</button>
+      <button data-view="pessoais" id="nav-pessoais" style="display:none;"><span class="navicon">⌂</span>Despesas pessoais <span class="lock">🔒</span></button>
     </nav>
   </aside>
   <main>
@@ -975,10 +976,103 @@ window.TN_CONFIG = {
         </div>
       </section>
 
+      <!-- DESPESAS PESSOAIS (casa - Anderson e Andreia) -->
+      <section class="view" id="view-pessoais">
+        <h2 class="section-title">Despesas pessoais <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>particular</span></h2>
+        <p class="section-desc">Contas da casa, renda e guarda de documentos. Área restrita: só quem está na lista de acesso enxerga estes números — nem os demais sócios, nem a equipe das lojas.</p>
+
+        <div class="toolbar" style="justify-content:space-between;align-items:center;gap:8px;">
+          <div style="display:flex;gap:5px;align-items:center;">
+            <button class="btn ghost" id="pes-mes-ant" title="Mês anterior" style="padding:3px 9px;">‹</button>
+            <span class="strong" id="pes-competencia" style="font-size:13px;min-width:110px;text-align:center;">—</span>
+            <button class="btn ghost" id="pes-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
+          </div>
+          <button class="btn ghost" id="pes-repetir" style="padding:5px 12px;" title="Traz as fixas e a renda do mês anterior">repetir mês anterior</button>
+        </div>
+
+        <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 16px 0;"></div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
+          <p class="hint" style="margin:0 0 8px 0;">Cartão, despesa fixa ou variável do mês em tela. Parcela é opcional (ex.: 2 de 6).</p>
+          <form class="feedback-form" id="form-pes" style="grid-template-columns:repeat(6,1fr);">
+            <select id="pes-tipo">
+              <option value="cartao">Cartão</option>
+              <option value="fixa">Despesa fixa</option>
+              <option value="variavel">Despesa variável</option>
+            </select>
+            <input type="text" id="pes-desc" placeholder="Descrição" required>
+            <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
+            <input type="text" id="pes-cartao" placeholder="Cartão (MASTER/VISA)">
+            <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
+            <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
+            <input type="text" id="pes-categoria" placeholder="Categoria (opcional, ajuda no IR)" style="grid-column:span 3;">
+            <button class="btn primary" type="submit" style="grid-column:span 3;">Lançar despesa</button>
+          </form>
+        </div>
+
+        <div id="pes-listas"></div>
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Renda do mês</h3>
+        <p class="section-desc">Salário, o que entra da Andreia, prefeitura e as receitas de soja, milho e peixe. O histórico por origem fica logo abaixo.</p>
+        <div class="card" style="margin-bottom:12px;">
+          <form class="feedback-form" id="form-pes-renda" style="grid-template-columns:repeat(5,1fr);">
+            <select id="pesr-origem">
+              <option>Salário</option><option>Andreia</option><option>Prefeitura</option>
+              <option>Soja</option><option>Milho</option><option>Peixe</option><option>Outros</option>
+            </select>
+            <input type="text" id="pesr-desc" placeholder="Descrição">
+            <input type="number" id="pesr-valor" placeholder="Valor" step="0.01" required>
+            <input type="date" id="pesr-data">
+            <button class="btn primary" type="submit">Lançar renda</button>
+          </form>
+        </div>
+        <div id="pes-rendas"></div>
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Histórico</h3>
+        <p class="section-desc">Como fechou cada mês e de onde veio a renda do ano.</p>
+        <div id="pes-historico"></div>
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Investimentos</h3>
+        <p class="section-desc">Aportes e resgates, com o saldo aplicado acumulado.</p>
+        <div class="card" style="margin-bottom:12px;">
+          <form class="feedback-form" id="form-pes-inv" style="grid-template-columns:repeat(6,1fr);">
+            <input type="date" id="pesi-data" required>
+            <select id="pesi-mov"><option value="aporte">Aporte</option><option value="resgate">Resgate</option></select>
+            <input type="text" id="pesi-tipo" placeholder="Tipo (CDB, ações...)">
+            <input type="text" id="pesi-inst" placeholder="Instituição">
+            <input type="text" id="pesi-desc" placeholder="Descrição">
+            <input type="number" id="pesi-valor" placeholder="Valor" step="0.01" required>
+            <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar investimento</button>
+          </form>
+        </div>
+        <div id="pes-investimentos"></div>
+
+        <h3 style="font-size:15px;margin:22px 0 4px 0;">Documentos — IR e extratos</h3>
+        <p class="section-desc">Guarda dos comprovantes: extratos do banco e do cartão, notas e tudo que serve para a declaração. Os arquivos ficam em área privada, só acessível por esta lista.</p>
+        <div class="card" style="margin-bottom:12px;">
+          <form class="feedback-form" id="form-pes-doc" style="grid-template-columns:repeat(5,1fr);">
+            <select id="pesd-tipo">
+              <option>Extrato banco</option><option>Extrato cartão</option>
+              <option>IR</option><option>Nota / recibo</option><option>Outro</option>
+            </select>
+            <input type="text" id="pesd-titulo" placeholder="Título" required>
+            <input type="text" id="pesd-ref" placeholder="Banco / cartão">
+            <input type="date" id="pesd-data">
+            <input type="file" id="pesd-arquivo" style="grid-column:span 4;">
+            <button class="btn primary" type="submit">Guardar documento</button>
+          </form>
+        </div>
+        <div id="pes-documentos"></div>
+      </section>
+
       <div class="footer-note">
         Toque Natural Celeiro · Painel modelo — dados de exemplo. Importe seus relatórios (CSV) em cada seção, ou conecte a planilha do Drive, para substituir pelos números reais das três lojas (Ouro Verde, Itaipulândia e Toledo).
       </div>
     </div>
+
+
+
   </main>
 </div>
 
@@ -3927,6 +4021,7 @@ function viewTemDados(v){
     case 'clientes':  return (CLIENTES||[]).length > 0;
     case 'parcerias': return (PARCERIAS||[]).length > 0;
     case 'pedidos':   return (PEDIDOS||[]).length > 0;
+    case 'pessoais':  return true;
     default: return true;
   }
 }
@@ -3934,7 +4029,7 @@ function viewTemDados(v){
 function aplicarMenuDoPerfil(socia){
   document.querySelectorAll('#nav button[data-view]').forEach(b=>{
     const v = b.dataset.view;
-    const liberado = socia || VIEWS_COLAB.indexOf(v) !== -1;
+    const liberado = (v === 'pessoais') ? ACESSO_CASA : (socia || VIEWS_COLAB.indexOf(v) !== -1);
     b.style.display = liberado ? '' : 'none';
     const vazio = socia && !viewTemDados(v);
     b.classList.toggle('sem-dados', vazio);
@@ -3954,6 +4049,9 @@ function aplicarMenuDoPerfil(socia){
     }
     g.style.display = algum ? '' : 'none';
   });
+  /* se o acesso a tela particular nao valer, ela nao fica aberta */
+  const ativa = document.querySelector('.view.active');
+  if(!ACESSO_CASA && ativa && ativa.id === 'view-pessoais') setView(socia ? 'visao-geral' : 'desempenho');
   aplicarMarcaDagua(socia);
 }
 
@@ -3998,6 +4096,337 @@ function applyPerfil(){
   }
   renderCaixa();
   renderDesempenho();   // os campos de meta mudam de editavel para leitura
+}
+
+
+/* ============ DESPESAS PESSOAIS (casa) ============
+   Dados particulares de Anderson e Andreia. Quem enxerga e definido pela tabela
+   pes_acesso no banco (funcao is_casa()), nao pelo papel de socio — ha outros
+   socios nas lojas que nao devem ver isto. A tela so aparece para quem passa
+   nessa lista; o banco recusa leitura e escrita para todo o resto. */
+let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [];
+let ACESSO_CASA = false;
+let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
+let pesEditando = null;
+
+const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas', variavel:'Despesas variáveis' };
+const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
+const pesDoMes = arr => arr.filter(x => +x.ano===pesAno && +x.mes===pesMes);
+const pesSoma  = arr => arr.reduce((a,x)=> a + (+x.valor||0), 0);
+
+async function tnVerificarAcessoCasa(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    const { data } = await window.TN.sb.rpc('is_casa');
+    ACESSO_CASA = data === true;
+    const b = document.getElementById('nav-pessoais');
+    if(b) b.style.display = ACESSO_CASA ? '' : 'none';
+    if(ACESSO_CASA) await tnCarregarPessoais();
+  }catch(e){ console.warn('acesso casa', e); }
+}
+
+async function tnCarregarPessoais(){
+  if(!ACESSO_CASA || !window.TN || !window.TN.sb) return;
+  const sb = window.TN.sb;
+  const [l, r, i, d] = await Promise.all([
+    sb.from('pes_lancamentos').select('*'),
+    sb.from('pes_rendas').select('*'),
+    sb.from('pes_investimentos').select('*').order('data',{ascending:false}),
+    sb.from('pes_documentos').select('*').order('criado_em',{ascending:false})
+  ]);
+  PES_LANC   = l.data || [];
+  PES_RENDAS = r.data || [];
+  PES_INV    = i.data || [];
+  PES_DOCS   = d.data || [];
+  renderPessoais();
+}
+
+function renderPessoais(){
+  const sec = document.getElementById('view-pessoais');
+  if(!sec) return;
+  const el = id => document.getElementById(id);
+  el('pes-competencia').textContent = pesComp();
+
+  const lanc = pesDoMes(PES_LANC);
+  const porTipo = t => lanc.filter(x=>x.tipo===t);
+  const cartao = pesSoma(porTipo('cartao')), fixa = pesSoma(porTipo('fixa')), varia = pesSoma(porTipo('variavel'));
+  const despesa = cartao + fixa + varia;
+  const renda = pesSoma(pesDoMes(PES_RENDAS));
+  const saldo = renda - despesa;
+  const pago = pesSoma(lanc.filter(x=>x.pago));
+
+  el('pes-kpis').innerHTML = `
+    <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${pesDoMes(PES_RENDAS).length} lançamento(s)</div></div>
+    <div class="card stat-tile"><div class="label">Cartão</div><div class="value">${BRL(cartao)}</div><div class="hint">${porTipo('cartao').length} item(ns)</div></div>
+    <div class="card stat-tile"><div class="label">Fixas + variáveis</div><div class="value">${BRL(fixa+varia)}</div><div class="hint">${BRL(fixa)} fixas · ${BRL(varia)} variáveis</div></div>
+    <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
+
+  const podeMexer = ACESSO_CASA;
+  const linha = x => {
+    const p = (x.parcela_num && x.parcela_total) ? `${x.parcela_num}/${x.parcela_total}` : '';
+    if(pesEditando === x.id){
+      return `<tr data-peid="${esc(x.id)}">
+        <td><input type="text" data-pe2="descricao" value="${esc(x.descricao)}" style="width:100%;"></td>
+        <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;"></td>
+        <td><input type="number" data-pe2="valor" value="${+x.valor}" step="0.01" style="width:100px;"></td>
+        <td colspan="2"><button class="btn primary" data-pesalvar="${esc(x.id)}" style="padding:2px 9px;font-size:11.5px;">salvar</button>
+        <button class="btn ghost" data-pecancelar="1" style="padding:2px 9px;font-size:11.5px;">cancelar</button></td></tr>`;
+    }
+    return `<tr>
+      <td>${esc(x.descricao)}${x.categoria?` <span class="hint">· ${esc(x.categoria)}</span>`:''}${x.cartao?` <span class="hint">· ${esc(x.cartao)}</span>`:''}</td>
+      <td class="hint">${p||'—'}</td>
+      <td class="strong">${BRL(+x.valor)}</td>
+      <td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>
+      <td style="white-space:nowrap;">${podeMexer?`<button class="btn ghost" data-peeditar="${esc(x.id)}" style="padding:1px 6px;">✏️</button>
+      <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
+  };
+
+  el('pes-listas').innerHTML = ['cartao','fixa','variavel'].map(t=>{
+    const itens = porTipo(t).slice().sort((a,b)=> (+b.valor)-(+a.valor));
+    const tot = pesSoma(itens);
+    return `<div class="card" style="margin-bottom:14px;">
+      <div class="toolbar" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:14px;margin:0;">${PES_ROTULO[t]}</h3>
+        <span class="strong">${BRL(tot)}</span>
+      </div>
+      <table class="table" style="margin-top:8px;"><thead><tr>
+        <th>Descrição</th><th>Parcela</th><th>Valor</th><th>Situação</th><th></th>
+      </tr></thead><tbody>
+        ${itens.map(linha).join('') || '<tr><td colspan="5" class="hint">Nada lançado neste mês.</td></tr>'}
+      </tbody></table></div>`;
+  }).join('') + `<p class="hint" style="margin:-4px 0 0 0;">Já quitado neste mês: ${BRL(pago)} de ${BRL(despesa)}.</p>`;
+
+  /* renda do mes */
+  const rendas = pesDoMes(PES_RENDAS);
+  el('pes-rendas').innerHTML = `<div class="card"><table class="table"><thead><tr>
+      <th>Origem</th><th>Descrição</th><th>Data</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${rendas.map(r=>`<tr>
+        <td class="strong">${esc(r.origem)}</td><td>${esc(r.descricao||'—')}</td>
+        <td class="hint">${r.data?dataBR(r.data):'—'}</td><td class="strong">${BRL(+r.valor)}</td>
+        <td><button class="btn ghost" data-prexcluir="${esc(r.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
+        || '<tr><td colspan="5" class="hint">Nenhuma renda lançada neste mês.</td></tr>'}
+      </tbody></table></div>`;
+
+  /* historico: ultimos 12 meses + renda por origem no ano */
+  const meses = [];
+  for(let k=11;k>=0;k--){
+    const d = new Date(pesAno, pesMes-1-k, 1);
+    const a = d.getFullYear(), m = d.getMonth()+1;
+    const des = pesSoma(PES_LANC.filter(x=>+x.ano===a && +x.mes===m));
+    const ren = pesSoma(PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m));
+    if(des || ren) meses.push({a, m, des, ren, saldo: ren-des});
+  }
+  const origens = {};
+  PES_RENDAS.filter(r=>+r.ano===pesAno).forEach(r=>{ origens[r.origem] = (origens[r.origem]||0) + (+r.valor||0); });
+  const listaOrigens = Object.entries(origens).sort((a,b)=>b[1]-a[1]);
+  el('pes-historico').innerHTML = `<div class="grid grid-2">
+    <div class="card"><h3 style="font-size:14px;margin:0 0 8px 0;">Mês a mês</h3>
+      <table class="table"><thead><tr><th>Mês</th><th>Renda</th><th>Despesas</th><th>Sobra</th></tr></thead><tbody>
+      ${meses.map(x=>`<tr><td>${MES_ABREV[x.m]||x.m}/${String(x.a).slice(2)}</td><td>${BRL(x.ren)}</td><td>${BRL(x.des)}</td>
+        <td class="strong" style="color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="hint">Sem histórico ainda.</td></tr>'}
+      </tbody></table></div>
+    <div class="card"><h3 style="font-size:14px;margin:0 0 8px 0;">Renda por origem em ${pesAno}</h3>
+      <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th></tr></thead><tbody>
+      ${listaOrigens.map(([o,v])=>`<tr><td>${esc(o)}</td><td class="strong">${BRL(v)}</td></tr>`).join('')
+        || '<tr><td colspan="2" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
+      </tbody></table></div></div>`;
+
+  /* investimentos */
+  const saldoInv = PES_INV.reduce((a,x)=> a + (x.movimento==='resgate' ? -(+x.valor||0) : (+x.valor||0)), 0);
+  el('pes-investimentos').innerHTML = `<div class="card">
+    <div class="toolbar" style="justify-content:space-between;align-items:center;">
+      <h3 style="font-size:14px;margin:0;">Movimentações</h3><span class="strong">Aplicado: ${BRL(saldoInv)}</span></div>
+    <table class="table" style="margin-top:8px;"><thead><tr>
+      <th>Data</th><th>Movimento</th><th>Tipo</th><th>Instituição</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${PES_INV.map(x=>`<tr>
+        <td class="hint">${x.data?dataBR(x.data):'—'}</td>
+        <td>${x.movimento==='resgate'?'Resgate':'Aporte'}</td>
+        <td>${esc(x.tipo||'—')}</td><td>${esc(x.instituicao||'—')}</td><td>${esc(x.descricao||'—')}</td>
+        <td class="strong">${BRL(+x.valor)}</td>
+        <td><button class="btn ghost" data-piexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
+        || '<tr><td colspan="7" class="hint">Nenhum investimento lançado.</td></tr>'}
+      </tbody></table></div>`;
+
+  /* documentos */
+  el('pes-documentos').innerHTML = `<div class="card"><table class="table"><thead><tr>
+      <th>Tipo</th><th>Título</th><th>Referência</th><th>Data</th><th>Competência</th><th></th></tr></thead><tbody>
+      ${PES_DOCS.map(x=>`<tr>
+        <td>${esc(x.tipo)}</td><td>${esc(x.titulo)}</td><td>${esc(x.referencia||'—')}</td>
+        <td class="hint">${x.data_ref?dataBR(x.data_ref):'—'}</td>
+        <td class="hint">${x.mes?((MES_ABREV[x.mes]||x.mes)+'/'+String(x.ano).slice(2)):x.ano}</td>
+        <td style="white-space:nowrap;">${x.caminho?`<button class="btn ghost" data-pdabrir="${esc(x.caminho)}" style="padding:1px 8px;font-size:11.5px;">abrir</button>`:''}
+        <button class="btn ghost" data-pdexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
+        || '<tr><td colspan="6" class="hint">Nenhum documento guardado ainda.</td></tr>'}
+      </tbody></table></div>`;
+
+  ligarAcoesPessoais();
+}
+
+function ligarAcoesPessoais(){
+  const sb = () => window.TN.sb;
+  const recarregar = async ()=>{ await tnCarregarPessoais(); };
+  const erro = e => alert('Não deu certo: ' + (e && e.message ? e.message : e));
+
+  document.querySelectorAll('[data-pepago]').forEach(c=>{
+    c.onchange = async ()=>{
+      const id = c.dataset.pepago;
+      const { error } = await sb().from('pes_lancamentos')
+        .update({ pago: c.checked, pago_em: c.checked ? new Date().toISOString().slice(0,10) : null }).eq('id', id);
+      if(error) return erro(error);
+      const x = PES_LANC.find(l=>l.id===id); if(x){ x.pago = c.checked; }
+      renderPessoais();
+    };
+  });
+  document.querySelectorAll('[data-peeditar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = b.dataset.peeditar; renderPessoais(); }; });
+  document.querySelectorAll('[data-pecancelar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = null; renderPessoais(); }; });
+  document.querySelectorAll('[data-pesalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const tr = b.closest('tr');
+      const v = k => tr.querySelector('[data-pe2="'+k+'"]').value.trim();
+      const par = v('parcela').split('/');
+      const dados = { descricao: v('descricao'), valor: +v('valor')||0,
+                      parcela_num: par[0] ? parseInt(par[0]) : null,
+                      parcela_total: par[1] ? parseInt(par[1]) : null };
+      if(!dados.descricao) return alert('A descrição não pode ficar vazia.');
+      const { data, error } = await sb().from('pes_lancamentos').update(dados).eq('id', b.dataset.pesalvar).select();
+      if(error) return erro(error);
+      if(!data || !data.length) return alert('Este lançamento não é seu para editar.');
+      pesEditando = null; await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-peexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este lançamento?')) return;
+      const { error } = await sb().from('pes_lancamentos').delete().eq('id', b.dataset.peexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-prexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir esta renda?')) return;
+      const { error } = await sb().from('pes_rendas').delete().eq('id', b.dataset.prexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-piexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este investimento?')) return;
+      const { error } = await sb().from('pes_investimentos').delete().eq('id', b.dataset.piexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-pdabrir]').forEach(b=>{
+    b.onclick = async ()=>{
+      /* arquivo em area privada: abre por link temporario, valido por 1 minuto */
+      const { data, error } = await sb().storage.from('pessoais').createSignedUrl(b.dataset.pdabrir, 60);
+      if(error) return erro(error);
+      window.open(data.signedUrl, '_blank', 'noopener');
+    };
+  });
+  document.querySelectorAll('[data-pdexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Excluir este documento? O arquivo também sai do cofre.')) return;
+      const doc = PES_DOCS.find(d=>d.id===b.dataset.pdexcluir);
+      if(doc && doc.caminho) await sb().storage.from('pessoais').remove([doc.caminho]);
+      const { error } = await sb().from('pes_documentos').delete().eq('id', b.dataset.pdexcluir);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+}
+
+function ligarFormulariosPessoais(){
+  const sb = () => window.TN.sb;
+  const erro = e => alert('Não deu certo: ' + (e && e.message ? e.message : e));
+  const val = id => document.getElementById(id).value.trim();
+
+  const ant = document.getElementById('pes-mes-ant');
+  const prox = document.getElementById('pes-mes-prox');
+  if(ant) ant.onclick = ()=>{ pesMes--; if(pesMes<1){ pesMes=12; pesAno--; } pesEditando=null; renderPessoais(); };
+  if(prox) prox.onclick = ()=>{ pesMes++; if(pesMes>12){ pesMes=1; pesAno++; } pesEditando=null; renderPessoais(); };
+
+  const rep = document.getElementById('pes-repetir');
+  if(rep) rep.onclick = async ()=>{
+    const d = new Date(pesAno, pesMes-2, 1), a = d.getFullYear(), m = d.getMonth()+1;
+    const fixas = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo==='fixa');
+    const rendas = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m);
+    if(!fixas.length && !rendas.length) return alert('O mês anterior não tem fixas nem renda para repetir.');
+    const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && x.tipo==='fixa');
+    if(jaTem && !confirm('Este mês já tem despesas fixas. Trazer as do mês anterior mesmo assim?')) return;
+    if(fixas.length){
+      const { error } = await sb().from('pes_lancamentos').insert(fixas.map(x=>({
+        ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor, categoria:x.categoria })));
+      if(error) return erro(error);
+    }
+    if(rendas.length){
+      const { error } = await sb().from('pes_rendas').insert(rendas.map(x=>({
+        ano:pesAno, mes:pesMes, origem:x.origem, descricao:x.descricao, valor:x.valor })));
+      if(error) return erro(error);
+    }
+    await tnCarregarPessoais();
+  };
+
+  const f = document.getElementById('form-pes');
+  if(f) f.onsubmit = async ev=>{
+    ev.preventDefault();
+    const dados = { ano:pesAno, mes:pesMes, tipo: val('pes-tipo'), descricao: val('pes-desc'),
+                    valor: +val('pes-valor')||0, cartao: val('pes-cartao')||null,
+                    parcela_num: val('pes-pnum') ? +val('pes-pnum') : null,
+                    parcela_total: val('pes-ptot') ? +val('pes-ptot') : null,
+                    categoria: val('pes-categoria')||null };
+    const { error } = await sb().from('pes_lancamentos').insert(dados);
+    if(error) return erro(error);
+    f.reset(); await tnCarregarPessoais();
+  };
+
+  const fr = document.getElementById('form-pes-renda');
+  if(fr) fr.onsubmit = async ev=>{
+    ev.preventDefault();
+    const { error } = await sb().from('pes_rendas').insert({ ano:pesAno, mes:pesMes,
+      origem: val('pesr-origem'), descricao: val('pesr-desc')||null,
+      valor: +val('pesr-valor')||0, data: val('pesr-data')||null });
+    if(error) return erro(error);
+    fr.reset(); await tnCarregarPessoais();
+  };
+
+  const fi = document.getElementById('form-pes-inv');
+  if(fi) fi.onsubmit = async ev=>{
+    ev.preventDefault();
+    const { error } = await sb().from('pes_investimentos').insert({ data: val('pesi-data'),
+      movimento: val('pesi-mov'), tipo: val('pesi-tipo')||null, instituicao: val('pesi-inst')||null,
+      descricao: val('pesi-desc')||null, valor: +val('pesi-valor')||0 });
+    if(error) return erro(error);
+    fi.reset(); await tnCarregarPessoais();
+  };
+
+  const fd = document.getElementById('form-pes-doc');
+  if(fd) fd.onsubmit = async ev=>{
+    ev.preventDefault();
+    const arq = document.getElementById('pesd-arquivo').files[0];
+    const btn = fd.querySelector('button[type="submit"]');
+    const rot = btn.textContent;
+    btn.disabled = true; btn.textContent = 'guardando...';
+    try{
+      let caminho = null, tamanho = null;
+      if(arq){
+        const limpo = arq.name.replace(/[^A-Za-z0-9._-]/g,'_');
+        caminho = `${pesAno}/${String(pesMes).padStart(2,'0')}/${Date.now()}_${limpo}`;
+        const { error } = await sb().storage.from('pessoais').upload(caminho, arq, { upsert:false });
+        if(error) throw error;
+        tamanho = arq.size;
+      }
+      const { error } = await sb().from('pes_documentos').insert({ ano:pesAno, mes:pesMes,
+        tipo: val('pesd-tipo'), titulo: val('pesd-titulo'), referencia: val('pesd-ref')||null,
+        data_ref: val('pesd-data')||null, caminho, tamanho });
+      if(error) throw error;
+      fd.reset(); await tnCarregarPessoais();
+    }catch(e){ erro(e); }
+    finally{ btn.disabled = false; btn.textContent = rot; }
+  };
 }
 
 /* ============ CSV IMPORT ============ */
@@ -4079,6 +4508,7 @@ const VIEW_TITLES = {
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
   'parcerias':['Parcerias & bônus','Academias, pilates, cross e nutricionistas'],
   'pedidos':['Pedidos & entregas','Do WhatsApp à separação e coleta do entregador'],
+  'pessoais':['Despesas pessoais','Contas da casa, renda e guarda de documentos — particular'],
 };
 function setView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -4086,6 +4516,11 @@ function setView(view){
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   document.getElementById('topbar-title').textContent = VIEW_TITLES[view][0];
   document.getElementById('topbar-sub').textContent = VIEW_TITLES[view][1];
+  const particular = (view === 'pessoais');
+  const ctr = document.querySelector('.topbar-controls');
+  if(ctr) ctr.style.display = particular ? 'none' : '';
+  const chip = document.getElementById('store-chip');
+  if(chip) chip.parentElement.style.display = particular ? 'none' : '';
 }
 document.getElementById('nav').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-view]');
@@ -4416,6 +4851,7 @@ function renderAll(){
   renderParcerias();
   renderPedidos();
   renderPatrimonio();
+  if(ACESSO_CASA) renderPessoais();
   aplicarMenuDoPerfil(perfil==='socia');   // dados novos podem tirar uma tela da marca d'agua
 }
 /* ============ INTEGRAÇÃO SUPABASE ============ */
@@ -4487,6 +4923,7 @@ async function tnAfterLogin(sb){
   tnCarregarAcessos();
   tnCarregarConfig();
   tnCarregarPautas();
+  tnVerificarAcessoCasa();
 }
 
 async function tnInitApp(){
@@ -4621,6 +5058,7 @@ async function tnAplicarPerfil(email){
 }
 async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).insert(row); if(error) console.warn('insert',tabela,error.message);} }catch(e){ console.warn(e); } }
 
+ligarFormulariosPessoais();
 tnInitApp();
 </script>
 </body>
