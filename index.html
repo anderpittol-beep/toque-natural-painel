@@ -45,6 +45,13 @@
   nav.navlist .nav-group{font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:rgba(245,236,214,0.55);padding:14px 12px 5px 12px;font-weight:600;}
   nav.navlist .nav-group:first-child{padding-top:2px;}
   nav.navlist button .lock{margin-left:auto;font-size:11px;opacity:.7;}
+  /* Menu ainda sem dados reais: continua acessivel, mas em marca d'agua */
+  nav.navlist button.sem-dados{opacity:.42;}
+  nav.navlist button.sem-dados .tag-vazio{margin-left:auto;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;}
+  section.view.marca-dagua{position:relative;}
+  section.view.marca-dagua > *:not(.aviso-vazio){opacity:.34;filter:grayscale(.55);}
+  .aviso-vazio{border:1px dashed var(--border,rgba(0,0,0,.2));border-radius:10px;padding:10px 14px;margin:0 0 14px 0;
+               font-size:12.5px;color:var(--text-secondary,#777);background:transparent;}
   .perfil-box{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding-left:12px;border-left:1px solid var(--border);}
   .perfil-label{font-size:12px;color:var(--text-secondary);font-weight:600;}
   body[data-perfil="socia"] .perfil-label{color:var(--good);}
@@ -813,6 +820,9 @@ window.TN_CONFIG = {
           </div>
         </div>
         <div class="ig-week" id="ig-week"></div>
+        <div id="ig-week-add" style="margin-top:10px;display:none;">
+          <button class="btn ghost" id="ig-pauta-nova" style="padding:5px 12px;">+ nova pauta</button>
+        </div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Calendário de datas comemorativas</h3>
         <p class="section-desc">Ganchos de conteúdo e campanhas ao longo do ano. O mês atual aparece em destaque — use estas datas para planejar posts e promoções.</p>
@@ -2191,7 +2201,6 @@ function renderEquipeCad(){
       b.disabled = false; b.textContent = txt;
       alert(r.ok ? r.mensagem : ('Não foi possível: ' + r.erro));
       tnCarregarAcessos();
-  tnCarregarConfig();
     };
   });
   box.querySelectorAll('[data-eqconvite]').forEach(b=>{
@@ -2492,6 +2501,27 @@ function renderTarefas(){
 }
 
 /* ============ RENDER: INSTAGRAM ============ */
+/* Pautas da semana: nascem do código e passam a viver no banco, para que a
+   sócia possa ajustar pilar, formato e legenda de cada dia. */
+let IG_PAUTAS = [];
+let pautaEditando = null;
+let pautasPedidas = false;
+function pautasDaLoja(loja){
+  const doBanco = IG_PAUTAS.filter(p=>p.loja===loja).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+  if(doBanco.length) return doBanco;
+  return IG_PILARES.map((d,i)=>({ id:null, loja, ordem:i, dia:d.dia, pilar:d.pilar, fmt:d.fmt,
+                                  legenda:(IG_SUGESTOES[loja]||[])[i]||'' }));
+}
+async function tnCarregarPautas(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    pautasPedidas = true;
+    const {data} = await window.TN.sb.from('ig_pautas').select('*');
+    if(Array.isArray(data)) IG_PAUTAS = data;
+    renderInstagram();
+  }catch(e){ console.warn('pautas', e); }
+}
+
 /* Link do material padrão: fica no Supabase, então vale para a equipe toda */
 let IG_PADRAO_LINK = '';
 async function tnCarregarConfig(){
@@ -2515,15 +2545,34 @@ function aplicarPadraoIG(){
 
 function renderInstagram(){
   const loja = document.getElementById('igStoreFilter').value;
-  const sugestoes = IG_SUGESTOES[loja];
-  document.getElementById('ig-week').innerHTML = IG_PILARES.map((d,i)=>{
+  if(!pautasPedidas) tnCarregarPautas();   // primeira abertura da tela busca as pautas salvas
+  const pautas = pautasDaLoja(loja);
+  const sugestoes = pautas.map(p=>p.legenda||'');
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  document.getElementById('ig-week').innerHTML = pautas.map((d,i)=>{
     const key = loja+'-'+i;
     const postado = !!ig_state[key];
+    if(socia && pautaEditando && d.id===pautaEditando){
+      return `<div class="ig-day" style="outline:2px solid var(--accent,#1f7a4d);">
+        <input type="text" data-pe="dia" value="${esc(d.dia)}" placeholder="Dia" style="width:100%;box-sizing:border-box;margin-bottom:4px;">
+        <input type="text" data-pe="pilar" value="${esc(d.pilar)}" placeholder="Pilar" style="width:100%;box-sizing:border-box;margin-bottom:4px;">
+        <input type="text" data-pe="fmt" value="${esc(d.fmt||'')}" placeholder="Formato" style="width:100%;box-sizing:border-box;margin-bottom:4px;">
+        <textarea data-pe="legenda" placeholder="Sugestão de legenda" style="width:100%;box-sizing:border-box;min-height:52px;">${esc(d.legenda||'')}</textarea>
+        <div style="display:flex;gap:5px;margin-top:6px;">
+          <button class="btn primary" data-pasalvar="${esc(d.id)}" style="padding:3px 9px;font-size:11.5px;">salvar</button>
+          <button class="btn ghost" data-pacancelar="1" style="padding:3px 9px;font-size:11.5px;">cancelar</button>
+        </div>
+      </div>`;
+    }
     return `<div class="ig-day">
-      <div class="dname">${d.dia}</div>
-      <div class="pillar">${d.pilar}</div>
-      <div class="fmt">${d.fmt}</div>
-      <div class="cap">"${esc(sugestoes[i])}"</div>
+      ${(socia && d.id)?`<div style="display:flex;justify-content:flex-end;gap:4px;margin-bottom:2px;">
+        <button class="btn ghost" data-paeditar="${esc(d.id||'')}" title="Editar pauta" style="padding:1px 5px;font-size:11px;">✏️</button>
+        <button class="btn ghost" data-paexcluir="${esc(d.id||'')}" title="Excluir pauta" style="padding:1px 5px;font-size:11px;">🗑️</button>
+      </div>`:''}
+      <div class="dname">${esc(d.dia)}</div>
+      <div class="pillar">${esc(d.pilar)}</div>
+      <div class="fmt">${esc(d.fmt||'')}</div>
+      <div class="cap">"${esc(d.legenda||'')}"</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary);">
         <input type="checkbox" data-ig="${key}" ${postado?'checked':''}> Postado
       </label>
@@ -2536,7 +2585,7 @@ function renderInstagram(){
   /* Mesma distribuição das datas comemorativas, agora para a pauta da semana */
   document.querySelectorAll('[data-igpauta]').forEach(b=>{
     b.onclick = ()=>{
-      const i = +b.dataset.igpauta, d = IG_PILARES[i];
+      const i = +b.dataset.igpauta, d = pautas[i];
       abrirTarefaDaData({
         data: d.dia,
         titulo: d.dia + ' · ' + d.pilar + ' (' + d.fmt + ')',
@@ -2544,6 +2593,54 @@ function renderInstagram(){
       }, TODAY.getMonth(), true);
     };
   });
+  /* Editar, excluir e criar pautas — só a sócia mexe no calendário da loja */
+  document.querySelectorAll('[data-paeditar]').forEach(b=>{
+    b.onclick = ()=>{ pautaEditando = b.dataset.paeditar || null; renderInstagram(); };
+  });
+  document.querySelectorAll('[data-pacancelar]').forEach(b=>{
+    b.onclick = ()=>{ pautaEditando = null; renderInstagram(); };
+  });
+  document.querySelectorAll('[data-pasalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const card = b.closest('.ig-day');
+      const campo = k => (card.querySelector('[data-pe="'+k+'"]').value || '').trim();
+      const dados = { dia: campo('dia'), pilar: campo('pilar'), fmt: campo('fmt'), legenda: campo('legenda') };
+      if(!dados.dia || !dados.pilar) return alert('Dia e pilar são obrigatórios.');
+      b.disabled = true;
+      const { data, error } = await window.TN.sb.from('ig_pautas')
+        .update(dados).eq('id', b.dataset.pasalvar).select();
+      b.disabled = false;
+      if(error) return alert('Não deu para salvar: ' + error.message);
+      if(!data || !data.length) return alert('Só o perfil Sócio pode alterar a pauta da semana.');
+      pautaEditando = null;
+      await tnCarregarPautas();
+    };
+  });
+  document.querySelectorAll('[data-paexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      const id = b.dataset.paexcluir;
+      if(!id) return;
+      if(!confirm('Excluir esta pauta da semana?')) return;
+      const { data, error } = await window.TN.sb.from('ig_pautas').delete().eq('id', id).select();
+      if(error) return alert('Não deu para excluir: ' + error.message);
+      if(!data || !data.length) return alert('Só o perfil Sócio pode excluir uma pauta.');
+      await tnCarregarPautas();
+    };
+  });
+  const areaNova = document.getElementById('ig-week-add');
+  if(areaNova){
+    areaNova.style.display = socia ? '' : 'none';
+    const bn = document.getElementById('ig-pauta-nova');
+    if(bn) bn.onclick = async ()=>{
+      const ordem = pautas.reduce((a,p)=>Math.max(a, (p.ordem||0)+1), 0);
+      const { data, error } = await window.TN.sb.from('ig_pautas')
+        .insert({ loja, ordem, dia:'Novo dia', pilar:'Novo pilar', fmt:'', legenda:'' }).select().maybeSingle();
+      if(error) return alert('Não deu para criar: ' + error.message);
+      await tnCarregarPautas();
+      pautaEditando = data && data.id || null;
+      renderInstagram();
+    };
+  }
   aplicarPadraoIG();
   const btn = document.getElementById('ig-padrao-salvar');
   const inp = document.getElementById('ig-padrao');
@@ -3818,6 +3915,63 @@ function renderGente(){
 // Acesso de Sócio vem do login (Supabase profiles.papel='socia'); sem PIN.
 let perfil = 'colab';        // visão em uso
 let perfilReal = 'colab';    // papel verdadeiro, vindo do login
+/* Colaboradora ve so o que ela alimenta; sem menu, sem duvida de quem lanca o que */
+const VIEWS_COLAB = ['desempenho','equipe','instagram'];
+
+/* Telas que ainda nao tem dado real ficam em marca d'agua para o socio:
+   continuam navegaveis, mas ninguem confunde exemplo com numero da loja. */
+function viewTemDados(v){
+  const temProdutos = Array.isArray(PRODUCTS) && PRODUCTS.length > 0;
+  switch(v){
+    case 'margem': case 'produtos': case 'estoque': case 'validade': return temProdutos;
+    case 'clientes':  return (CLIENTES||[]).length > 0;
+    case 'parcerias': return (PARCERIAS||[]).length > 0;
+    case 'pedidos':   return (PEDIDOS||[]).length > 0;
+    default: return true;
+  }
+}
+
+function aplicarMenuDoPerfil(socia){
+  document.querySelectorAll('#nav button[data-view]').forEach(b=>{
+    const v = b.dataset.view;
+    const liberado = socia || VIEWS_COLAB.indexOf(v) !== -1;
+    b.style.display = liberado ? '' : 'none';
+    const vazio = socia && !viewTemDados(v);
+    b.classList.toggle('sem-dados', vazio);
+    let tag = b.querySelector('.tag-vazio');
+    if(vazio && !tag){
+      tag = document.createElement('span');
+      tag.className = 'tag-vazio';
+      tag.textContent = 'sem dados';
+      b.appendChild(tag);
+    }else if(!vazio && tag){ tag.remove(); }
+  });
+  /* grupo sem nenhum item visivel some junto */
+  document.querySelectorAll('#nav .nav-group').forEach(g=>{
+    let algum = false;
+    for(let el = g.nextElementSibling; el && !el.classList.contains('nav-group'); el = el.nextElementSibling){
+      if(el.matches('button[data-view]') && el.style.display !== 'none') algum = true;
+    }
+    g.style.display = algum ? '' : 'none';
+  });
+  aplicarMarcaDagua(socia);
+}
+
+function aplicarMarcaDagua(socia){
+  document.querySelectorAll('section.view').forEach(sec=>{
+    const v = sec.id.replace('view-','');
+    const vazio = socia && !viewTemDados(v);
+    sec.classList.toggle('marca-dagua', vazio);
+    let aviso = sec.querySelector(':scope > .aviso-vazio');
+    if(vazio && !aviso){
+      aviso = document.createElement('div');
+      aviso.className = 'aviso-vazio';
+      aviso.textContent = 'Sem dados reais ainda — o que aparece abaixo é só a estrutura da tela. Assim que os lançamentos entrarem, ela sai da marca d\u2019água.';
+      sec.insertBefore(aviso, sec.firstChild);
+    }else if(!vazio && aviso){ aviso.remove(); }
+  });
+}
+
 function applyPerfil(){
   document.body.setAttribute('data-perfil', perfil);
   const socia = perfil==='socia';
@@ -3832,13 +3986,15 @@ function applyPerfil(){
     tg.onclick = ()=>{ perfil = socia ? 'colab' : 'socia'; applyPerfil(); renderAll(); };
   }
   document.getElementById('nav-gente').style.display = socia ? '' : 'none';
+  aplicarMenuDoPerfil(socia);
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
   document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : (perfilReal==='socia' ? 'Prévia: Colaboradora' : 'Perfil: Colaboradora');
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
-    if(atual && atual.id==='view-gente') setView('visao-geral');
+    const vAtual = atual ? atual.id.replace('view-','') : '';
+    if(VIEWS_COLAB.indexOf(vAtual) === -1) setView('desempenho');
   }
   renderCaixa();
   renderDesempenho();   // os campos de meta mudam de editavel para leitura
@@ -4260,6 +4416,7 @@ function renderAll(){
   renderParcerias();
   renderPedidos();
   renderPatrimonio();
+  aplicarMenuDoPerfil(perfil==='socia');   // dados novos podem tirar uma tela da marca d'agua
 }
 /* ============ INTEGRAÇÃO SUPABASE ============ */
 function tnSetUpdate(txt){ const lu=document.getElementById('last-update'); if(lu) lu.textContent='Última atualização: '+txt; }
@@ -4328,6 +4485,8 @@ async function tnAfterLogin(sb){
   }catch(_){}
   await tnLoadAll(sb);
   tnCarregarAcessos();
+  tnCarregarConfig();
+  tnCarregarPautas();
 }
 
 async function tnInitApp(){
