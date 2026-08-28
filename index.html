@@ -766,6 +766,12 @@ window.TN_CONFIG = {
             <h3 style="font-size:14px;margin:0 0 10px 0;">Nova tarefa</h3>
             <form class="feedback-form" id="form-tarefa">
               <select id="tk-colaborador"></select>
+              <select id="tk-loja" title="Loja de destino da tarefa">
+                <option value="">Loja: todas</option>
+                <option>Itaipulândia</option>
+                <option>Ouro Verde</option>
+                <option>Toledo</option>
+              </select>
               <input type="text" id="tk-titulo" placeholder="Descrição da tarefa" required style="grid-column:1/-1;">
               <input type="text" id="tk-prazo" placeholder="Prazo (ex: 20/08/2026)">
               <select id="tk-area" title="Ação do Plano de Ação"></select>
@@ -783,6 +789,16 @@ window.TN_CONFIG = {
           <div class="toolbar" style="justify-content:space-between;">
             <h3 style="font-size:14px;margin:0;">Quadro de tarefas</h3>
             <div class="filters">
+              <label class="hint" for="tkFiltroLoja">Loja</label>
+              <select id="tkFiltroLoja">
+                <option value="">Todas</option>
+                <option>Itaipulândia</option>
+                <option>Ouro Verde</option>
+                <option>Toledo</option>
+                <option value="__sem">Sem loja</option>
+              </select>
+              <label class="hint" for="tkFiltroPessoa">Pessoa</label>
+              <select id="tkFiltroPessoa"><option value="">Todas</option></select>
               <label class="hint" for="tarefaView">Ver por</label>
               <select id="tarefaView">
                 <option value="status">Status (fluxo)</option>
@@ -2249,6 +2265,13 @@ function populateEquipeSelects(){
   const opts = EQUIPE.map(e=>`<option value="${esc(e.nome)}">${esc(e.nome)} — ${esc(e.cargo)} (${esc(e.loja)})</option>`).join('');
   document.getElementById('fb-colaborador').innerHTML = opts;
   document.getElementById('tk-colaborador').innerHTML = opts;
+  const fp = document.getElementById('tkFiltroPessoa');
+  if(fp){
+    const atual = fp.value;
+    fp.innerHTML = '<option value="">Todas</option>' +
+      EQUIPE.map(e=>`<option value="${esc(e.nome)}">${esc(e.nome)}</option>`).join('');
+    fp.value = atual;
+  }
   renderEquipeCad();
 }
 let equipeEditando = null;
@@ -2388,6 +2411,9 @@ function tarefaCard(t){
       <input type="text" data-ed="titulo" value="${esc(t.titulo)}" placeholder="Descrição" style="width:100%;box-sizing:border-box;margin-bottom:5px;">
       <select data-ed="colaborador" style="width:100%;margin-bottom:5px;">${opPes}</select>
       <select data-ed="area" style="width:100%;margin-bottom:5px;">${opArea}</select>
+      <select data-ed="loja" style="width:100%;margin-bottom:5px;">${
+        ['','Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option value="${esc(l)}" ${l===(t.loja||'')?'selected':''}>${l?esc(l):'Loja: todas'}</option>`).join('')
+      }</select>
       <input type="text" data-ed="prazo" value="${esc(t.prazo||'')}" placeholder="Prazo (ex: 20/08/2026)" style="width:100%;box-sizing:border-box;margin-bottom:5px;">
       <select data-ed="prioridade" style="width:100%;margin-bottom:5px;">${opPri}</select>
       <textarea data-ed="detalhe" placeholder="Detalhes" style="width:100%;box-sizing:border-box;min-height:56px;">${esc(t.detalhe||'')}</textarea>
@@ -2406,7 +2432,10 @@ function tarefaCard(t){
       </div>`:''}
     </div>
     <div>${esc(t.titulo)}</div>
-    ${t.area?`<div style="margin-top:5px;"><span class="store-tag">${esc(t.area)}</span></div>`:''}
+    ${(t.area || t.loja)?`<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">
+      ${t.area?`<span class="store-tag">${esc(t.area)}</span>`:''}
+      ${t.loja?`<span class="store-tag" style="background:rgba(31,122,77,.12);">${esc(t.loja)}</span>`:''}
+    </div>`:''}
     <div class="meta">Prazo: ${esc(t.prazo||'—')} · ${esc(t.prioridade)}</div>
     ${(()=>{ /* material anexado à tarefa: link à mão, sem precisar abrir os detalhes */
       const m = String(t.detalhe||'').match(/https?:\/\/\S+/);
@@ -2544,7 +2573,17 @@ function renderPlanoAcao(){
 }
 /* Tarefas exibidas no quadro: só micro tarefas, respeitando o filtro de ação */
 function tarefasVisiveis(){
-  return TAREFAS.filter(t=> t.tipo!=='acao' && (!planoFiltro || (t.area||'Outros')===planoFiltro));
+  const fLoja = (document.getElementById('tkFiltroLoja')||{}).value || '';
+  const fPessoa = (document.getElementById('tkFiltroPessoa')||{}).value || '';
+  return TAREFAS.filter(t=>{
+    if(t.tipo==='acao') return false;
+    if(planoFiltro && (t.area||'Outros')!==planoFiltro) return false;
+    /* "Sem loja" existe para achar as tarefas antigas, que ainda nao tinham o campo */
+    if(fLoja === '__sem'){ if(t.loja) return false; }
+    else if(fLoja && t.loja !== fLoja) return false;
+    if(fPessoa && t.colaborador !== fPessoa) return false;
+    return true;
+  });
 }
 function renderTarefas(){
   renderPlanoAcao();
@@ -2608,8 +2647,8 @@ function renderTarefas(){
       const val = k => { const el = card.querySelector('[data-ed="'+k+'"]'); return el ? el.value.trim() : t[k]; };
       const titulo = val('titulo');
       if(!titulo){ alert('A descrição da tarefa não pode ficar vazia.'); return; }
-      Object.assign(t, {titulo, colaborador:val('colaborador'), area:val('area'), prazo:val('prazo'), prioridade:val('prioridade'), detalhe:val('detalhe')});
-      if(t.id) tnUpdate('tarefas',{id:t.id},{titulo:t.titulo,colaborador:t.colaborador,area:t.area,prazo:t.prazo,prioridade:t.prioridade,detalhe:t.detalhe});
+      Object.assign(t, {titulo, colaborador:val('colaborador'), area:val('area'), loja:val('loja'), prazo:val('prazo'), prioridade:val('prioridade'), detalhe:val('detalhe')});
+      if(t.id) tnUpdate('tarefas',{id:t.id},{titulo:t.titulo,colaborador:t.colaborador,area:t.area,loja:t.loja||null,prazo:t.prazo,prioridade:t.prioridade,detalhe:t.detalhe});
       tarefaEditando = null; renderTarefas();
     };
   });
@@ -4949,12 +4988,25 @@ document.getElementById('form-equipe').addEventListener('submit', e=>{
   e.target.reset();
   populateEquipeSelects(); renderAll();
 });
+/* Ao escolher a pessoa, a loja dela ja vem sugerida — socias ficam em "todas" */
+(function(){
+  const pes = document.getElementById('tk-colaborador'), lj = document.getElementById('tk-loja');
+  if(pes && lj) pes.addEventListener('change', ()=>{
+    const e = EQUIPE.find(x=>x.nome===pes.value);
+    lj.value = (e && e.loja && e.loja !== 'Todas') ? e.loja : '';
+  });
+  ['tkFiltroLoja','tkFiltroPessoa'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', renderTarefas);
+  });
+})();
+
 document.getElementById('form-tarefa').addEventListener('submit', e=>{
   e.preventDefault();
   const _area = (document.getElementById('tk-area')||{}).value || 'Outros';
-  const _t = {tipo:'tarefa', area:_area, colaborador: document.getElementById('tk-colaborador').value, titulo: document.getElementById('tk-titulo').value, prazo: document.getElementById('tk-prazo').value, prioridade: document.getElementById('tk-prioridade').value, status:'pendente', detalhe:''};
+  const _t = {tipo:'tarefa', area:_area, colaborador: document.getElementById('tk-colaborador').value, loja: (document.getElementById('tk-loja')||{}).value || '', titulo: document.getElementById('tk-titulo').value, prazo: document.getElementById('tk-prazo').value, prioridade: document.getElementById('tk-prioridade').value, status:'pendente', detalhe:''};
   TAREFAS.push(_t);
-  tnInsert('tarefas',_t);
+  tnInsert('tarefas', Object.assign({}, _t, {loja: _t.loja || null}));
   document.getElementById('tk-titulo').value=''; document.getElementById('tk-prazo').value='';
   renderTarefas();
 });
@@ -5034,7 +5086,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
-  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
+  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,loja:r.loja||'',titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
   populateEquipeSelects();
   await carregarPrefs();    // restaura a última análise deste usuário
