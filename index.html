@@ -1086,6 +1086,11 @@ window.TN_CONFIG = {
             <input type="text" id="pesi-inst" placeholder="Instituição">
             <input type="text" id="pesi-desc" placeholder="Descrição">
             <input type="number" id="pesi-valor" placeholder="Valor" step="0.01" required>
+            <input type="number" id="pesi-cdi" placeholder="% do CDI (ex.: 102)" step="0.01">
+            <input type="date" id="pesi-carencia" title="Carência: até quando fica preso">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;">
+              <input type="checkbox" id="pesi-trava"> com trava
+            </label>
             <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar investimento</button>
           </form>
         </div>
@@ -4166,6 +4171,7 @@ let ACESSO_CASA = false;
 let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
 let pesEditando = null;
 let rendaEditando = null;
+let invEditando = null;
 
 /* Ultimo lancamento de uma origem no ano em tela: e o valor que vale hoje */
 function ultimaRenda(origem){
@@ -4432,18 +4438,46 @@ function renderPessoais(){
 
   /* investimentos */
   const saldoInv = PES_INV.reduce((a,x)=> a + (x.movimento==='resgate' ? -(+x.valor||0) : (+x.valor||0)), 0);
+  const hojeISO2 = new Date().toISOString().slice(0,10);
+  /* carencia vencida deixa de prender o dinheiro: mostramos "liberado" */
+  const selosTrava = x => {
+    if(!x.trava) return '<span class="hint">sem trava</span>';
+    if(x.carencia && x.carencia <= hojeISO2) return '<span class="badge b-good"><span class="dot"></span>liberado</span>';
+    return `<span class="badge b-warning"><span class="dot"></span>preso${x.carencia?' até '+dataBR(x.carencia):''}</span>`;
+  };
   el('pes-investimentos').innerHTML = `<div class="card">
     <div class="toolbar" style="justify-content:space-between;align-items:center;">
       <h3 style="font-size:14px;margin:0;">Movimentações</h3><span class="strong">Aplicado: ${BRL(saldoInv)}</span></div>
     <table class="table" style="margin-top:8px;"><thead><tr>
-      <th>Data</th><th>Movimento</th><th>Tipo</th><th>Instituição</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
-      ${PES_INV.map(x=>`<tr>
+      <th>Data</th><th>Movimento</th><th>Tipo</th><th>Instituição</th><th>Descrição</th><th>Valor</th>
+      <th>% do CDI</th><th>Trava</th><th></th></tr></thead><tbody>
+      ${PES_INV.map(x=>{
+        if(invEditando === x.id){
+          return `<tr>
+            <td><input type="date" data-iv="data" value="${x.data?String(x.data).slice(0,10):''}" style="width:135px;"></td>
+            <td><select data-iv="movimento">${['aporte','resgate'].map(m=>`<option value="${m}" ${m===x.movimento?'selected':''}>${m==='aporte'?'Aporte':'Resgate'}</option>`).join('')}</select></td>
+            <td><input type="text" data-iv="tipo" value="${esc(x.tipo||'')}" style="width:90px;"></td>
+            <td><input type="text" data-iv="instituicao" value="${esc(x.instituicao||'')}" style="width:100px;"></td>
+            <td><input type="text" data-iv="descricao" value="${esc(x.descricao||'')}" style="width:110px;"></td>
+            <td><input type="number" data-iv="valor" value="${+x.valor||0}" step="0.01" style="width:100px;"></td>
+            <td><input type="number" data-iv="cdi_pct" value="${x.cdi_pct!=null?+x.cdi_pct:''}" step="0.01" placeholder="102" style="width:70px;"></td>
+            <td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-iv="trava" ${x.trava?'checked':''}>trava</label>
+                <input type="date" data-iv="carencia" value="${x.carencia?String(x.carencia).slice(0,10):''}" style="width:135px;margin-top:4px;"></td>
+            <td style="white-space:nowrap;">
+              <button class="btn primary" data-pisalvar="${esc(x.id)}" style="padding:2px 8px;font-size:11.5px;">salvar</button>
+              <button class="btn ghost" data-picancelar="1" style="padding:2px 8px;font-size:11.5px;">cancelar</button></td></tr>`;
+        }
+        return `<tr>
         <td class="hint">${x.data?dataBR(x.data):'—'}</td>
         <td>${x.movimento==='resgate'?'Resgate':'Aporte'}</td>
         <td>${esc(x.tipo||'—')}</td><td>${esc(x.instituicao||'—')}</td><td>${esc(x.descricao||'—')}</td>
         <td class="strong">${BRL(+x.valor)}</td>
-        <td><button class="btn ghost" data-piexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
-        || '<tr><td colspan="7" class="hint">Nenhum investimento lançado.</td></tr>'}
+        <td>${x.cdi_pct!=null?(+x.cdi_pct).toLocaleString('pt-BR')+'%':'—'}</td>
+        <td>${selosTrava(x)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn ghost" data-pieditar="${esc(x.id)}" title="Editar" style="padding:1px 6px;">✏️</button>
+          <button class="btn ghost" data-piexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`;
+      }).join('') || '<tr><td colspan="9" class="hint">Nenhum investimento lançado.</td></tr>'}
       </tbody></table></div>`;
 
   /* documentos: extrato entra na fila de conferencia sozinho */
@@ -4535,6 +4569,28 @@ function ligarAcoesPessoais(){
       const { error } = await sb().from('pes_rendas').delete().eq('id', b.dataset.prexcluir);
       if(error) return erro(error);
       await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-pieditar]').forEach(b=>{
+    b.onclick = ()=>{ invEditando = b.dataset.pieditar; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-picancelar]').forEach(b=>{
+    b.onclick = ()=>{ invEditando = null; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-pisalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const tr = b.closest('tr');
+      const campo = k => { const el2 = tr.querySelector('[data-iv="'+k+'"]'); return el2 ? el2.value.trim() : ''; };
+      const marcado = k => { const el2 = tr.querySelector('[data-iv="'+k+'"]'); return el2 ? el2.checked : false; };
+      const { data, error } = await sb().from('pes_investimentos').update({
+        data: campo('data')||null, movimento: campo('movimento'), tipo: campo('tipo')||null,
+        instituicao: campo('instituicao')||null, descricao: campo('descricao')||null,
+        valor: +campo('valor')||0, cdi_pct: campo('cdi_pct') ? +campo('cdi_pct') : null,
+        trava: marcado('trava'), carencia: campo('carencia')||null
+      }).eq('id', b.dataset.pisalvar).select();
+      if(error) return erro(error);
+      if(!data || !data.length) return alert('Só o perfil autorizado pode alterar este investimento.');
+      invEditando = null; await recarregar();
     };
   });
   document.querySelectorAll('[data-piexcluir]').forEach(b=>{
@@ -4666,7 +4722,10 @@ function ligarFormulariosPessoais(){
     ev.preventDefault();
     const { error } = await sb().from('pes_investimentos').insert({ data: val('pesi-data'),
       movimento: val('pesi-mov'), tipo: val('pesi-tipo')||null, instituicao: val('pesi-inst')||null,
-      descricao: val('pesi-desc')||null, valor: +val('pesi-valor')||0 });
+      descricao: val('pesi-desc')||null, valor: +val('pesi-valor')||0,
+      cdi_pct: val('pesi-cdi') ? +val('pesi-cdi') : null,
+      trava: document.getElementById('pesi-trava').checked,
+      carencia: val('pesi-carencia')||null });
     if(error) return erro(error);
     fi.reset(); await tnCarregarPessoais();
   };
