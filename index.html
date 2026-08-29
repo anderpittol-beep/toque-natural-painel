@@ -1004,7 +1004,8 @@ window.TN_CONFIG = {
           <button class="btn ghost" id="pes-repetir" style="padding:5px 12px;" title="Traz as fixas e a renda do mês anterior">repetir mês anterior</button>
         </div>
 
-        <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 16px 0;"></div>
+        <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 12px 0;"></div>
+        <div id="pes-proximos" style="margin-bottom:16px;"></div>
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
@@ -4221,6 +4222,72 @@ function renderPessoais(){
     <div class="card stat-tile"><div class="label">Cartão</div><div class="value">${BRL(cartao)}</div><div class="hint">${porTipo('cartao').length} item(ns)</div></div>
     <div class="card stat-tile"><div class="label">Fixas + variáveis</div><div class="value">${BRL(fixa+varia)}</div><div class="hint">${BRL(fixa)} fixas · ${BRL(varia)} variáveis</div></div>
     <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
+
+  /* Os tres proximos meses, encadeados: o que sobra de um entra no seguinte.
+     Um mes sem fixas ou sem renda lancada herda as do mes anterior — sao os
+     valores que se repetem todo mes; cartao e variaveis contam so o que ja
+     esta lancado naquele mes (parcelas futuras, por exemplo). */
+  const somaMesTipo = (a, m, t) => PES_LANC
+    .filter(x => +x.ano===a && +x.mes===m && x.tipo===t)
+    .reduce((s2,x)=> s2 + (+x.valor||0), 0);
+
+  function previsaoDoMes(a, m){
+    const cart = somaMesTipo(a,m,'cartao');
+    const varia2 = somaMesTipo(a,m,'variavel');
+    /* Herda do ultimo mes que realmente tem lancamento, nao so do anterior:
+       assim Novembro nao zera so porque Outubro ainda nao foi lancado. */
+    const buscarAtras = (temNoMes, somaNoMes) => {
+      for(let k=1; k<=12; k++){
+        const d2 = new Date(a, m-1-k, 1);
+        const aa = d2.getFullYear(), mm = d2.getMonth()+1;
+        if(temNoMes(aa,mm)) return somaNoMes(aa,mm);
+      }
+      return 0;
+    };
+    let fixa2 = somaMesTipo(a,m,'fixa');
+    let fixaHerdada = false;
+    if(!PES_LANC.some(x=>+x.ano===a && +x.mes===m && x.tipo==='fixa')){
+      fixa2 = buscarAtras(
+        (aa,mm)=>PES_LANC.some(x=>+x.ano===aa && +x.mes===mm && x.tipo==='fixa'),
+        (aa,mm)=>somaMesTipo(aa,mm,'fixa'));
+      fixaHerdada = fixa2 > 0;
+    }
+    let ren = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m).reduce((s2,x)=>s2+(+x.valor||0),0);
+    let rendaHerdada = false;
+    if(!PES_RENDAS.some(x=>+x.ano===a && +x.mes===m)){
+      ren = buscarAtras(
+        (aa,mm)=>PES_RENDAS.some(x=>+x.ano===aa && +x.mes===mm),
+        (aa,mm)=>PES_RENDAS.filter(x=>+x.ano===aa && +x.mes===mm).reduce((s2,x)=>s2+(+x.valor||0),0));
+      rendaHerdada = ren > 0;
+    }
+    const desp = cart + fixa2 + varia2;
+    return {ano:a, mes:m, cart, fixa:fixa2, varia:varia2, desp, renda:ren,
+            saldo: ren - desp, fixaHerdada, rendaHerdada};
+  }
+
+  let acumulado = 0;
+  const proximos = [0,1,2].map(k=>{
+    const d = new Date(pesAno, pesMes-1+k, 1);
+    const pv = previsaoDoMes(d.getFullYear(), d.getMonth()+1);
+    acumulado += pv.saldo;
+    return {...pv, acumulado, nome: MESES_NOMES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2)};
+  });
+  el('pes-proximos').innerHTML = `<div class="grid grid-3">${proximos.map((x,i)=>`
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:14px;margin:0;">${esc(x.nome)}${i===0?' <span class="hint" style="font-weight:400;">· mês em tela</span>':''}</h3>
+        <span class="strong" style="color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</span>
+      </div>
+      <table class="table" style="margin-top:6px;"><tbody>
+        <tr><td>Renda</td><td style="text-align:right;">${BRL(x.renda)}${x.rendaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
+        <tr><td>Cartão</td><td style="text-align:right;">${BRL(x.cart)}</td></tr>
+        <tr><td>Fixas</td><td style="text-align:right;">${BRL(x.fixa)}${x.fixaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
+        <tr><td>Variáveis</td><td style="text-align:right;">${BRL(x.varia)}</td></tr>
+        <tr><td class="strong">Sobra do mês</td><td class="strong" style="text-align:right;color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>
+        <tr><td class="hint">Acumulado até aqui</td><td class="hint" style="text-align:right;">${BRL(x.acumulado)}</td></tr>
+      </tbody></table>
+    </div>`).join('')}</div>
+    <p class="hint" style="margin:6px 0 0 0;">O acumulado encadeia os meses: a sobra (ou o buraco) de um entra no seguinte. "Prevista" quer dizer que o mês ainda não tem lançamento próprio e repetiu o anterior.</p>`;
 
   const podeMexer = ACESSO_CASA;
   const linha = x => {
