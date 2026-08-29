@@ -299,14 +299,7 @@ window.TN_CONFIG = {
         </div>
         <div class="section-block">
           <h2 class="section-title">Receitas x despesas</h2>
-          <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
-          <div class="toolbar">
-            <div class="import-box">
-              <button class="btn" id="btn-import-financeiro">Importar relatório financeiro (CSV)</button>
-              <button class="btn ghost" id="btn-template-financeiro">baixar modelo</button>
-              <input type="file" id="file-financeiro" accept=".csv">
-            </div>
-          </div>
+          <p class="section-desc">Receita e despesa de cada loja, mês a mês. Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
           <div class="card chart-card">
             <div class="legend">
               <div class="item">Em cada mês: <strong style="margin:0 4px;">R</strong> = Receita &nbsp;·&nbsp; <strong style="margin:0 4px;">D</strong> = Despesa. Cores = participação de cada loja.</div>
@@ -4669,14 +4662,6 @@ wireImport('btn-import-clientes','file-clientes','btn-template-clientes',
   ['nome','loja','telefone','ultima_compra(AAAA-MM-DD)'],
   rows=>{
     CLIENTES = rows.map(r=>({nome:r['nome']||'', loja:r['loja']||'', telefone:r['telefone']||'', ultimaCompra:r['ultima_compra(aaaa-mm-dd)']||r['ultima_compra']||TODAY.toISOString().slice(0,10)}));
-  });
-wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
-  ['loja','mes','receita','despesa'],
-  rows=>{
-    rows.forEach(r=>{
-      const loja=r['loja']; const mes=r['mes']; const idx = FINANCEIRO.meses.indexOf(mes);
-      if(FINANCEIRO[loja] && idx>=0){ FINANCEIRO[loja].receita[idx]=num(r['receita'])??FINANCEIRO[loja].receita[idx]; FINANCEIRO[loja].despesa[idx]=num(r['despesa'])??FINANCEIRO[loja].despesa[idx]; }
-    });
   });
 
 /* ============ NAV / VIEW SWITCH ============ */
