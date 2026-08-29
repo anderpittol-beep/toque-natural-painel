@@ -254,7 +254,7 @@ window.TN_CONFIG = {
       <button data-view="pedidos"><span class="navicon">▤</span>Pedidos &amp; entregas</button>
       <button data-view="equipe"><span class="navicon">◎</span>Equipe: tarefas</button>
       <button data-view="instagram"><span class="navicon">◫</span>Instagram — pautas</button>
-      <button data-view="pessoais" id="nav-pessoais" style="display:none;"><span class="navicon">⌂</span>Despesas pessoais <span class="lock">🔒</span></button>
+      <button data-view="pessoais" id="nav-pessoais" style="display:none;"><span class="navicon">⌂</span>Finanças particulares <span class="lock">🔒</span></button>
     </nav>
   </aside>
   <main>
@@ -990,9 +990,9 @@ window.TN_CONFIG = {
         </div>
       </section>
 
-      <!-- DESPESAS PESSOAIS (casa - Anderson e Andreia) -->
+      <!-- FINANÇAS PARTICULARES (casa - Anderson e Andreia) -->
       <section class="view" id="view-pessoais">
-        <h2 class="section-title">Despesas pessoais <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>particular</span></h2>
+        <h2 class="section-title">Finanças particulares <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>particular</span></h2>
         <p class="section-desc">Contas da casa, renda e guarda de documentos. Área restrita: só quem está na lista de acesso enxerga estes números — nem os demais sócios, nem a equipe das lojas.</p>
 
         <div class="toolbar" style="justify-content:space-between;align-items:center;gap:8px;">
@@ -4156,7 +4156,7 @@ function applyPerfil(){
 }
 
 
-/* ============ DESPESAS PESSOAIS (casa) ============
+/* ============ FINANÇAS PARTICULARES (casa) ============
    Dados particulares de Anderson e Andreia. Quem enxerga e definido pela tabela
    pes_acesso no banco (funcao is_casa()), nao pelo papel de socio — ha outros
    socios nas lojas que nao devem ver isto. A tela so aparece para quem passa
@@ -4763,7 +4763,7 @@ const VIEW_TITLES = {
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
   'parcerias':['Parcerias & bônus','Academias, pilates, cross e nutricionistas'],
   'pedidos':['Pedidos & entregas','Do WhatsApp à separação e coleta do entregador'],
-  'pessoais':['Despesas pessoais','Contas da casa, renda e guarda de documentos — particular'],
+  'pessoais':['Finanças particulares','Contas da casa, renda e guarda de documentos — particular'],
 };
 function setView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
