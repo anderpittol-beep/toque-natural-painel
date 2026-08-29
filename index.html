@@ -1028,24 +1028,24 @@ window.TN_CONFIG = {
 
         <div id="pes-listas"></div>
 
-        <h3 style="font-size:15px;margin:22px 0 4px 0;">Renda do mês</h3>
-        <p class="section-desc">Salário, o que entra da Andreia, prefeitura e as receitas de soja, milho e peixe. O histórico por origem fica logo abaixo.</p>
-        <div class="card" style="margin-bottom:12px;">
-          <form class="feedback-form" id="form-pes-renda" style="grid-template-columns:repeat(5,1fr);">
-            <select id="pesr-origem">
-              <option>Salário</option><option>Andreia</option><option>Prefeitura</option>
-              <option>Soja</option><option>Milho</option><option>Peixe</option><option>Outros</option>
-            </select>
-            <input type="text" id="pesr-desc" placeholder="Descrição">
-            <input type="number" id="pesr-valor" placeholder="Valor" step="0.01" required>
-            <input type="date" id="pesr-data">
-            <button class="btn primary" type="submit">Lançar renda</button>
-          </form>
-        </div>
-
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Histórico</h3>
         <p class="section-desc">Como fechou cada mês e de onde veio a renda do ano.</p>
         <div id="pes-historico"></div>
+        <details style="margin-top:8px;">
+          <summary class="hint" style="cursor:pointer;">+ lançar renda de uma origem nova</summary>
+          <div class="card" style="margin-top:8px;">
+            <form class="feedback-form" id="form-pes-renda" style="grid-template-columns:repeat(5,1fr);">
+              <select id="pesr-origem">
+                <option>Salário</option><option>Andreia</option><option>Prefeitura</option>
+                <option>Soja</option><option>Milho</option><option>Peixe</option><option>Outros</option>
+              </select>
+              <input type="text" id="pesr-desc" placeholder="Descrição">
+              <input type="number" id="pesr-valor" placeholder="Valor" step="0.01" required>
+              <input type="date" id="pesr-data">
+              <button class="btn primary" type="submit">Lançar renda</button>
+            </form>
+          </div>
+        </details>
 
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Safras — renda extra</h3>
