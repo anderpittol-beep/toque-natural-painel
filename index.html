@@ -4446,16 +4446,27 @@ function renderPessoais(){
         || '<tr><td colspan="7" class="hint">Nenhum investimento lançado.</td></tr>'}
       </tbody></table></div>`;
 
-  /* documentos */
-  el('pes-documentos').innerHTML = `<div class="card"><table class="table"><thead><tr>
-      <th>Tipo</th><th>Título</th><th>Referência</th><th>Data</th><th>Competência</th><th></th></tr></thead><tbody>
+  /* documentos: extrato entra na fila de conferencia sozinho */
+  const naFila = PES_DOCS.filter(x=>x.conferencia==='pendente').length;
+  const selo = x => {
+    if(x.conferencia==='pendente') return '<span class="badge b-warning"><span class="dot"></span>aguardando conferência</span>';
+    if(x.conferencia==='conferida') return `<span class="badge b-good"><span class="dot"></span>conferido${x.conferido_em?' em '+dataBR(x.conferido_em):''}</span>`;
+    return '<span class="hint">—</span>';
+  };
+  el('pes-documentos').innerHTML = `
+    ${naFila?`<p class="hint" style="margin:0 0 8px 0;"><strong>${naFila}</strong> extrato(s) aguardando conferência — me peça "confere os extratos" que eu comparo com os lançamentos.</p>`:''}
+    <div class="card"><table class="table"><thead><tr>
+      <th>Tipo</th><th>Título</th><th>Referência</th><th>Data</th><th>Competência</th><th>Conferência</th><th></th></tr></thead><tbody>
       ${PES_DOCS.map(x=>`<tr>
         <td>${esc(x.tipo)}</td><td>${esc(x.titulo)}</td><td>${esc(x.referencia||'—')}</td>
         <td class="hint">${x.data_ref?dataBR(x.data_ref):'—'}</td>
         <td class="hint">${x.mes?((MES_ABREV[x.mes]||x.mes)+'/'+String(x.ano).slice(2)):x.ano}</td>
+        <td>${selo(x)}${x.conferencia_obs?`<div class="hint" style="margin-top:3px;">${esc(x.conferencia_obs)}</div>`:''}</td>
         <td style="white-space:nowrap;">${x.caminho?`<button class="btn ghost" data-pdabrir="${esc(x.caminho)}" style="padding:1px 8px;font-size:11.5px;">abrir</button>`:''}
+        ${x.conferencia==='pendente'?`<button class="btn ghost" data-pdconferido="${esc(x.id)}" title="Marcar como conferido" style="padding:1px 8px;font-size:11.5px;">conferido</button>`:''}
+        ${x.conferencia==='conferida'?`<button class="btn ghost" data-pdrever="${esc(x.id)}" title="Voltar para a fila" style="padding:1px 8px;font-size:11.5px;">rever</button>`:''}
         <button class="btn ghost" data-pdexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
-        || '<tr><td colspan="6" class="hint">Nenhum documento guardado ainda.</td></tr>'}
+        || '<tr><td colspan="7" class="hint">Nenhum documento guardado ainda.</td></tr>'}
       </tbody></table></div>`;
 
   ligarAcoesPessoais();
@@ -4565,6 +4576,23 @@ function ligarAcoesPessoais(){
       const { data, error } = await sb().storage.from('pessoais').createSignedUrl(b.dataset.pdabrir, 60);
       if(error) return erro(error);
       window.open(data.signedUrl, '_blank', 'noopener');
+    };
+  });
+  document.querySelectorAll('[data-pdconferido]').forEach(b=>{
+    b.onclick = async ()=>{
+      const { error } = await sb().from('pes_documentos')
+        .update({ conferencia:'conferida', conferido_em: new Date().toISOString().slice(0,10) })
+        .eq('id', b.dataset.pdconferido);
+      if(error) return erro(error);
+      await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-pdrever]').forEach(b=>{
+    b.onclick = async ()=>{
+      const { error } = await sb().from('pes_documentos')
+        .update({ conferencia:'pendente', conferido_em:null }).eq('id', b.dataset.pdrever);
+      if(error) return erro(error);
+      await recarregar();
     };
   });
   document.querySelectorAll('[data-pdexcluir]').forEach(b=>{
@@ -4684,6 +4712,8 @@ function ligarFormulariosPessoais(){
       }
       const { error } = await sb().from('pes_documentos').insert({ ano:pesAno, mes:pesMes,
         tipo: val('pesd-tipo'), titulo: val('pesd-titulo'), referencia: val('pesd-ref')||null,
+        /* extrato entra na fila sozinho; os demais tipos nao precisam de conferencia */
+        conferencia: /^Extrato/.test(val('pesd-tipo')) ? 'pendente' : null,
         data_ref: val('pesd-data')||null, caminho, tamanho });
       if(error) throw error;
       fd.reset(); await tnCarregarPessoais();
