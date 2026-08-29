@@ -1042,7 +1042,6 @@ window.TN_CONFIG = {
             <button class="btn primary" type="submit">Lançar renda</button>
           </form>
         </div>
-        <div id="pes-rendas"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Histórico</h3>
         <p class="section-desc">Como fechou cada mês e de onde veio a renda do ano.</p>
@@ -4166,6 +4165,14 @@ let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [], PES_SAFRAS = []
 let ACESSO_CASA = false;
 let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
 let pesEditando = null;
+let rendaEditando = null;
+
+/* Ultimo lancamento de uma origem no ano em tela: e o valor que vale hoje */
+function ultimaRenda(origem){
+  return PES_RENDAS
+    .filter(r=>+r.ano===pesAno && r.origem===origem)
+    .sort((a,b)=> (+b.mes - +a.mes) || String(b.data||'').localeCompare(String(a.data||'')) || String(b.criado_em||'').localeCompare(String(a.criado_em||'')))[0] || null;
+}
 
 const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas', variavel:'Despesas variáveis' };
 const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
@@ -4329,17 +4336,6 @@ function renderPessoais(){
   }).join('')}</div>
     <p class="hint" style="margin:6px 0 0 0;">Fixas e variáveis já quitadas neste mês: ${BRL(pago)}. A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
 
-  /* renda do mes */
-  const rendas = pesDoMes(PES_RENDAS);
-  el('pes-rendas').innerHTML = `<div class="card"><table class="table"><thead><tr>
-      <th>Origem</th><th>Descrição</th><th>Data</th><th>Valor</th><th></th></tr></thead><tbody>
-      ${rendas.map(r=>`<tr>
-        <td class="strong">${esc(r.origem)}</td><td>${esc(r.descricao||'—')}</td>
-        <td class="hint">${r.data?dataBR(r.data):'—'}</td><td class="strong">${BRL(+r.valor)}</td>
-        <td><button class="btn ghost" data-prexcluir="${esc(r.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
-        || '<tr><td colspan="5" class="hint">Nenhuma renda lançada neste mês.</td></tr>'}
-      </tbody></table></div>`;
-
   /* historico: ultimos 12 meses + renda por origem no ano */
   const meses = [];
   for(let k=11;k>=0;k--){
@@ -4360,10 +4356,29 @@ function renderPessoais(){
         || '<tr><td colspan="4" class="hint">Sem histórico ainda.</td></tr>'}
       </tbody></table></div>
     <div class="card"><h3 style="font-size:14px;margin:0 0 8px 0;">Renda por origem em ${pesAno}</h3>
-      <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th></tr></thead><tbody>
-      ${listaOrigens.map(([o,v])=>`<tr><td>${esc(o)}</td><td class="strong">${BRL(v)}</td></tr>`).join('')
-        || '<tr><td colspan="2" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
-      </tbody></table></div></div>`;
+      <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th><th>Último lançamento</th><th></th></tr></thead><tbody>
+      ${listaOrigens.map(([o,v])=>{
+        const u = ultimaRenda(o);
+        if(u && rendaEditando === u.id){
+          return `<tr>
+            <td class="strong">${esc(o)}</td>
+            <td class="hint">${BRL(v)}</td>
+            <td><input type="number" data-re="valor" value="${+u.valor||0}" step="0.01" style="width:110px;">
+                <input type="date" data-re="data" value="${u.data?String(u.data).slice(0,10):''}" style="width:135px;margin-top:4px;"></td>
+            <td style="white-space:nowrap;">
+              <button class="btn primary" data-prsalvar="${esc(u.id)}" style="padding:2px 8px;font-size:11.5px;">salvar</button>
+              <button class="btn ghost" data-prcancelar="1" style="padding:2px 8px;font-size:11.5px;">cancelar</button></td></tr>`;
+        }
+        return `<tr>
+          <td class="strong">${esc(o)}</td>
+          <td class="strong">${BRL(v)}</td>
+          <td>${u?BRL(+u.valor):'—'}${u?` <span class="hint">· ${MES_ABREV[+u.mes]||u.mes}/${String(u.ano).slice(2)}</span>`:''}</td>
+          <td style="white-space:nowrap;">${u?`<button class="btn ghost" data-preditar="${esc(u.id)}" title="Editar o último lançamento" style="padding:1px 6px;">✏️</button>
+          <button class="btn ghost" data-prexcluir="${esc(u.id)}" title="Excluir o último lançamento" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
+      }).join('') || '<tr><td colspan="4" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
+      </tbody></table>
+      <p class="hint" style="margin:8px 0 0 0;">Editar e excluir agem sobre o <strong>último lançamento</strong> de cada origem — é ele que vale como valor atual.</p>
+    </div></div>`;
 
   /* safras: cada uma fecha sozinha, por isso ficam fora dos indicadores do mes */
   const porSafra = {};
@@ -4484,6 +4499,23 @@ function ligarAcoesPessoais(){
       const { error } = await sb().from('pes_lancamentos').delete().eq('id', b.dataset.peexcluir);
       if(error) return erro(error);
       await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-preditar]').forEach(b=>{
+    b.onclick = ()=>{ rendaEditando = b.dataset.preditar; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-prcancelar]').forEach(b=>{
+    b.onclick = ()=>{ rendaEditando = null; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-prsalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const tr = b.closest('tr');
+      const val = k => { const el2 = tr.querySelector('[data-re="'+k+'"]'); return el2 ? el2.value.trim() : ''; };
+      const { data, error } = await sb().from('pes_rendas')
+        .update({ valor: +val('valor')||0, data: val('data')||null }).eq('id', b.dataset.prsalvar).select();
+      if(error) return erro(error);
+      if(!data || !data.length) return alert('Só o perfil autorizado pode alterar esta renda.');
+      rendaEditando = null; await recarregar();
     };
   });
   document.querySelectorAll('[data-prexcluir]').forEach(b=>{
