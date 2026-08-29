@@ -561,14 +561,10 @@ window.TN_CONFIG = {
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 8px 0;">Benefícios do colaborador</h3>
           <p class="hint" style="margin:0 0 10px 0;">Vantagens de quem faz parte da equipe Toque Natural Celeiro.</p>
-          <div class="grid grid-2" style="gap:12px;">
+          <div class="grid" style="gap:12px;">
             <div class="card" style="background:var(--surface-2,transparent);">
               <div class="strong" style="font-size:15px;">🛒 10% de desconto em compras</div>
               <div class="hint" style="margin-top:4px;">Desconto de 10% para o colaborador em compras de produtos na loja.</div>
-            </div>
-            <div class="card" style="background:var(--surface-2,transparent);">
-              <div class="strong" style="font-size:15px;">⭐ Programa de pontos</div>
-              <div class="hint" style="margin-top:4px;">Acúmulo de pontos nas compras, que podem ser trocados por benefícios internos.</div>
             </div>
           </div>
         </div>
@@ -5001,6 +4997,7 @@ function renderAll(){
   renderVisaoGeral();
   renderFinanceiro();
   renderCaixa();
+  renderDisponibilidade();   // sem isto a tela so montava depois de salvar um registro
   renderGente();
   renderProjecao();
   renderStoreShare();
