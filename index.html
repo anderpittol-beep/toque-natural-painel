@@ -4231,16 +4231,51 @@ function renderPessoais(){
   const el = id => document.getElementById(id);
   el('pes-competencia').textContent = pesComp();
 
-  const lanc = pesDoMes(PES_LANC);
-  const porTipo = t => lanc.filter(x=>x.tipo===t);
+  const lancReais = pesDoMes(PES_LANC);
+
+  /* Fixas e variaveis se repetem todo mes: quando o mes ainda nao tem nenhuma,
+     o painel mostra as do ultimo mes que teve, marcadas como "do mes anterior".
+     Elas ja entram nos totais; viram lancamento de verdade quando voce clicar
+     em "trazer para este mes" (ou usar o repetir mes anterior la em cima).
+     O cartao nao herda: a fatura muda todo mes e as parcelas ja sao lancadas. */
+  function herdadasDoTipo(t){
+    for(let k=1; k<=12; k++){
+      const d = new Date(pesAno, pesMes-1-k, 1);
+      const a = d.getFullYear(), m = d.getMonth()+1;
+      const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo===t);
+      if(doMes.length) return doMes.map(x=>({...x, id:null, pago:false, pago_em:null,
+                                            herdada:true, de:`${MES_ABREV[m]||m}/${String(a).slice(2)}`}));
+    }
+    return [];
+  }
+  const porTipo = t => {
+    const reais = lancReais.filter(x=>x.tipo===t);
+    if(reais.length || t==='cartao') return reais;
+    return herdadasDoTipo(t);
+  };
+  const lanc = ['cartao','fixa','variavel'].reduce((a,t)=>a.concat(porTipo(t)), []);
   const cartao = pesSoma(porTipo('cartao')), fixa = pesSoma(porTipo('fixa')), varia = pesSoma(porTipo('variavel'));
   const despesa = cartao + fixa + varia;
-  const renda = pesSoma(pesDoMes(PES_RENDAS));
+  /* a renda tambem se repete: sem lancamento no mes, vale a do ultimo mes que teve */
+  function rendasDoMes(){
+    const reais = pesDoMes(PES_RENDAS);
+    if(reais.length) return reais;
+    for(let k=1; k<=12; k++){
+      const d = new Date(pesAno, pesMes-1-k, 1);
+      const a = d.getFullYear(), m = d.getMonth()+1;
+      const doMes = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m);
+      if(doMes.length) return doMes.map(x=>({...x, id:null, herdada:true}));
+    }
+    return [];
+  }
+  const rendasMes = rendasDoMes();
+  const rendaHerdada = rendasMes.length && rendasMes[0].herdada;
+  const renda = pesSoma(rendasMes);
   const saldo = renda - despesa;
   const pago = pesSoma(lanc.filter(x=>x.pago && x.tipo!=='cartao'));
 
   el('pes-kpis').innerHTML = `
-    <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${pesDoMes(PES_RENDAS).length} lançamento(s)</div></div>
+    <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${rendasMes.length} lançamento(s)${rendaHerdada?' · repetida do mês anterior':''}</div></div>
     <div class="card stat-tile"><div class="label">Cartão</div><div class="value">${BRL(cartao)}</div><div class="hint">${porTipo('cartao').length} item(ns)</div></div>
     <div class="card stat-tile"><div class="label">Fixas + variáveis</div><div class="value">${BRL(fixa+varia)}</div><div class="hint">${BRL(fixa)} fixas · ${BRL(varia)} variáveis</div></div>
     <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
@@ -4338,11 +4373,16 @@ function renderPessoais(){
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a marcar */
     const comCheck = t !== 'cartao';
     const colunas = comCheck ? 5 : 4;
+    const herdado = itens.length && itens[0].herdada;
     return `<div class="card">
       <div class="toolbar" style="justify-content:space-between;align-items:center;">
         <h3 style="font-size:14px;margin:0;">${PES_ROTULO[t]}</h3>
         <span class="strong">${BRL(tot)}</span>
       </div>
+      ${herdado?`<div class="hint" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span>repetido de ${esc(itens[0].de)}</span>
+        <button class="btn ghost" data-petrazer="${t}" style="padding:2px 8px;font-size:11px;">trazer para este mês</button>
+      </div>`:''}
       <table class="table" style="margin-top:8px;"><thead><tr>
         <th>Descrição</th><th>Parcela</th><th>Valor</th>${comCheck?'<th>Situação</th>':''}<th></th>
       </tr></thead><tbody>
@@ -4544,6 +4584,26 @@ function ligarAcoesPessoais(){
       if(error) return erro(error);
       const x = PES_LANC.find(l=>l.id===id); if(x){ x.pago = c.checked; }
       renderPessoais();
+    };
+  });
+  document.querySelectorAll('[data-petrazer]').forEach(b=>{
+    b.onclick = async ()=>{
+      const t = b.dataset.petrazer;
+      /* repete no mes em tela o que veio do mes anterior, ai vira lancamento de verdade */
+      for(let k=1; k<=12; k++){
+        const d = new Date(pesAno, pesMes-1-k, 1);
+        const a = d.getFullYear(), m = d.getMonth()+1;
+        const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo===t);
+        if(doMes.length){
+          const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
+            ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
+            cartao:x.cartao||null, categoria:x.categoria||null,
+            parcela_num:x.parcela_num||null, parcela_total:x.parcela_total||null })));
+          if(error) return erro(error);
+          break;
+        }
+      }
+      await recarregar();
     };
   });
   document.querySelectorAll('[data-peeditar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = b.dataset.peeditar; renderPessoais(); }; });
