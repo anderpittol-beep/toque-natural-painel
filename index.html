@@ -290,12 +290,7 @@ window.TN_CONFIG = {
       <!-- VISÃO GERAL -->
       <section class="view active" id="view-visao-geral">
         <div class="section-block">
-          <div class="grid grid-4" id="kpi-cards"></div>
-        </div>
-        <div class="section-block">
-          <h2 class="section-title">Alertas que pedem ação</h2>
-          <p class="section-desc">Contagens calculadas a partir dos cadastros de produto, estoque, validade e clientes. Clique para ir direto à lista.</p>
-          <div class="grid grid-4" id="alert-cards"></div>
+          <div class="grid grid-3" id="kpi-cards"></div>
         </div>
         <div class="section-block">
           <h2 class="section-title">Receitas x despesas</h2>
@@ -1611,34 +1606,19 @@ function renderVisaoGeral(){
   let receita=0, despesa=0;
   lojas.forEach(l=>{ receita += somaMeses(l,'receita'); despesa += somaMeses(l,'despesa'); });
   const lucro = receita-despesa;
-  const clientesAtivos = filteredClientes().filter(c=>computeCliente(c).status==='ativo').length;
   const ticketMedio = null; // not enough data modelled — omitted intentionally
 
   const kpis = [
     {label:'Faturamento ('+periodoLabel()+')', value: BRL(receita), accent:''},
     {label:'Despesas ('+periodoLabel()+')', value: BRL(despesa), accent:''},
     {label:'Lucro ('+periodoLabel()+')', value: BRL(lucro), accent: lucro>=0?'accent-good':'accent-critical'},
-    {label:'Clientes ativos (≤30 dias)', value: clientesAtivos, accent:''},
   ];
   document.getElementById('kpi-cards').innerHTML = kpis.map(k=>`
     <div class="card stat-tile ${k.accent}"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>
   `).join('');
 
-  const margemIncompleta = prods.filter(p=>computeMargem(p).status==='incompleto').length;
-  const margemProblema = prods.filter(p=>['baixa','prejuizo'].includes(computeMargem(p).status)).length;
-  const estoqueRepor = prods.filter(p=>computeEstoque(p).status!=='ok').length;
-  const validadeCritica = prods.filter(p=>['vencido','critico'].includes(computeValidade(p).status)).length;
-
-  const alerts = [
-    {label:'Produtos com margem incompleta', value:margemIncompleta, view:'margem', accent:'accent-critical'},
-    {label:'Produtos com margem baixa ou prejuízo', value:margemProblema, view:'margem', accent:'accent-warning'},
-    {label:'Produtos para repor estoque', value:estoqueRepor, view:'estoque', accent:'accent-warning'},
-    {label:'Produtos vencidos ou vencendo em 15 dias', value:validadeCritica, view:'validade', accent:'accent-critical'},
-  ];
-  document.getElementById('alert-cards').innerHTML = alerts.map(a=>`
-    <div class="card stat-tile clickable ${a.accent}" data-jump="${a.view}"><div class="label">${a.label}</div><div class="value">${a.value}</div></div>
-  `).join('');
-  document.querySelectorAll('[data-jump]').forEach(el=>el.onclick=()=>setView(el.dataset.jump));
+  /* A faixa de alertas saiu da tela enquanto os cadastros de produto, estoque e
+     validade nao tem dados reais — quando tiverem, ela volta com este bloco. */
 
   // lucro por loja (empilhado quando Todas)
   const idx = mesesIdx(), meses = mesesLabels();
