@@ -146,6 +146,9 @@
   @media(max-width:1000px){.kanban{grid-template-columns:1fr;}}
   .kcol h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);margin:0 0 10px 0;}
   .kcard{background:var(--surface-card);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;font-size:12.5px;}
+  /* tarefa concluida sai da frente: fica em marca d'agua e volta ao normal no hover */
+  .kcard.feita{opacity:.45;filter:grayscale(.5);transition:opacity .15s,filter .15s;}
+  .kcard.feita:hover{opacity:1;filter:none;}
   .kcard .who{font-weight:600;color:var(--text-primary);margin-bottom:3px;}
   .kcard .meta{color:var(--text-muted);font-size:11px;margin-top:5px;}
   .feedback-item{border-bottom:1px solid var(--gridline);padding:12px 0;}
@@ -2408,7 +2411,7 @@ function tarefaCard(t){
       </div>
     </div>`;
   }
-  return `<div class="kcard">
+  return `<div class="kcard${status==='concluida'?' feita':''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
       <div class="who">${prioDot(t.prioridade)}${esc(t.colaborador)}</div>
       ${socia?`<div style="flex-shrink:0;">
