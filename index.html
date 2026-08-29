@@ -57,9 +57,9 @@
   body[data-perfil="socia"] .perfil-label{color:var(--good);}
   nav.navlist .navicon{font-size:15px;width:18px;text-align:center;}
   main{flex:1;min-width:0;}
-  .topbar{position:sticky;top:0;background:var(--surface-2);z-index:5;padding:16px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
-  .topbar h1{font-size:18px;margin:0 0 2px 0;}
-  .topbar .sub{font-size:12.5px;color:var(--text-muted);}
+  .topbar{position:sticky;top:0;background:var(--surface-2);z-index:5;padding:8px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .topbar h1{font-size:16px;margin:0;line-height:1.25;}
+  .topbar .sub{font-size:11.5px;color:var(--text-muted);line-height:1.3;}
   /* Cor de acento por loja: Itaipulândia=verde, Ouro Verde=laranja, Toledo=preto/branco */
   :root{ --store-accent:#1f5c3f; --store-accent-soft:rgba(31,92,63,0.12); }
   body[data-store="Itaipulândia"]{ --store-accent:#1f7a4d; --store-accent-soft:rgba(31,122,77,0.13); }
@@ -71,8 +71,12 @@
   .store-chip .sdot{width:9px;height:9px;border-radius:50%;background:var(--store-accent);flex-shrink:0;}
   .btn.primary{background:var(--store-accent);border-color:var(--store-accent);}
   .hbar-fill{background:var(--store-accent);}
-  .topbar-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-  .store-logo{height:38px;width:auto;margin-left:4px;}
+  .topbar-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:12px;}
+  .topbar-controls .hint{font-size:11px;}
+  .topbar-controls input[type=checkbox]{width:13px;height:13px;}
+  .store-logo{height:30px;width:auto;margin-left:4px;}
+  /* no tema escuro a marca vira branca: verde e preto somem no fundo */
+  @media (prefers-color-scheme: dark){ .store-logo{filter:brightness(0) invert(1);opacity:.92;} }
   select, input[type=number], input[type=text]{font-family:inherit;font-size:13px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface-card);color:var(--text-primary);}
   .content{padding:22px 28px 60px 28px;}
   section.view{display:none;}
@@ -253,22 +257,24 @@ window.TN_CONFIG = {
   <main>
     <div class="topbar">
       <div>
-        <h1 id="topbar-title">Visão geral</h1>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+          <h1 id="topbar-title">Visão geral</h1>
+          <span class="store-chip" id="store-chip"><span class="sdot"></span><span id="store-chip-label">Todas as lojas</span></span>
+        </div>
         <div class="sub" id="topbar-sub">Toque Natural Celeiro · consolidado das 3 lojas</div>
-        <div style="margin-top:7px;"><span class="store-chip" id="store-chip"><span class="sdot"></span><span id="store-chip-label">Todas as lojas</span></span></div>
       </div>
       <div class="topbar-controls">
-        <span class="hint">Comparar meses</span>
+        <span class="hint">Meses</span>
         <span id="anoTabs" style="display:inline-flex;gap:4px;align-items:center;"></span>
         <span id="mesChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;"></span>
-        <button class="btn ghost" id="mesLimpar" style="padding:3px 8px;font-size:12px;">todos</button>
-        <button class="btn ghost" id="mesNenhum" style="padding:3px 8px;font-size:12px;">desmarcar</button>
+        <button class="btn ghost" id="mesLimpar" style="padding:2px 7px;font-size:11px;">todos</button>
+        <button class="btn ghost" id="mesNenhum" style="padding:2px 7px;font-size:11px;">limpar</button>
         <span style="opacity:.35;">|</span>
-        <span class="hint">Comparar lojas</span>
+        <span class="hint">Lojas</span>
         <span id="storeChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">
-          <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Itaipulândia" checked> Itaipulândia</label>
-          <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Ouro Verde" checked> Ouro Verde</label>
-          <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Toledo" checked> Toledo</label>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Itaipulândia" checked> Itaipulândia</label>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Ouro Verde" checked> Ouro Verde</label>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Toledo" checked> Toledo</label>
         </span>
         <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
@@ -788,17 +794,20 @@ window.TN_CONFIG = {
         <div class="section-block" style="margin-top:20px;">
           <div class="toolbar" style="justify-content:space-between;">
             <h3 style="font-size:14px;margin:0;">Quadro de tarefas</h3>
-            <div class="filters">
-              <label class="hint" for="tkFiltroLoja">Loja</label>
-              <select id="tkFiltroLoja">
-                <option value="">Todas</option>
-                <option>Itaipulândia</option>
-                <option>Ouro Verde</option>
-                <option>Toledo</option>
-                <option value="__sem">Sem loja</option>
-              </select>
-              <label class="hint" for="tkFiltroPessoa">Pessoa</label>
-              <select id="tkFiltroPessoa"><option value="">Todas</option></select>
+            <div class="filters" style="align-items:flex-start;">
+              <!-- loja e pessoa empilhadas: dois seletores curtos ocupam a altura de um campo -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <select id="tkFiltroLoja" style="font-size:11.5px;padding:2px 6px;" title="Filtrar por loja">
+                  <option value="">Loja: todas</option>
+                  <option>Itaipulândia</option>
+                  <option>Ouro Verde</option>
+                  <option>Toledo</option>
+                  <option value="__sem">Sem loja</option>
+                </select>
+                <select id="tkFiltroPessoa" style="font-size:11.5px;padding:2px 6px;" title="Filtrar por pessoa">
+                  <option value="">Quem: todos</option>
+                </select>
+              </div>
               <label class="hint" for="tarefaView">Ver por</label>
               <select id="tarefaView">
                 <option value="status">Status (fluxo)</option>
@@ -1363,7 +1372,13 @@ function applyStoreTheme(){
   const label = c.length>=STORES.length ? 'Todas as lojas' : (c.length>1 ? 'Comparando: '+c.join(' · ') : c[0]);
   document.getElementById('store-chip-label').textContent = label;
   const logo = document.getElementById('store-logo');
-  if(logo) logo.src = TN_LOGOS[STORE_LOGO_COLOR[s] || 'green'];
+  if(logo){
+    /* a marca preta do Toledo desaparece no tema escuro: nele usamos a verde */
+    let cor = STORE_LOGO_COLOR[s] || 'green';
+    const escuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if(escuro && cor === 'black') cor = 'green';
+    logo.src = TN_LOGOS[cor];
+  }
 }
 function filteredProducts(){
   const s = currentStore();
@@ -1555,7 +1570,7 @@ function renderMesFiltro(){
   const anos = anosDisponiveis();
   if(!anos.length){ tabs.innerHTML=''; box.innerHTML=''; return; }
   if(!anos.includes(anoAtivo)) anoAtivo = anos[anos.length-1];   // por padrão, o ano mais recente
-  tabs.innerHTML = anos.map(a=>`<button class="btn ${a===anoAtivo?'primary':'ghost'}" data-ano="${esc(a)}" style="padding:3px 9px;font-size:12px;">20${esc(a)}</button>`).join('');
+  tabs.innerHTML = anos.map(a=>`<button class="btn ${a===anoAtivo?'primary':'ghost'}" data-ano="${esc(a)}" style="padding:2px 7px;font-size:11.5px;">20${esc(a)}</button>`).join('');
   /* Os doze meses sempre à vista, em duas fileiras — assim dá para escolher o
      recorte sem depender de quais meses já têm dado carregado. */
   const comDados = new Set((FINANCEIRO.meses||[]).filter(x=>x.split("/")[1]===anoAtivo));
@@ -1563,12 +1578,12 @@ function renderMesFiltro(){
     const lab = m + '/' + anoAtivo;
     const on  = (mesesSel === null) || mesesSel.includes(lab);
     const tem = comDados.has(lab);
-    return `<label title="${tem?'':'sem dados neste mês'}" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;${tem?'cursor:pointer;':'opacity:.4;cursor:not-allowed;'}">
+    return `<label title="${tem?'':'sem dados neste mês'}" style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;${tem?'cursor:pointer;':'opacity:.4;cursor:not-allowed;'}">
       <input type="checkbox" class="mes-chk" value="${esc(lab)}" ${on&&tem?'checked':''} ${tem?'':'disabled'}> ${esc(m)}</label>`;
   }).join('');
-  box.innerHTML = `<span style="display:inline-flex;flex-direction:column;gap:3px;">
-      <span style="display:inline-flex;gap:10px;">${linha(1,6)}</span>
-      <span style="display:inline-flex;gap:10px;">${linha(7,12)}</span>
+  box.innerHTML = `<span style="display:inline-flex;flex-direction:column;gap:2px;">
+      <span style="display:inline-flex;gap:7px;">${linha(1,6)}</span>
+      <span style="display:inline-flex;gap:7px;">${linha(7,12)}</span>
     </span>`;
   tabs.querySelectorAll('[data-ano]').forEach(b=>{ b.onclick=()=>{ anoAtivo=b.dataset.ano; salvarPrefs(); renderMesFiltro(); }; });
   box.querySelectorAll('.mes-chk').forEach(chk=>{
@@ -2268,7 +2283,7 @@ function populateEquipeSelects(){
   const fp = document.getElementById('tkFiltroPessoa');
   if(fp){
     const atual = fp.value;
-    fp.innerHTML = '<option value="">Todas</option>' +
+    fp.innerHTML = '<option value="">Quem: todos</option>' +
       EQUIPE.map(e=>`<option value="${esc(e.nome)}">${esc(e.nome)}</option>`).join('');
     fp.value = atual;
   }
