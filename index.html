@@ -4450,7 +4450,15 @@ function renderPessoais(){
   const hojeISO2 = new Date().toISOString().slice(0,10);
   /* carencia vencida deixa de prender o dinheiro: mostramos "liberado" */
   const selosTrava = x => {
-    if(!x.trava) return '<span class="hint">sem trava</span>';
+    if(!x.trava){
+      /* sem trava nao tem carencia: o dinheiro esta disponivel desde o aporte —
+         deixamos a data escrita para nao restar duvida na hora de resgatar */
+      const desde = x.data ? dataBR(x.data) : null;
+      const naData = (x.carencia_dias != null) ? liberaEm(x.data, x.carencia_dias) : null;
+      return `<span class="badge b-good"><span class="dot"></span>sem trava</span>
+        <div class="hint" style="margin-top:2px;">${desde ? 'disponível desde '+desde : 'resgate a qualquer momento'}${
+          naData ? ' · rende cheio a partir de '+dataBR(naData) : ''}</div>`;
+    }
     const dias = x.carencia_dias != null ? x.carencia_dias : null;
     const libera = x.carencia || liberaEm(x.data, dias);
     const rotuloDias = dias != null ? `<div class="hint" style="margin-top:2px;">${dias} dias</div>` : '';
