@@ -146,6 +146,9 @@
   @media(max-width:1000px){.kanban{grid-template-columns:1fr;}}
   .kcol h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);margin:0 0 10px 0;}
   .kcard{background:var(--surface-card);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;font-size:12.5px;}
+  /* tarefa concluida sai da frente: fica em marca d'agua e volta ao normal no hover */
+  .kcard.feita{opacity:.45;filter:grayscale(.5);transition:opacity .15s,filter .15s;}
+  .kcard.feita:hover{opacity:1;filter:none;}
   .kcard .who{font-weight:600;color:var(--text-primary);margin-bottom:3px;}
   .kcard .meta{color:var(--text-muted);font-size:11px;margin-top:5px;}
   .feedback-item{border-bottom:1px solid var(--gridline);padding:12px 0;}
@@ -251,7 +254,7 @@ window.TN_CONFIG = {
       <button data-view="pedidos"><span class="navicon">▤</span>Pedidos &amp; entregas</button>
       <button data-view="equipe"><span class="navicon">◎</span>Equipe: tarefas</button>
       <button data-view="instagram"><span class="navicon">◫</span>Instagram — pautas</button>
-      <button data-view="pessoais" id="nav-pessoais" style="display:none;"><span class="navicon">⌂</span>Despesas pessoais <span class="lock">🔒</span></button>
+      <button data-view="pessoais" id="nav-pessoais" style="display:none;"><span class="navicon">⌂</span>Finanças particulares <span class="lock">🔒</span></button>
     </nav>
   </aside>
   <main>
@@ -538,7 +541,7 @@ window.TN_CONFIG = {
       <!-- DESEMPENHO DE VENDAS -->
       <section class="view" id="view-desempenho">
         <h2 class="section-title">Vendas &amp; caixa diário</h2>
-        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: almoço para quem superou a meta da semana, café para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café para quem superou a meta da semana, almoço para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
         <div class="card" >
@@ -561,14 +564,10 @@ window.TN_CONFIG = {
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 8px 0;">Benefícios do colaborador</h3>
           <p class="hint" style="margin:0 0 10px 0;">Vantagens de quem faz parte da equipe Toque Natural Celeiro.</p>
-          <div class="grid grid-2" style="gap:12px;">
+          <div class="grid" style="gap:12px;">
             <div class="card" style="background:var(--surface-2,transparent);">
               <div class="strong" style="font-size:15px;">🛒 10% de desconto em compras</div>
               <div class="hint" style="margin-top:4px;">Desconto de 10% para o colaborador em compras de produtos na loja.</div>
-            </div>
-            <div class="card" style="background:var(--surface-2,transparent);">
-              <div class="strong" style="font-size:15px;">⭐ Programa de pontos</div>
-              <div class="hint" style="margin-top:4px;">Acúmulo de pontos nas compras, que podem ser trocados por benefícios internos.</div>
             </div>
           </div>
         </div>
@@ -991,9 +990,9 @@ window.TN_CONFIG = {
         </div>
       </section>
 
-      <!-- DESPESAS PESSOAIS (casa - Anderson e Andreia) -->
+      <!-- FINANÇAS PARTICULARES (casa - Anderson e Andreia) -->
       <section class="view" id="view-pessoais">
-        <h2 class="section-title">Despesas pessoais <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>particular</span></h2>
+        <h2 class="section-title">Finanças particulares <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>particular</span></h2>
         <p class="section-desc">Contas da casa, renda e guarda de documentos. Área restrita: só quem está na lista de acesso enxerga estes números — nem os demais sócios, nem a equipe das lojas.</p>
 
         <div class="toolbar" style="justify-content:space-between;align-items:center;gap:8px;">
@@ -1005,7 +1004,8 @@ window.TN_CONFIG = {
           <button class="btn ghost" id="pes-repetir" style="padding:5px 12px;" title="Traz as fixas e a renda do mês anterior">repetir mês anterior</button>
         </div>
 
-        <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 16px 0;"></div>
+        <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 12px 0;"></div>
+        <div id="pes-proximos" style="margin-bottom:16px;"></div>
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
@@ -1042,7 +1042,6 @@ window.TN_CONFIG = {
             <button class="btn primary" type="submit">Lançar renda</button>
           </form>
         </div>
-        <div id="pes-rendas"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Histórico</h3>
         <p class="section-desc">Como fechou cada mês e de onde veio a renda do ano.</p>
@@ -2065,7 +2064,7 @@ function renderDesempenho(){
   // ===== Premiações (por % da meta) =====
   let premSemana=null;
   if(wAtual){ nomes.forEach(n=>{ const meta=metaSem(n); const pct=meta>0?(wAtual.tot[n]||0)/meta*100:0; if((wAtual.tot[n]||0)>0 && (!premSemana||pct>premSemana.pct)) premSemana={pessoa:n,pct,label:wAtual.label}; }); }
-  // Mês (café): maior % da meta mensal
+  // Mês (almoço): maior % da meta mensal
   const mRef = TODAY.getMonth(), yRef=TODAY.getFullYear();
   const totMes={};
   vendas.forEach(v=>{ const dt=parseBR(v.data); if(dt&&dt.getMonth()===mRef&&dt.getFullYear()===yRef) totMes[v.colab]=(totMes[v.colab]||0)+v.valor; });
@@ -2085,8 +2084,8 @@ function renderDesempenho(){
       <div class="delta">${esc(detalhe)}</div>
     </div>`;
   document.getElementById('premios').innerHTML =
-    card('🍽️','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — almoço'):'Sem vendas na semana','accent-good')
-   +card('☕','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — café'):'Sem vendas no mês','')
+    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café'):'Sem vendas na semana','accent-good')
+   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço'):'Sem vendas no mês','')
    +card('🍽️','3 meses seguidos', premTri&&premTri.pessoa, premTri?'Destaque 3 meses seguidos — almoço com as sócias':'Ninguém em 3 meses seguidos','accent-warning')
    +card('💰','Melhor desempenho anual', premAno&&premAno.pessoa, premAno?(premAno.c+' destaque(s) no ano — bonificação salarial'):'Em apuração','');
 }
@@ -2412,7 +2411,7 @@ function tarefaCard(t){
       </div>
     </div>`;
   }
-  return `<div class="kcard">
+  return `<div class="kcard${status==='concluida'?' feita':''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
       <div class="who">${prioDot(t.prioridade)}${esc(t.colaborador)}</div>
       ${socia?`<div style="flex-shrink:0;">
@@ -4157,7 +4156,7 @@ function applyPerfil(){
 }
 
 
-/* ============ DESPESAS PESSOAIS (casa) ============
+/* ============ FINANÇAS PARTICULARES (casa) ============
    Dados particulares de Anderson e Andreia. Quem enxerga e definido pela tabela
    pes_acesso no banco (funcao is_casa()), nao pelo papel de socio — ha outros
    socios nas lojas que nao devem ver isto. A tela so aparece para quem passa
@@ -4166,6 +4165,14 @@ let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [], PES_SAFRAS = []
 let ACESSO_CASA = false;
 let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
 let pesEditando = null;
+let rendaEditando = null;
+
+/* Ultimo lancamento de uma origem no ano em tela: e o valor que vale hoje */
+function ultimaRenda(origem){
+  return PES_RENDAS
+    .filter(r=>+r.ano===pesAno && r.origem===origem)
+    .sort((a,b)=> (+b.mes - +a.mes) || String(b.data||'').localeCompare(String(a.data||'')) || String(b.criado_em||'').localeCompare(String(a.criado_em||'')))[0] || null;
+}
 
 const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas', variavel:'Despesas variáveis' };
 const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
@@ -4215,13 +4222,79 @@ function renderPessoais(){
   const despesa = cartao + fixa + varia;
   const renda = pesSoma(pesDoMes(PES_RENDAS));
   const saldo = renda - despesa;
-  const pago = pesSoma(lanc.filter(x=>x.pago));
+  const pago = pesSoma(lanc.filter(x=>x.pago && x.tipo!=='cartao'));
 
   el('pes-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${pesDoMes(PES_RENDAS).length} lançamento(s)</div></div>
     <div class="card stat-tile"><div class="label">Cartão</div><div class="value">${BRL(cartao)}</div><div class="hint">${porTipo('cartao').length} item(ns)</div></div>
     <div class="card stat-tile"><div class="label">Fixas + variáveis</div><div class="value">${BRL(fixa+varia)}</div><div class="hint">${BRL(fixa)} fixas · ${BRL(varia)} variáveis</div></div>
     <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
+
+  /* Os tres proximos meses, encadeados: o que sobra de um entra no seguinte.
+     Um mes sem fixas ou sem renda lancada herda as do mes anterior — sao os
+     valores que se repetem todo mes; cartao e variaveis contam so o que ja
+     esta lancado naquele mes (parcelas futuras, por exemplo). */
+  const somaMesTipo = (a, m, t) => PES_LANC
+    .filter(x => +x.ano===a && +x.mes===m && x.tipo===t)
+    .reduce((s2,x)=> s2 + (+x.valor||0), 0);
+
+  function previsaoDoMes(a, m){
+    const cart = somaMesTipo(a,m,'cartao');
+    const varia2 = somaMesTipo(a,m,'variavel');
+    /* Herda do ultimo mes que realmente tem lancamento, nao so do anterior:
+       assim Novembro nao zera so porque Outubro ainda nao foi lancado. */
+    const buscarAtras = (temNoMes, somaNoMes) => {
+      for(let k=1; k<=12; k++){
+        const d2 = new Date(a, m-1-k, 1);
+        const aa = d2.getFullYear(), mm = d2.getMonth()+1;
+        if(temNoMes(aa,mm)) return somaNoMes(aa,mm);
+      }
+      return 0;
+    };
+    let fixa2 = somaMesTipo(a,m,'fixa');
+    let fixaHerdada = false;
+    if(!PES_LANC.some(x=>+x.ano===a && +x.mes===m && x.tipo==='fixa')){
+      fixa2 = buscarAtras(
+        (aa,mm)=>PES_LANC.some(x=>+x.ano===aa && +x.mes===mm && x.tipo==='fixa'),
+        (aa,mm)=>somaMesTipo(aa,mm,'fixa'));
+      fixaHerdada = fixa2 > 0;
+    }
+    let ren = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m).reduce((s2,x)=>s2+(+x.valor||0),0);
+    let rendaHerdada = false;
+    if(!PES_RENDAS.some(x=>+x.ano===a && +x.mes===m)){
+      ren = buscarAtras(
+        (aa,mm)=>PES_RENDAS.some(x=>+x.ano===aa && +x.mes===mm),
+        (aa,mm)=>PES_RENDAS.filter(x=>+x.ano===aa && +x.mes===mm).reduce((s2,x)=>s2+(+x.valor||0),0));
+      rendaHerdada = ren > 0;
+    }
+    const desp = cart + fixa2 + varia2;
+    return {ano:a, mes:m, cart, fixa:fixa2, varia:varia2, desp, renda:ren,
+            saldo: ren - desp, fixaHerdada, rendaHerdada};
+  }
+
+  let acumulado = 0;
+  const proximos = [0,1,2].map(k=>{
+    const d = new Date(pesAno, pesMes-1+k, 1);
+    const pv = previsaoDoMes(d.getFullYear(), d.getMonth()+1);
+    acumulado += pv.saldo;
+    return {...pv, acumulado, nome: MESES_NOMES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2)};
+  });
+  el('pes-proximos').innerHTML = `<div class="grid grid-3">${proximos.map((x,i)=>`
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between;align-items:center;">
+        <h3 style="font-size:14px;margin:0;">${esc(x.nome)}${i===0?' <span class="hint" style="font-weight:400;">· mês em tela</span>':''}</h3>
+        <span class="strong" style="color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</span>
+      </div>
+      <table class="table" style="margin-top:6px;"><tbody>
+        <tr><td>Renda</td><td style="text-align:right;">${BRL(x.renda)}${x.rendaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
+        <tr><td>Cartão</td><td style="text-align:right;">${BRL(x.cart)}</td></tr>
+        <tr><td>Fixas</td><td style="text-align:right;">${BRL(x.fixa)}${x.fixaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
+        <tr><td>Variáveis</td><td style="text-align:right;">${BRL(x.varia)}</td></tr>
+        <tr><td class="strong">Sobra do mês</td><td class="strong" style="text-align:right;color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>
+        <tr><td class="hint">Acumulado até aqui</td><td class="hint" style="text-align:right;">${BRL(x.acumulado)}</td></tr>
+      </tbody></table>
+    </div>`).join('')}</div>
+    <p class="hint" style="margin:6px 0 0 0;">O acumulado encadeia os meses: a sobra (ou o buraco) de um entra no seguinte. "Prevista" quer dizer que o mês ainda não tem lançamento próprio e repetiu o anterior.</p>`;
 
   const podeMexer = ACESSO_CASA;
   const linha = x => {
@@ -4238,36 +4311,30 @@ function renderPessoais(){
       <td>${esc(x.descricao)}${x.categoria?` <span class="hint">· ${esc(x.categoria)}</span>`:''}${x.cartao?` <span class="hint">· ${esc(x.cartao)}</span>`:''}</td>
       <td class="hint">${p||'—'}</td>
       <td class="strong">${BRL(+x.valor)}</td>
-      <td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>
+      ${x.tipo==='cartao' ? '' : `<td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>`}
       <td style="white-space:nowrap;">${podeMexer?`<button class="btn ghost" data-peeditar="${esc(x.id)}" style="padding:1px 6px;">✏️</button>
       <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
   };
 
-  el('pes-listas').innerHTML = ['cartao','fixa','variavel'].map(t=>{
+  /* os tres blocos lado a lado: da para comparar cartao, fixas e variaveis de um olhar */
+  el('pes-listas').innerHTML = `<div class="grid grid-3">${['cartao','fixa','variavel'].map(t=>{
     const itens = porTipo(t).slice().sort((a,b)=> (+b.valor)-(+a.valor));
     const tot = pesSoma(itens);
-    return `<div class="card" style="margin-bottom:14px;">
+    /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a marcar */
+    const comCheck = t !== 'cartao';
+    const colunas = comCheck ? 5 : 4;
+    return `<div class="card">
       <div class="toolbar" style="justify-content:space-between;align-items:center;">
         <h3 style="font-size:14px;margin:0;">${PES_ROTULO[t]}</h3>
         <span class="strong">${BRL(tot)}</span>
       </div>
       <table class="table" style="margin-top:8px;"><thead><tr>
-        <th>Descrição</th><th>Parcela</th><th>Valor</th><th>Situação</th><th></th>
+        <th>Descrição</th><th>Parcela</th><th>Valor</th>${comCheck?'<th>Situação</th>':''}<th></th>
       </tr></thead><tbody>
-        ${itens.map(linha).join('') || '<tr><td colspan="5" class="hint">Nada lançado neste mês.</td></tr>'}
+        ${itens.map(linha).join('') || `<tr><td colspan="${colunas}" class="hint">Nada lançado neste mês.</td></tr>`}
       </tbody></table></div>`;
-  }).join('') + `<p class="hint" style="margin:-4px 0 0 0;">Já quitado neste mês: ${BRL(pago)} de ${BRL(despesa)}.</p>`;
-
-  /* renda do mes */
-  const rendas = pesDoMes(PES_RENDAS);
-  el('pes-rendas').innerHTML = `<div class="card"><table class="table"><thead><tr>
-      <th>Origem</th><th>Descrição</th><th>Data</th><th>Valor</th><th></th></tr></thead><tbody>
-      ${rendas.map(r=>`<tr>
-        <td class="strong">${esc(r.origem)}</td><td>${esc(r.descricao||'—')}</td>
-        <td class="hint">${r.data?dataBR(r.data):'—'}</td><td class="strong">${BRL(+r.valor)}</td>
-        <td><button class="btn ghost" data-prexcluir="${esc(r.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`).join('')
-        || '<tr><td colspan="5" class="hint">Nenhuma renda lançada neste mês.</td></tr>'}
-      </tbody></table></div>`;
+  }).join('')}</div>
+    <p class="hint" style="margin:6px 0 0 0;">Fixas e variáveis já quitadas neste mês: ${BRL(pago)}. A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
 
   /* historico: ultimos 12 meses + renda por origem no ano */
   const meses = [];
@@ -4289,10 +4356,29 @@ function renderPessoais(){
         || '<tr><td colspan="4" class="hint">Sem histórico ainda.</td></tr>'}
       </tbody></table></div>
     <div class="card"><h3 style="font-size:14px;margin:0 0 8px 0;">Renda por origem em ${pesAno}</h3>
-      <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th></tr></thead><tbody>
-      ${listaOrigens.map(([o,v])=>`<tr><td>${esc(o)}</td><td class="strong">${BRL(v)}</td></tr>`).join('')
-        || '<tr><td colspan="2" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
-      </tbody></table></div></div>`;
+      <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th><th>Último lançamento</th><th></th></tr></thead><tbody>
+      ${listaOrigens.map(([o,v])=>{
+        const u = ultimaRenda(o);
+        if(u && rendaEditando === u.id){
+          return `<tr>
+            <td class="strong">${esc(o)}</td>
+            <td class="hint">${BRL(v)}</td>
+            <td><input type="number" data-re="valor" value="${+u.valor||0}" step="0.01" style="width:110px;">
+                <input type="date" data-re="data" value="${u.data?String(u.data).slice(0,10):''}" style="width:135px;margin-top:4px;"></td>
+            <td style="white-space:nowrap;">
+              <button class="btn primary" data-prsalvar="${esc(u.id)}" style="padding:2px 8px;font-size:11.5px;">salvar</button>
+              <button class="btn ghost" data-prcancelar="1" style="padding:2px 8px;font-size:11.5px;">cancelar</button></td></tr>`;
+        }
+        return `<tr>
+          <td class="strong">${esc(o)}</td>
+          <td class="strong">${BRL(v)}</td>
+          <td>${u?BRL(+u.valor):'—'}${u?` <span class="hint">· ${MES_ABREV[+u.mes]||u.mes}/${String(u.ano).slice(2)}</span>`:''}</td>
+          <td style="white-space:nowrap;">${u?`<button class="btn ghost" data-preditar="${esc(u.id)}" title="Editar o último lançamento" style="padding:1px 6px;">✏️</button>
+          <button class="btn ghost" data-prexcluir="${esc(u.id)}" title="Excluir o último lançamento" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
+      }).join('') || '<tr><td colspan="4" class="hint">Nada lançado em ' + pesAno + '.</td></tr>'}
+      </tbody></table>
+      <p class="hint" style="margin:8px 0 0 0;">Editar e excluir agem sobre o <strong>último lançamento</strong> de cada origem — é ele que vale como valor atual.</p>
+    </div></div>`;
 
   /* safras: cada uma fecha sozinha, por isso ficam fora dos indicadores do mes */
   const porSafra = {};
@@ -4413,6 +4499,23 @@ function ligarAcoesPessoais(){
       const { error } = await sb().from('pes_lancamentos').delete().eq('id', b.dataset.peexcluir);
       if(error) return erro(error);
       await recarregar();
+    };
+  });
+  document.querySelectorAll('[data-preditar]').forEach(b=>{
+    b.onclick = ()=>{ rendaEditando = b.dataset.preditar; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-prcancelar]').forEach(b=>{
+    b.onclick = ()=>{ rendaEditando = null; renderPessoais(); };
+  });
+  document.querySelectorAll('[data-prsalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const tr = b.closest('tr');
+      const val = k => { const el2 = tr.querySelector('[data-re="'+k+'"]'); return el2 ? el2.value.trim() : ''; };
+      const { data, error } = await sb().from('pes_rendas')
+        .update({ valor: +val('valor')||0, data: val('data')||null }).eq('id', b.dataset.prsalvar).select();
+      if(error) return erro(error);
+      if(!data || !data.length) return alert('Só o perfil autorizado pode alterar esta renda.');
+      rendaEditando = null; await recarregar();
     };
   });
   document.querySelectorAll('[data-prexcluir]').forEach(b=>{
@@ -4660,7 +4763,7 @@ const VIEW_TITLES = {
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
   'parcerias':['Parcerias & bônus','Academias, pilates, cross e nutricionistas'],
   'pedidos':['Pedidos & entregas','Do WhatsApp à separação e coleta do entregador'],
-  'pessoais':['Despesas pessoais','Contas da casa, renda e guarda de documentos — particular'],
+  'pessoais':['Finanças particulares','Contas da casa, renda e guarda de documentos — particular'],
 };
 function setView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -5001,6 +5104,7 @@ function renderAll(){
   renderVisaoGeral();
   renderFinanceiro();
   renderCaixa();
+  renderDisponibilidade();   // sem isto a tela so montava depois de salvar um registro
   renderGente();
   renderProjecao();
   renderStoreShare();
