@@ -1087,7 +1087,7 @@ window.TN_CONFIG = {
             <input type="text" id="pesi-desc" placeholder="Descrição">
             <input type="number" id="pesi-valor" placeholder="Valor" step="0.01" required>
             <input type="number" id="pesi-cdi" placeholder="% do CDI (ex.: 102)" step="0.01">
-            <input type="date" id="pesi-carencia" title="Carência: até quando fica preso">
+            <input type="number" id="pesi-carencia" placeholder="Carência (dias): 90, 181, 360..." min="0" step="1">
             <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;">
               <input type="checkbox" id="pesi-trava"> com trava
             </label>
@@ -4173,6 +4173,15 @@ let pesEditando = null;
 let rendaEditando = null;
 let invEditando = null;
 
+/* Carencia entra em dias (60, 90, 181, 360...) e vira data somando ao aporte */
+function liberaEm(dataISO, dias){
+  if(!dataISO || !dias) return null;
+  const d = new Date(String(dataISO).slice(0,10) + 'T00:00:00');
+  if(isNaN(d)) return null;
+  d.setDate(d.getDate() + (+dias||0));
+  return d.toISOString().slice(0,10);
+}
+
 /* Ultimo lancamento de uma origem no ano em tela: e o valor que vale hoje */
 function ultimaRenda(origem){
   return PES_RENDAS
@@ -4442,8 +4451,16 @@ function renderPessoais(){
   /* carencia vencida deixa de prender o dinheiro: mostramos "liberado" */
   const selosTrava = x => {
     if(!x.trava) return '<span class="hint">sem trava</span>';
-    if(x.carencia && x.carencia <= hojeISO2) return '<span class="badge b-good"><span class="dot"></span>liberado</span>';
-    return `<span class="badge b-warning"><span class="dot"></span>preso${x.carencia?' até '+dataBR(x.carencia):''}</span>`;
+    const dias = x.carencia_dias != null ? x.carencia_dias : null;
+    const libera = x.carencia || liberaEm(x.data, dias);
+    const rotuloDias = dias != null ? `<div class="hint" style="margin-top:2px;">${dias} dias</div>` : '';
+    if(libera && libera <= hojeISO2) return `<span class="badge b-good"><span class="dot"></span>liberado</span>${rotuloDias}`;
+    if(libera){
+      const faltam = Math.ceil((new Date(libera+'T00:00:00') - new Date(hojeISO2+'T00:00:00'))/86400000);
+      return `<span class="badge b-warning"><span class="dot"></span>preso até ${dataBR(libera)}</span>
+              <div class="hint" style="margin-top:2px;">${dias != null ? dias+' dias · ' : ''}faltam ${faltam}</div>`;
+    }
+    return '<span class="badge b-warning"><span class="dot"></span>com trava</span>';
   };
   el('pes-investimentos').innerHTML = `<div class="card">
     <div class="toolbar" style="justify-content:space-between;align-items:center;">
@@ -4462,7 +4479,7 @@ function renderPessoais(){
             <td><input type="number" data-iv="valor" value="${+x.valor||0}" step="0.01" style="width:100px;"></td>
             <td><input type="number" data-iv="cdi_pct" value="${x.cdi_pct!=null?+x.cdi_pct:''}" step="0.01" placeholder="102" style="width:70px;"></td>
             <td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-iv="trava" ${x.trava?'checked':''}>trava</label>
-                <input type="date" data-iv="carencia" value="${x.carencia?String(x.carencia).slice(0,10):''}" style="width:135px;margin-top:4px;"></td>
+                <input type="number" data-iv="carencia_dias" value="${x.carencia_dias!=null?x.carencia_dias:''}" placeholder="dias" min="0" step="1" style="width:80px;margin-top:4px;"></td>
             <td style="white-space:nowrap;">
               <button class="btn primary" data-pisalvar="${esc(x.id)}" style="padding:2px 8px;font-size:11.5px;">salvar</button>
               <button class="btn ghost" data-picancelar="1" style="padding:2px 8px;font-size:11.5px;">cancelar</button></td></tr>`;
@@ -4586,7 +4603,9 @@ function ligarAcoesPessoais(){
         data: campo('data')||null, movimento: campo('movimento'), tipo: campo('tipo')||null,
         instituicao: campo('instituicao')||null, descricao: campo('descricao')||null,
         valor: +campo('valor')||0, cdi_pct: campo('cdi_pct') ? +campo('cdi_pct') : null,
-        trava: marcado('trava'), carencia: campo('carencia')||null
+        trava: marcado('trava'),
+        carencia_dias: campo('carencia_dias') ? +campo('carencia_dias') : null,
+        carencia: liberaEm(campo('data'), campo('carencia_dias'))
       }).eq('id', b.dataset.pisalvar).select();
       if(error) return erro(error);
       if(!data || !data.length) return alert('Só o perfil autorizado pode alterar este investimento.');
@@ -4725,7 +4744,9 @@ function ligarFormulariosPessoais(){
       descricao: val('pesi-desc')||null, valor: +val('pesi-valor')||0,
       cdi_pct: val('pesi-cdi') ? +val('pesi-cdi') : null,
       trava: document.getElementById('pesi-trava').checked,
-      carencia: val('pesi-carencia')||null });
+      carencia_dias: val('pesi-carencia') ? +val('pesi-carencia') : null,
+      /* guardamos tambem a data de liberacao, para consultar direto no banco */
+      carencia: liberaEm(val('pesi-data'), val('pesi-carencia')) });
     if(error) return erro(error);
     fi.reset(); await tnCarregarPessoais();
   };
