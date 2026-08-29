@@ -267,16 +267,17 @@ window.TN_CONFIG = {
         <span class="hint">Meses</span>
         <span id="anoTabs" style="display:inline-flex;gap:4px;align-items:center;"></span>
         <span id="mesChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;"></span>
-        <button class="btn ghost" id="mesLimpar" style="padding:2px 7px;font-size:11px;">todos</button>
-        <button class="btn ghost" id="mesNenhum" style="padding:2px 7px;font-size:11px;">limpar</button>
-        <span style="opacity:.35;">|</span>
-        <span class="hint">Lojas</span>
-        <span id="storeChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">
+        <span style="display:inline-flex;flex-direction:column;gap:2px;">
+          <button class="btn ghost" id="mesLimpar" style="padding:1px 6px;font-size:10.5px;">todos</button>
+          <button class="btn ghost" id="mesNenhum" style="padding:1px 6px;font-size:10.5px;">limpar</button>
+        </span>
+        <span style="opacity:.3;">|</span>
+        <span id="storeChecks" style="display:inline-flex;flex-direction:column;gap:1px;align-items:flex-start;">
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Itaipulândia" checked> Itaipulândia</label>
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Ouro Verde" checked> Ouro Verde</label>
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Toledo" checked> Toledo</label>
         </span>
-        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
+        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
@@ -289,23 +290,11 @@ window.TN_CONFIG = {
       <!-- VISÃO GERAL -->
       <section class="view active" id="view-visao-geral">
         <div class="section-block">
-          <div class="grid grid-4" id="kpi-cards"></div>
-        </div>
-        <div class="section-block">
-          <h2 class="section-title">Alertas que pedem ação</h2>
-          <p class="section-desc">Contagens calculadas a partir dos cadastros de produto, estoque, validade e clientes. Clique para ir direto à lista.</p>
-          <div class="grid grid-4" id="alert-cards"></div>
+          <div class="grid grid-3" id="kpi-cards"></div>
         </div>
         <div class="section-block">
           <h2 class="section-title">Receitas x despesas</h2>
-          <p class="section-desc">Dados extraídos dos relatórios de cada loja (importe via CSV para atualizar). Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
-          <div class="toolbar">
-            <div class="import-box">
-              <button class="btn" id="btn-import-financeiro">Importar relatório financeiro (CSV)</button>
-              <button class="btn ghost" id="btn-template-financeiro">baixar modelo</button>
-              <input type="file" id="file-financeiro" accept=".csv">
-            </div>
-          </div>
+          <p class="section-desc">Receita e despesa de cada loja, mês a mês. Valores em R$, <span class="js-periodo">Abr–Jul/26</span>.</p>
           <div class="card chart-card">
             <div class="legend">
               <div class="item">Em cada mês: <strong style="margin:0 4px;">R</strong> = Receita &nbsp;·&nbsp; <strong style="margin:0 4px;">D</strong> = Despesa. Cores = participação de cada loja.</div>
@@ -1617,34 +1606,19 @@ function renderVisaoGeral(){
   let receita=0, despesa=0;
   lojas.forEach(l=>{ receita += somaMeses(l,'receita'); despesa += somaMeses(l,'despesa'); });
   const lucro = receita-despesa;
-  const clientesAtivos = filteredClientes().filter(c=>computeCliente(c).status==='ativo').length;
   const ticketMedio = null; // not enough data modelled — omitted intentionally
 
   const kpis = [
     {label:'Faturamento ('+periodoLabel()+')', value: BRL(receita), accent:''},
     {label:'Despesas ('+periodoLabel()+')', value: BRL(despesa), accent:''},
     {label:'Lucro ('+periodoLabel()+')', value: BRL(lucro), accent: lucro>=0?'accent-good':'accent-critical'},
-    {label:'Clientes ativos (≤30 dias)', value: clientesAtivos, accent:''},
   ];
   document.getElementById('kpi-cards').innerHTML = kpis.map(k=>`
     <div class="card stat-tile ${k.accent}"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>
   `).join('');
 
-  const margemIncompleta = prods.filter(p=>computeMargem(p).status==='incompleto').length;
-  const margemProblema = prods.filter(p=>['baixa','prejuizo'].includes(computeMargem(p).status)).length;
-  const estoqueRepor = prods.filter(p=>computeEstoque(p).status!=='ok').length;
-  const validadeCritica = prods.filter(p=>['vencido','critico'].includes(computeValidade(p).status)).length;
-
-  const alerts = [
-    {label:'Produtos com margem incompleta', value:margemIncompleta, view:'margem', accent:'accent-critical'},
-    {label:'Produtos com margem baixa ou prejuízo', value:margemProblema, view:'margem', accent:'accent-warning'},
-    {label:'Produtos para repor estoque', value:estoqueRepor, view:'estoque', accent:'accent-warning'},
-    {label:'Produtos vencidos ou vencendo em 15 dias', value:validadeCritica, view:'validade', accent:'accent-critical'},
-  ];
-  document.getElementById('alert-cards').innerHTML = alerts.map(a=>`
-    <div class="card stat-tile clickable ${a.accent}" data-jump="${a.view}"><div class="label">${a.label}</div><div class="value">${a.value}</div></div>
-  `).join('');
-  document.querySelectorAll('[data-jump]').forEach(el=>el.onclick=()=>setView(el.dataset.jump));
+  /* A faixa de alertas saiu da tela enquanto os cadastros de produto, estoque e
+     validade nao tem dados reais — quando tiverem, ela volta com este bloco. */
 
   // lucro por loja (empilhado quando Todas)
   const idx = mesesIdx(), meses = mesesLabels();
@@ -4161,7 +4135,7 @@ function applyPerfil(){
   const tg = document.getElementById('perfil-toggle');
   if(tg){
     tg.style.display = (perfilReal==='socia') ? '' : 'none';
-    tg.textContent = socia ? 'ver como Colaboradora' : '← voltar para Sócio';
+    tg.textContent = socia ? 'ver como colab.' : '← voltar a Sócio';
     // na prévia o botão fica em destaque, para a saída ficar sempre evidente
     tg.className = socia ? 'btn ghost' : 'btn primary';
     tg.style.fontWeight = socia ? '' : '600';
@@ -4171,7 +4145,7 @@ function applyPerfil(){
   aplicarMenuDoPerfil(socia);
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : (perfilReal==='socia' ? 'Prévia: Colaboradora' : 'Perfil: Colaboradora');
+  document.getElementById('perfil-label').textContent = socia ? 'Sócio' : (perfilReal==='socia' ? 'Prévia: Colab.' : 'Colaboradora');
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
@@ -4668,14 +4642,6 @@ wireImport('btn-import-clientes','file-clientes','btn-template-clientes',
   ['nome','loja','telefone','ultima_compra(AAAA-MM-DD)'],
   rows=>{
     CLIENTES = rows.map(r=>({nome:r['nome']||'', loja:r['loja']||'', telefone:r['telefone']||'', ultimaCompra:r['ultima_compra(aaaa-mm-dd)']||r['ultima_compra']||TODAY.toISOString().slice(0,10)}));
-  });
-wireImport('btn-import-financeiro','file-financeiro','btn-template-financeiro',
-  ['loja','mes','receita','despesa'],
-  rows=>{
-    rows.forEach(r=>{
-      const loja=r['loja']; const mes=r['mes']; const idx = FINANCEIRO.meses.indexOf(mes);
-      if(FINANCEIRO[loja] && idx>=0){ FINANCEIRO[loja].receita[idx]=num(r['receita'])??FINANCEIRO[loja].receita[idx]; FINANCEIRO[loja].despesa[idx]=num(r['despesa'])??FINANCEIRO[loja].despesa[idx]; }
-    });
   });
 
 /* ============ NAV / VIEW SWITCH ============ */
