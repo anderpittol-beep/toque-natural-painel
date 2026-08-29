@@ -267,16 +267,17 @@ window.TN_CONFIG = {
         <span class="hint">Meses</span>
         <span id="anoTabs" style="display:inline-flex;gap:4px;align-items:center;"></span>
         <span id="mesChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;"></span>
-        <button class="btn ghost" id="mesLimpar" style="padding:2px 7px;font-size:11px;">todos</button>
-        <button class="btn ghost" id="mesNenhum" style="padding:2px 7px;font-size:11px;">limpar</button>
-        <span style="opacity:.35;">|</span>
-        <span class="hint">Lojas</span>
-        <span id="storeChecks" style="display:inline-flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">
+        <span style="display:inline-flex;flex-direction:column;gap:2px;">
+          <button class="btn ghost" id="mesLimpar" style="padding:1px 6px;font-size:10.5px;">todos</button>
+          <button class="btn ghost" id="mesNenhum" style="padding:1px 6px;font-size:10.5px;">limpar</button>
+        </span>
+        <span style="opacity:.3;">|</span>
+        <span id="storeChecks" style="display:inline-flex;flex-direction:column;gap:1px;align-items:flex-start;">
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Itaipulândia" checked> Itaipulândia</label>
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Ouro Verde" checked> Ouro Verde</label>
           <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;"><input type="checkbox" class="store-chk" value="Toledo" checked> Toledo</label>
         </span>
-        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Perfil: Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
+        <span class="perfil-box"><span id="perfil-label" class="perfil-label">Colaboradora</span><button class="btn ghost" id="perfil-toggle" style="padding:5px 9px;font-size:12px;display:none;">ver como Colaboradora</button><button class="btn" id="perfil-btn" style="padding:6px 10px;">Sair</button></span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
@@ -4161,7 +4162,7 @@ function applyPerfil(){
   const tg = document.getElementById('perfil-toggle');
   if(tg){
     tg.style.display = (perfilReal==='socia') ? '' : 'none';
-    tg.textContent = socia ? 'ver como Colaboradora' : '← voltar para Sócio';
+    tg.textContent = socia ? 'ver como colab.' : '← voltar a Sócio';
     // na prévia o botão fica em destaque, para a saída ficar sempre evidente
     tg.className = socia ? 'btn ghost' : 'btn primary';
     tg.style.fontWeight = socia ? '' : '600';
@@ -4171,7 +4172,7 @@ function applyPerfil(){
   aplicarMenuDoPerfil(socia);
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Perfil: Sócio' : (perfilReal==='socia' ? 'Prévia: Colaboradora' : 'Perfil: Colaboradora');
+  document.getElementById('perfil-label').textContent = socia ? 'Sócio' : (perfilReal==='socia' ? 'Prévia: Colab.' : 'Colaboradora');
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
