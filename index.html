@@ -145,6 +145,16 @@
   .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
   @media(max-width:1000px){.kanban{grid-template-columns:1fr;}}
   .kcol h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);margin:0 0 10px 0;}
+  /* conversas do whatsapp */
+  .wa-item{padding:9px 11px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .wa-item:hover{background:var(--surface-2);}
+  .wa-item.sel{background:var(--store-accent-soft,rgba(31,122,77,.12));}
+  .wa-item .quem{font-size:12.5px;font-weight:600;}
+  .wa-item .prev{font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .wa-bolha{max-width:72%;padding:7px 10px;border-radius:10px;font-size:12.5px;line-height:1.35;}
+  .wa-bolha.deles{align-self:flex-start;background:var(--surface-2);}
+  .wa-bolha.nossa{align-self:flex-end;background:rgba(31,122,77,.16);}
+  .wa-bolha .assina{display:block;font-size:10.5px;color:var(--text-muted);margin-top:3px;}
   .kcard{background:var(--surface-card);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px;font-size:12.5px;}
   /* tarefa concluida sai da frente: fica em marca d'agua e volta ao normal no hover */
   .kcard.feita{opacity:.45;filter:grayscale(.5);transition:opacity .15s,filter .15s;}
@@ -916,7 +926,25 @@ window.TN_CONFIG = {
           </form>
         </div>
         <div class="kanban" id="pedidos-kanban" style="grid-template-columns:repeat(5,1fr);"></div>
-        <p class="hint" style="margin-top:14px;">Observação: a chegada automática dos pedidos do WhatsApp direto neste quadro depende de uma integração (WhatsApp Business API) — é a fase 2. Por enquanto, os pedidos entram aqui manualmente (ou via planilha), e todo o fluxo de separação e definição de entregador já funciona.</p>
+        <div class="section-block" id="bloco-wa" style="margin-top:20px;">
+          <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div>
+              <h3 style="font-size:15px;margin:0;">Conversas do WhatsApp</h3>
+              <p class="hint" style="margin:2px 0 0 0;">O que o cliente perguntou e o que a equipe respondeu, ao vivo. <span id="wa-status"></span></p>
+            </div>
+            <select id="wa-loja" style="flex-shrink:0;"></select>
+          </div>
+          <div class="grid" style="grid-template-columns:300px 1fr;gap:12px;margin-top:10px;align-items:start;">
+            <div class="card" style="padding:0;max-height:460px;overflow:auto;">
+              <div id="wa-lista"></div>
+            </div>
+            <div class="card" style="display:flex;flex-direction:column;min-height:300px;max-height:460px;">
+              <div id="wa-titulo" class="strong" style="font-size:13.5px;margin-bottom:8px;"></div>
+              <div id="wa-thread" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:14px;">As conversas acima chegam do WhatsApp de cada loja pela Evolution API. Virar conversa em pedido, com a esteira de separação e entrega, é o próximo passo.</p>
       </section>
 
       <!-- PATRIMÔNIO & MANUTENÇÃO -->
@@ -4870,6 +4898,104 @@ function ligarFormulariosPessoais(){
   };
 }
 
+
+/* ============ CONVERSAS DO WHATSAPP (Evolution API) ============
+   O painel so le: quem escreve no WhatsApp e a equipe, pelo celular da loja.
+   As mensagens chegam pelo webhook da Evolution, sao gravadas no Supabase e
+   aparecem aqui ao vivo — a colaboradora ve so a loja dela. */
+let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
+
+const waLojasVisiveis = () => {
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  if(socia) return STORES.slice();
+  const eu = EQUIPE.find(e=>e.nome && typeof usuarioNome!=='undefined' && e.nome===usuarioNome);
+  return (eu && eu.loja && eu.loja!=='Todas') ? [eu.loja] : STORES.slice();
+};
+
+async function tnCarregarWhatsapp(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    const sb = window.TN.sb;
+    const [c, m] = await Promise.all([
+      sb.from('wa_conversas').select('*').order('ultima_em',{ascending:false}).limit(200),
+      sb.from('wa_mensagens').select('*').order('msg_em',{ascending:true}).limit(1000)
+    ]);
+    WA_CONVERSAS = c.data || [];
+    WA_MENSAGENS = m.data || [];
+    renderWhatsapp();
+    waAssinarTempoReal();
+  }catch(e){ console.warn('whatsapp', e); }
+}
+
+/* Tempo real: mensagem nova entra na tela sem recarregar */
+function waAssinarTempoReal(){
+  if(waInscrito || !window.TN || !window.TN.sb) return;
+  waInscrito = true;
+  window.TN.sb.channel('wa')
+    .on('postgres_changes', {event:'INSERT', schema:'public', table:'wa_mensagens'}, p=>{
+      WA_MENSAGENS.push(p.new); renderWhatsapp();
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'wa_conversas'}, p=>{
+      const i = WA_CONVERSAS.findIndex(x=>x.id===p.new.id);
+      if(i>=0) WA_CONVERSAS[i] = p.new; else WA_CONVERSAS.unshift(p.new);
+      renderWhatsapp();
+    })
+    .subscribe();
+}
+
+const waHora = t => { if(!t) return ''; const d=new Date(t);
+  return d.toLocaleDateString('pt-BR')===new Date().toLocaleDateString('pt-BR')
+    ? d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+    : d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); };
+
+function renderWhatsapp(){
+  const bloco = document.getElementById('bloco-wa');
+  if(!bloco) return;
+  const sel = document.getElementById('wa-loja');
+  const lojas = waLojasVisiveis();
+  if(sel && sel.options.length !== lojas.length){
+    const atual = sel.value;
+    sel.innerHTML = lojas.map(l=>`<option>${esc(l)}</option>`).join('');
+    if(lojas.includes(atual)) sel.value = atual;
+    sel.onchange = ()=>{ waConversaSel = null; renderWhatsapp(); };
+  }
+  const loja = (sel && sel.value) || lojas[0];
+
+  const conversas = WA_CONVERSAS.filter(c=>c.loja===loja)
+    .sort((a,b)=> String(b.ultima_em||'').localeCompare(String(a.ultima_em||'')));
+  const st = document.getElementById('wa-status');
+  if(st) st.textContent = conversas.length ? `${conversas.length} conversa(s) em ${loja}.`
+                                           : `Nenhuma conversa em ${loja} ainda — o WhatsApp desta loja ainda não foi conectado.`;
+
+  document.getElementById('wa-lista').innerHTML = conversas.map(c=>`
+    <div class="wa-item ${c.id===waConversaSel?'sel':''}" data-waconv="${esc(c.id)}">
+      <div style="display:flex;justify-content:space-between;gap:6px;">
+        <span class="quem">${esc(c.nome || c.telefone)}</span>
+        <span class="hint" style="font-size:11px;">${waHora(c.ultima_em)}</span>
+      </div>
+      <div class="prev">${esc(c.ultima_msg || '')}</div>
+    </div>`).join('') || '<p class="hint" style="padding:11px;">Sem conversas.</p>';
+
+  const conv = conversas.find(c=>c.id===waConversaSel) || conversas[0] || null;
+  waConversaSel = conv ? conv.id : null;
+  const tit = document.getElementById('wa-titulo'), th = document.getElementById('wa-thread');
+  if(!conv){ tit.textContent=''; th.innerHTML='<p class="hint">Escolha uma conversa à esquerda.</p>'; }
+  else{
+    tit.innerHTML = `${esc(conv.nome || conv.telefone)} <span class="hint" style="font-weight:400;">· ${esc(conv.telefone)}</span>`;
+    const msgs = WA_MENSAGENS.filter(m=>m.conversa_id===conv.id)
+      .sort((a,b)=> String(a.msg_em).localeCompare(String(b.msg_em)));
+    th.innerHTML = msgs.map(m=>`
+      <div class="wa-bolha ${m.direcao==='enviada'?'nossa':'deles'}">
+        ${m.tipo && m.tipo!=='texto' ? `<span class="hint">[${esc(m.tipo)}]</span> ` : ''}${esc(m.texto||'')}
+        <span class="assina">${m.direcao==='enviada' ? (m.autor?esc(m.autor)+' · ':'loja · ') : ''}${waHora(m.msg_em)}</span>
+      </div>`).join('') || '<p class="hint">Sem mensagens nesta conversa.</p>';
+    th.scrollTop = th.scrollHeight;
+  }
+  document.querySelectorAll('[data-waconv]').forEach(el=>{
+    el.onclick = ()=>{ waConversaSel = el.dataset.waconv; renderWhatsapp(); };
+  });
+}
+
 /* ============ CSV IMPORT ============ */
 function parseCSV(text){
   const delim = (text.split('\n')[0].split(';').length > text.split('\n')[0].split(',').length) ? ';' : ',';
@@ -5297,6 +5423,7 @@ function renderAll(){
   renderInstagram();
   renderParcerias();
   renderPedidos();
+  renderWhatsapp();
   renderPatrimonio();
   if(ACESSO_CASA) renderPessoais();
   aplicarMenuDoPerfil(perfil==='socia');   // dados novos podem tirar uma tela da marca d'agua
@@ -5370,6 +5497,7 @@ async function tnAfterLogin(sb){
   tnCarregarAcessos();
   tnCarregarConfig();
   tnCarregarPautas();
+  tnCarregarWhatsapp();
   tnVerificarAcessoCasa();
 }
 
