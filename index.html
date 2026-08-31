@@ -419,13 +419,17 @@ window.TN_CONFIG = {
               <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
                 <div>
                   <h3 style="font-size:14px;margin:0 0 4px 0;">Boletos pagos no mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>saiu do caixa</span></h3>
-                  <p class="hint" style="margin:0;">Parcelas efetivamente pagas, referentes às compras lançadas acima. É o que já saiu do caixa.</p>
+                  <p class="hint" style="margin:0;">Parcelas efetivamente pagas, referentes às compras lançadas acima. É o que já saiu do caixa.<br>
+                  <strong>O formulário abaixo lança os dois casos</strong>: com status <strong>Pago</strong> o boleto entra nesta lista; com <strong>Pendente</strong> ele vai para "A pagar", logo abaixo, e você marca como pago quando quitar.</p>
                 </div>
               </div>
               <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
-                <input type="date" id="bl-data" title="Data do pagamento / vencimento">
+                <input type="date" id="bl-data" title="Se Pago: data do pagamento. Se Pendente: data de vencimento.">
                 <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
-                <select id="bl-status"><option>Pago</option><option>Pendente</option></select>
+                <select id="bl-status" title="Pago entra nesta lista; Pendente vai para A pagar">
+                  <option value="Pago">Pago — já saiu do caixa</option>
+                  <option value="Pendente">Pendente — vai para A pagar</option>
+                </select>
                 <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
                 <input type="number" id="bl-valor" placeholder="Valor da parcela" step="0.01">
                 <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar</button>
@@ -3821,7 +3825,7 @@ function renderCaixa(){
         ? linhaPlanilha('bl-pagos', 'Pagamentos da planilha ('+fxCompetencia()+')', dePlanilha, 3, socia2) : '';
       const visiveis   = (dePlanilha.length && !planilhaAberta['bl-pagos'])
         ? pagosMes.filter(b=>!ehDaPlanilha(b)) : pagosMes;
-      return cabecalho + visiveis.map(linhaBoleto).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())}.</td></tr>`;
+      return cabecalho + visiveis.map(linhaBoleto).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())} — boletos lançados como <strong>Pendente</strong> aparecem em "A pagar", logo abaixo.</td></tr>`;
     })()}
     <tr><td colspan="3" class="strong" style="text-align:right;">Total pago no mês</td><td class="strong">${BRL(totPagos)}</td>${socia2?'<td></td>':''}</tr></tbody>`;
 
