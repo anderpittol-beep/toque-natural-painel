@@ -1014,7 +1014,9 @@ window.TN_CONFIG = {
               <select id="gt-papel"><option>Colaboradora</option><option>Sócia</option></select>
               <select id="gt-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
               <input type="number" id="gt-salario" placeholder="Salário base" step="0.01">
-              <input type="number" id="gt-comissao" placeholder="Comissão do mês" step="0.01">
+              <input type="number" id="gt-horas" placeholder="Horas por dia (ex.: 8)" step="0.5">
+              <input type="number" id="gt-he" placeholder="Horas extras no mês" step="0.5">
+              <input type="number" id="gt-comissao" placeholder="Comissão (vazio = calculada)" step="0.01">
               <input type="number" id="gt-encargo" placeholder="Encargos" step="0.01">
               <input type="number" id="gt-vale" placeholder="Vale alimentação" step="0.01">
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar folha</button>
@@ -1022,13 +1024,14 @@ window.TN_CONFIG = {
           </details>
           <p class="hint" id="gt-aviso" style="margin:8px 0 0 0;"></p>
         </div>
-        <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Retenção de 13º e férias <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>provisão mensal</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Quanto guardar por mês para não ser pego de surpresa: <strong>13º</strong> = 1/12 do salário; <strong>férias</strong> = (salário + 1/3) ÷ 12. Inclui as colaboradoras (provisão legal) e o pró-labore das sócias — neste caso é uma <strong>reserva informal</strong>, mas retida mensalmente do mesmo jeito.</p>
-          <div class="grid grid-3" id="prov-kpis"></div>
-          <div style="overflow-x:auto;margin-top:10px;"><table id="tbl-provisao"></table></div>
+        
+        <div class="card">
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Folha do mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>com provisões</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Salário, horas extras, comissão por faixa de faturamento, encargos e a retenção de 13º e férias — tudo na mesma linha.
+             <strong>13º</strong> = 1/12 do salário; <strong>férias</strong> = (salário + 1/3) ÷ 12. Hora extra = valor da hora + 50%.</p>
+          <div style="overflow-x:auto;"><table id="tbl-gente"></table></div>
+          <p class="hint" id="gt-rodape" style="margin:8px 0 0 0;"></p>
         </div>
-        <div class="card"><div style="overflow-x:auto;"><table id="tbl-gente"></table></div></div>
 
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio</span></h3>
@@ -1401,7 +1404,43 @@ let GENTE = [
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", salario:2848.72, comissao:0, encargo:369.04, vale:0},
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", salario:2141.25, comissao:0, encargo:86.56, vale:0},
 ];
-const gTotal = g => (g.salario||0)+(g.comissao||0)+(g.encargo||0)+(g.vale||0);
+/* Comissao por faixa de faturamento da loja, cumulativa: bateu 25 mil ganha 100;
+   bateu 30 mil ganha 100+150 = 250; 35 mil, 450; 40 mil, 700. */
+const COMISSAO_FAIXAS = [ {meta:25000, valor:100}, {meta:30000, valor:150},
+                          {meta:35000, valor:200}, {meta:40000, valor:250} ];
+function comissaoDaFaixa(fat){
+  return COMISSAO_FAIXAS.reduce((a,f)=> a + ((+fat||0) >= f.meta ? f.valor : 0), 0);
+}
+/* Faturamento da loja no mes: caixa diario a partir do corte, planilha antes dele */
+let _fatCache = {};
+function fatCacheLimpar(){ _fatCache = {}; }
+function faturamentoLojaMes(ano, mes, loja){
+  const k = ano+'|'+mes+'|'+loja;
+  if(k in _fatCache) return _fatCache[k];
+  let v = (typeof receitaPainelLoja==='function') ? receitaPainelLoja(+ano, +mes, loja) : 0;
+  if(!v && typeof FINANCEIRO!=='undefined' && FINANCEIRO.meses){
+    const lab = (MES_ABREV[+mes]||'') + '/' + String(ano).slice(2);
+    const i = FINANCEIRO.meses.indexOf(lab);
+    if(i>=0 && FINANCEIRO[loja] && FINANCEIRO[loja].receita) v = +FINANCEIRO[loja].receita[i] || 0;
+  }
+  return (_fatCache[k] = v);
+}
+/* Jornada: 8h/dia = 220h/mes. Quem faz 4h tem metade da carga e metade da comissao. */
+const JORNADA_PADRAO = 8;
+const gJornada  = g => +g.horas_dia > 0 ? +g.horas_dia : (g.papel==='Colaboradora' ? JORNADA_PADRAO : 0);
+const gHorasMes = g => (gJornada(g) || JORNADA_PADRAO) * 27.5;   // sem jornada lancada, calcula a hora sobre 220h
+const gValorHora = g => { const hm = gHorasMes(g); return hm ? (+g.salario||0)/hm : 0; };
+const cent = v => Math.round((+v||0)*100)/100;
+/* Hora extra com adicional de 50% sobre o valor da hora */
+const gExtras = g => cent(gValorHora(g) * 1.5 * (+g.horas_extras||0));
+/* Comissao: o valor lancado na mao manda; sem ele, o painel calcula pela faixa */
+function gComissao(g){
+  if(+g.comissao > 0) return +g.comissao;
+  if(g.papel !== 'Colaboradora') return 0;
+  const faixa = comissaoDaFaixa(faturamentoLojaMes(+g.ano, +g.mes, g.loja));
+  return cent(faixa * (gJornada(g) / JORNADA_PADRAO));
+}
+const gTotal = g => (g.salario||0)+gComissao(g)+gExtras(g)+(g.encargo||0)+(g.vale||0);
 /* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
 let BOLETOS = [];
 
@@ -4044,13 +4083,14 @@ function folhaDaCompetencia(ano, mes, prof){
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
   return folhaDaCompetencia(p.ano, p.mes, prof+1)
-    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, pago:false, pago_em:null}));
+    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, horas_extras:0, pago:false, pago_em:null}));
 }
 async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
   if(!herdadas.length) return false;
   const regs = herdadas.map(g=>({ competencia: gtCompetencia(), ano: gtAno, mes: gtMes, pessoa: g.pessoa,
                  papel: g.papel, loja: g.loja, salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0, vale: +g.vale||0,
+                 horas_dia: g.horas_dia==null ? null : +g.horas_dia, horas_extras: 0,
                  origem: 'painel', pago: false, pago_em: null }));
   regs.forEach(r=>GENTE.push(r));
   try{
@@ -4083,7 +4123,8 @@ function renderGente(){
   const socias = list.filter(g=>g.papel==='Sócia');
   const colabs = list.filter(g=>g.papel==='Colaboradora');
   const soma = arr => arr.reduce((a,g)=>a+gTotal(g),0);
-  const comiss = list.reduce((a,g)=>a+(g.comissao||0),0);
+  const comiss = list.reduce((a,g)=>a+gComissao(g),0);
+  fatCacheLimpar();   // faturamento pode ter mudado desde o ultimo render
   document.getElementById('gente-kpis').innerHTML = `
     <div class="card stat-tile accent-warning"><div class="label">Folha total / mês</div><div class="value">${BRL(soma(list))}</div></div>
     <div class="card stat-tile"><div class="label">Sócias (pró-labore + encargos)</div><div class="value">${BRL(soma(socias))}</div></div>
@@ -4093,61 +4134,71 @@ function renderGente(){
   const rows = list.slice().sort((a,b)=> (a.papel===b.papel?0:(a.papel==='Sócia'?-1:1)) || a.loja.localeCompare(b.loja));
   const podeEd = (typeof perfil!=='undefined' && perfil==='socia') && gtGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
+  const prov = rows.map(g=>({g, p:gProvisao(g)}));
+  const t13  = prov.reduce((a,x)=>a+x.p.t13,0), tFer = prov.reduce((a,x)=>a+x.p.fer,0);
+  const tExtras = rows.reduce((a,g)=>a+gExtras(g),0);
+  const totalFolha = soma(list), totalCusto = totalFolha + t13 + tFer;
+  const COLS = podeEd ? 14 : 13;
+
   document.getElementById('tbl-gente').innerHTML = `
-    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Salário base</th><th>Comissão do mês</th><th>Encargos</th><th>Vale alim.</th><th>Total</th>${podeEd?'<th></th>':''}</tr></thead>
-    <tbody>${rows.map(g=>{
+    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Jornada</th><th>Salário base</th><th>Horas extras</th>
+      <th>Comissão</th><th>Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
+      <th>Custo total</th>${podeEd?'<th></th>':''}</tr></thead>
+    <tbody>${prov.map(({g,p})=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
           <td><input type="text" data-ge="pessoa" value="${esc(g.pessoa)}" style="width:100%;box-sizing:border-box;"></td>
-          <td><select data-ge="papel">${['Colaboradora','Sócia'].map(p=>`<option ${p===g.papel?'selected':''}>${p}</option>`).join('')}</select></td>
+          <td><select data-ge="papel">${['Colaboradora','Sócia'].map(x=>`<option ${x===g.papel?'selected':''}>${x}</option>`).join('')}</select></td>
           <td><select data-ge="loja">${lojasOpt.map(l=>`<option ${l===g.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
-          <td><input type="number" data-ge="salario" value="${+g.salario||0}" step="0.01" style="width:104px;"></td>
-          <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" style="width:96px;"></td>
-          <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:96px;"></td>
-          <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:92px;"></td>
-          <td class="strong">—</td>
+          <td><input type="number" data-ge="horas_dia" value="${g.horas_dia==null?'':+g.horas_dia}" step="0.5" placeholder="h/dia" style="width:66px;"></td>
+          <td><input type="number" data-ge="salario" value="${+g.salario||0}" step="0.01" style="width:100px;"></td>
+          <td><input type="number" data-ge="horas_extras" value="${+g.horas_extras||0}" step="0.5" title="Quantidade de horas extras no mês" style="width:74px;"></td>
+          <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" title="0 = o painel calcula pela faixa de faturamento" style="width:92px;"></td>
+          <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:92px;"></td>
+          <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:88px;"></td>
+          <td class="strong">—</td><td>—</td><td>—</td><td>—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
       }
+      const com = gComissao(g), ext = gExtras(g), manual = +g.comissao > 0;
+      const fat = g.papel==='Colaboradora' ? faturamentoLojaMes(+g.ano, +g.mes, g.loja) : 0;
+      const jorn = gJornada(g);
       return `<tr>
-        <td class="strong">${esc(g.pessoa)}</td>
-        <td>${esc(g.papel)}</td>
-        <td>${esc(g.loja)}</td>
-        <td>${BRL(g.salario)}</td>
-        <td>${g.comissao?`<span style="color:var(--good);font-weight:600;">${BRL(g.comissao)}</span>`:'—'}</td>
-        <td>${BRL(g.encargo)}</td>
-        <td>${g.vale?BRL(g.vale):'—'}</td>
-        <td class="strong">${BRL(gTotal(g))}</td>
-        ${podeEd?`<td style="white-space:nowrap;text-align:right;">
-          <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
-          <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${podeEd?9:8}" class="hint">Nenhum lançamento de folha.</td></tr>`}
-    <tr><td colspan="7" class="strong" style="text-align:right;">Folha total</td><td class="strong">${BRL(soma(list))}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
-
-  // ===== Retenção de 13º e férias (provisão do mês) =====
-  const prov = rows.map(g=>({g, p:gProvisao(g)})).filter(x=>x.p.total>0);
-  const t13 = prov.reduce((a,x)=>a+x.p.t13,0), tFer = prov.reduce((a,x)=>a+x.p.fer,0);
-  const pk = document.getElementById('prov-kpis');
-  if(pk) pk.innerHTML = `
-    <div class="card stat-tile accent-warning"><div class="label">Provisão de 13º / mês</div><div class="value">${BRL(t13)}</div></div>
-    <div class="card stat-tile accent-warning"><div class="label">Provisão de férias / mês</div><div class="value">${BRL(tFer)}</div></div>
-    <div class="card stat-tile"><div class="label">Total a reter no mês</div><div class="value">${BRL(t13+tFer)}</div></div>`;
-  const tp = document.getElementById('tbl-provisao');
-  if(tp) tp.innerHTML = `
-    <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Base</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th><th>Total/mês</th><th>Acumulado no ano</th></tr></thead>
-    <tbody>${prov.map(({g,p})=>`
-      <tr>
         <td class="strong">${esc(g.pessoa)}</td>
         <td>${esc(g.papel)}${g.papel==='Sócia'?' <span class="hint">(informal)</span>':''}</td>
         <td>${esc(g.loja)}</td>
+        <td>${jorn?`${jorn}h/dia <span class="hint">${Math.round(gHorasMes(g))}h/mês</span>`:'—'}</td>
         <td>${BRL(g.salario)}</td>
+        <td>${ext?`${BRL(ext)} <span class="hint">${(+g.horas_extras||0)}h × ${BRL(gValorHora(g)*1.5)}</span>`:'—'}</td>
+        <td>${com?`<span style="color:var(--good);font-weight:600;">${BRL(com)}</span>
+             <span class="hint">${manual?'lançada na mão':'faturou '+BRL(fat)+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':'')}</span>`
+            :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${BRL(fat)}</span>`:'—')}</td>
+        <td>${BRL(g.encargo)}</td>
+        <td>${g.vale?BRL(g.vale):'—'}</td>
+        <td class="strong">${BRL(gTotal(g))}</td>
         <td>${BRL(p.t13)}</td>
         <td>${BRL(p.fer)}</td>
-        <td class="strong">${BRL(p.total)}</td>
-        <td class="hint">${BRL(p.total*gtMes)} <span style="opacity:.7;">(${gtMes} ${gtMes>1?'meses':'mês'})</span></td>
-      </tr>`).join('') || '<tr><td colspan="8" class="hint">Sem lançamentos nesta competência.</td></tr>'}
-    ${prov.length?`<tr><td colspan="4" class="strong" style="text-align:right;">Total</td><td class="strong">${BRL(t13)}</td><td class="strong">${BRL(tFer)}</td><td class="strong">${BRL(t13+tFer)}</td><td class="strong">${BRL((t13+tFer)*gtMes)}</td></tr>`:''}</tbody>`;
+        <td class="strong">${BRL(gTotal(g)+p.total)}</td>
+        ${podeEd?`<td style="white-space:nowrap;text-align:right;">
+          <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
+      </tr>`;}).join('') || `<tr><td colspan="${COLS}" class="hint">Nenhum lançamento de folha.</td></tr>`}
+    ${rows.length?`<tr>
+      <td colspan="5" class="strong" style="text-align:right;">Total</td>
+      <td class="strong">${BRL(tExtras)}</td>
+      <td class="strong">${BRL(comiss)}</td>
+      <td colspan="2"></td>
+      <td class="strong">${BRL(totalFolha)}</td>
+      <td class="strong">${BRL(t13)}</td>
+      <td class="strong">${BRL(tFer)}</td>
+      <td class="strong">${BRL(totalCusto)}</td>${podeEd?'<td></td>':''}</tr>`:''}</tbody>`;
+
+  const rod = document.getElementById('gt-rodape');
+  if(rod) rod.innerHTML = `A reter neste mês para 13º e férias: <strong>${BRL(t13+tFer)}</strong>
+    (13º ${BRL(t13)} · férias ${BRL(tFer)}) — acumulado no ano: <strong>${BRL((t13+tFer)*gtMes)}</strong> em ${gtMes} ${gtMes>1?'meses':'mês'}.
+    Comissão por faixa de faturamento da loja: ${COMISSAO_FAIXAS.map(f=>BRL(f.meta)+' → '+BRL(f.valor)).join(' · ')} — cumulativa
+    (bateu ${BRL(30000)}, recebe ${BRL(250)}). Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.`;
 
   // ===== ações de editar / excluir =====
   document.querySelectorAll('[data-geditar]').forEach(b=>{
@@ -4167,9 +4218,12 @@ function renderGente(){
       const get = k => { const el=tr.querySelector('[data-ge="'+k+'"]'); return el?el.value.trim():''; };
       const pes = get('pessoa');
       if(!pes){ alert('O nome não pode ficar vazio.'); return; }
+      const hd = get('horas_dia');
       Object.assign(g, { pessoa:pes, papel:get('papel'), loja:get('loja'),
-        salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0, vale:num(get('vale'))||0 });
-      if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,encargo:g.encargo,vale:g.vale});
+        salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0, vale:num(get('vale'))||0,
+        horas_dia: hd==='' ? null : (num(hd)||0), horas_extras: num(get('horas_extras'))||0 });
+      if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,
+        encargo:g.encargo,vale:g.vale,horas_dia:g.horas_dia,horas_extras:g.horas_extras});
       folhaEditando=null; renderGente(); renderCaixa();
     };
   });
@@ -5225,8 +5279,11 @@ document.getElementById('form-gente').addEventListener('submit', async e=>{
   const pessoa=document.getElementById('gt-pessoa').value.trim();
   const papel=document.getElementById('gt-papel').value;
   const loja=document.getElementById('gt-loja').value;
+  const _hd = document.getElementById('gt-horas').value.trim();
   const reg={ pessoa, papel, loja,
     salario:num(document.getElementById('gt-salario').value)||0,
+    horas_dia: _hd==='' ? (papel==='Colaboradora' ? JORNADA_PADRAO : null) : (num(_hd)||0),
+    horas_extras: num(document.getElementById('gt-he').value)||0,
     comissao:num(document.getElementById('gt-comissao').value)||0,
     encargo:num(document.getElementById('gt-encargo').value)||0,
     vale:num(document.getElementById('gt-vale').value)||0 };
@@ -5235,7 +5292,7 @@ document.getElementById('form-gente').addEventListener('submit', async e=>{
   Object.assign(reg, { competencia: gtCompetencia(), ano: gtAno, mes: gtMes, origem: 'painel' });
   const i=GENTE.findIndex(g=> +g.ano===gtAno && +g.mes===gtMes && g.pessoa.toLowerCase()===pessoa.toLowerCase() && g.papel===papel && g.loja===loja);
   if(i>=0){
-    const id=GENTE[i].id; Object.assign(GENTE[i], reg); if(id){ GENTE[i].id=id; tnUpdate('folha',{id},{salario:reg.salario,comissao:reg.comissao,encargo:reg.encargo,vale:reg.vale}); }
+    const id=GENTE[i].id; Object.assign(GENTE[i], reg); if(id){ GENTE[i].id=id; tnUpdate('folha',{id},{salario:reg.salario,horas_dia:reg.horas_dia,horas_extras:reg.horas_extras,comissao:reg.comissao,encargo:reg.encargo,vale:reg.vale}); }
   } else {
     GENTE.push(reg);
     await tnInsertRet('folha', reg);
