@@ -5005,6 +5005,24 @@ function renderWhatsapp(){
   });
 }
 
+
+/* Confere se a data lancada cai no mes que esta em tela. Se nao cair, pergunta —
+   e o erro mais comum: lancar dia 01/09 com o painel em Ago e achar que sumiu. */
+function confirmaMesRef(dataISO, ano, mes){
+  if(!dataISO) return true;
+  const d = new Date(String(dataISO).slice(0,10) + 'T00:00:00');
+  if(isNaN(d)) return true;
+  const dm = d.getMonth()+1, da = d.getFullYear();
+  if(dm === +mes && da === +ano) return true;
+  const naTela = (MES_ABREV[+mes]||mes) + '/' + String(ano).slice(2);
+  const daData = (MES_ABREV[dm]||dm) + '/' + String(da).slice(2);
+  return confirm(
+    'Atenção: o painel está mostrando ' + naTela + ', mas a data ' + dataBR(dataISO) +
+    ' é de ' + daData + '.\n\nO mês de referência é este mesmo?\n\n' +
+    'OK — lança em ' + daData + ' (para ver, troque o mês no topo).\n' +
+    'Cancelar — voltar e corrigir a data.');
+}
+
 /* ============ CSV IMPORT ============ */
 function parseCSV(text){
   const delim = (text.split('\n')[0].split(';').length > text.split('\n')[0].split(',').length) ? ';' : ',';
@@ -5203,6 +5221,7 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   const hoje = new Date().toISOString().slice(0,10);
   const d = document.getElementById('cp-data').value || hoje;
   if(!dataNoPainel(d)){ alert('O painel só recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 os dados vêm da planilha do Drive — lançar aqui geraria duplicidade.'); return; }
+  if(!confirmaMesRef(d, cpAno, cpMes)) return;
   const reg = { data:d, ano:+d.slice(0,4), mes:+d.slice(5,7),
     loja: document.getElementById('cp-loja').value,
     fornecedor: forn, nf: document.getElementById('cp-nf').value.trim(),
@@ -5264,6 +5283,7 @@ document.getElementById('form-boleto').addEventListener('submit', async e=>{
   e.preventDefault();
   const _bd = document.getElementById('bl-data').value || new Date().toISOString().slice(0,10);
   if(!dataNoPainel(_bd)){ alert('O painel só recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 os dados vêm da planilha do Drive — lançar aqui geraria duplicidade.'); return; }
+  if(!confirmaMesRef(_bd, fxAno, fxMes)) return;
   const _reg = {
     data_pgto: _bd, ano: +_bd.slice(0,4), mes: +_bd.slice(5,7),
     competencia: (MES_ABREV[+_bd.slice(5,7)]||'') + '/' + _bd.slice(2,4),
