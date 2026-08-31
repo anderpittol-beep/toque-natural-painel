@@ -1087,14 +1087,13 @@ window.TN_CONFIG = {
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
-          <p class="hint" style="margin:0 0 8px 0;">Cartão, despesa fixa ou variável do mês em tela. Parcela é opcional (ex.: 2 de 6).</p>
+          <p class="hint" style="margin:0 0 8px 0;">Cartão ou despesa fixa do mês em tela. Parcela é opcional (ex.: 2 de 6).</p>
           <details class="add-form">
             <summary>Lançar despesa</summary>
             <form class="feedback-form" id="form-pes" style="grid-template-columns:repeat(6,1fr);">
               <select id="pes-tipo">
                 <option value="cartao">Cartão</option>
                 <option value="fixa">Despesa fixa</option>
-                <option value="variavel">Despesa variável</option>
               </select>
               <input type="text" id="pes-desc" placeholder="Descrição" required>
               <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
@@ -4311,7 +4310,9 @@ function ultimaRenda(origem){
     .sort((a,b)=> (+b.mes - +a.mes) || String(b.data||'').localeCompare(String(a.data||'')) || String(b.criado_em||'').localeCompare(String(a.criado_em||'')))[0] || null;
 }
 
-const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas', variavel:'Despesas variáveis' };
+const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
+/* 'variavel' foi unificado em 'fixa'; registro antigo continua lendo como fixa */
+const pesTipo = x => (x && x.tipo==='variavel') ? 'fixa' : (x ? x.tipo : x);
 const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
 const pesDoMes = arr => arr.filter(x => +x.ano===pesAno && +x.mes===pesMes);
 const pesSoma  = arr => arr.reduce((a,x)=> a + (+x.valor||0), 0);
@@ -4338,7 +4339,8 @@ async function tnCarregarPessoais(){
     sb.from('pes_safras').select('*').order('data',{ascending:false}),
     sb.from('pes_pendencias').select('*').order('criado_em')
   ]);
-  PES_LANC   = l.data || [];
+  /* 'variavel' saiu do painel: o que restar de lancamento antigo entra como fixa */
+  PES_LANC   = (l.data || []).map(x => x.tipo==='variavel' ? {...x, tipo:'fixa'} : x);
   PES_RENDAS = r.data || [];
   PES_INV    = i.data || [];
   PES_DOCS   = d.data || [];
@@ -4364,20 +4366,20 @@ function renderPessoais(){
     for(let k=1; k<=12; k++){
       const d = new Date(pesAno, pesMes-1-k, 1);
       const a = d.getFullYear(), m = d.getMonth()+1;
-      const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo===t);
+      const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)===t);
       if(doMes.length) return doMes.map(x=>({...x, id:null, pago:false, pago_em:null,
                                             herdada:true, de:`${MES_ABREV[m]||m}/${String(a).slice(2)}`}));
     }
     return [];
   }
   const porTipo = t => {
-    const reais = lancReais.filter(x=>x.tipo===t);
+    const reais = lancReais.filter(x=>pesTipo(x)===t);
     if(reais.length || t==='cartao') return reais;
     return herdadasDoTipo(t);
   };
-  const lanc = ['cartao','fixa','variavel'].reduce((a,t)=>a.concat(porTipo(t)), []);
-  const cartao = pesSoma(porTipo('cartao')), fixa = pesSoma(porTipo('fixa')), varia = pesSoma(porTipo('variavel'));
-  const despesa = cartao + fixa + varia;
+  const lanc = ['cartao','fixa'].reduce((a,t)=>a.concat(porTipo(t)), []);
+  const cartao = pesSoma(porTipo('cartao')), fixa = pesSoma(porTipo('fixa'));
+  const despesa = cartao + fixa;
   /* a renda tambem se repete: sem lancamento no mes, vale a do ultimo mes que teve */
   function rendasDoMes(){
     const reais = pesDoMes(PES_RENDAS);
@@ -4394,25 +4396,24 @@ function renderPessoais(){
   const rendaHerdada = rendasMes.length && rendasMes[0].herdada;
   const renda = pesSoma(rendasMes);
   const saldo = renda - despesa;
-  const pago = pesSoma(lanc.filter(x=>x.pago && x.tipo!=='cartao'));
+  const pago = pesSoma(lanc.filter(x=>x.pago && pesTipo(x)!=='cartao'));
 
   el('pes-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${rendasMes.length} lançamento(s)${rendaHerdada?' · repetida do mês anterior':''}</div></div>
     <div class="card stat-tile"><div class="label">Cartão</div><div class="value">${BRL(cartao)}</div><div class="hint">${porTipo('cartao').length} item(ns)</div></div>
-    <div class="card stat-tile"><div class="label">Fixas + variáveis</div><div class="value">${BRL(fixa+varia)}</div><div class="hint">${BRL(fixa)} fixas · ${BRL(varia)} variáveis</div></div>
+    <div class="card stat-tile"><div class="label">Despesas fixas</div><div class="value">${BRL(fixa)}</div><div class="hint">${porTipo('fixa').length} item(ns)</div></div>
     <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
 
   /* Os tres proximos meses, encadeados: o que sobra de um entra no seguinte.
      Um mes sem fixas ou sem renda lancada herda as do mes anterior — sao os
-     valores que se repetem todo mes; cartao e variaveis contam so o que ja
-     esta lancado naquele mes (parcelas futuras, por exemplo). */
+     valores que se repetem todo mes; o cartao conta so o que ja esta
+     lancado naquele mes (parcelas futuras, por exemplo). */
   const somaMesTipo = (a, m, t) => PES_LANC
-    .filter(x => +x.ano===a && +x.mes===m && x.tipo===t)
+    .filter(x => +x.ano===a && +x.mes===m && pesTipo(x)===t)
     .reduce((s2,x)=> s2 + (+x.valor||0), 0);
 
   function previsaoDoMes(a, m){
     const cart = somaMesTipo(a,m,'cartao');
-    const varia2 = somaMesTipo(a,m,'variavel');
     /* Herda do ultimo mes que realmente tem lancamento, nao so do anterior:
        assim Novembro nao zera so porque Outubro ainda nao foi lancado. */
     const buscarAtras = (temNoMes, somaNoMes) => {
@@ -4425,9 +4426,9 @@ function renderPessoais(){
     };
     let fixa2 = somaMesTipo(a,m,'fixa');
     let fixaHerdada = false;
-    if(!PES_LANC.some(x=>+x.ano===a && +x.mes===m && x.tipo==='fixa')){
+    if(!PES_LANC.some(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='fixa')){
       fixa2 = buscarAtras(
-        (aa,mm)=>PES_LANC.some(x=>+x.ano===aa && +x.mes===mm && x.tipo==='fixa'),
+        (aa,mm)=>PES_LANC.some(x=>+x.ano===aa && +x.mes===mm && pesTipo(x)==='fixa'),
         (aa,mm)=>somaMesTipo(aa,mm,'fixa'));
       fixaHerdada = fixa2 > 0;
     }
@@ -4439,8 +4440,8 @@ function renderPessoais(){
         (aa,mm)=>PES_RENDAS.filter(x=>+x.ano===aa && +x.mes===mm).reduce((s2,x)=>s2+(+x.valor||0),0));
       rendaHerdada = ren > 0;
     }
-    const desp = cart + fixa2 + varia2;
-    return {ano:a, mes:m, cart, fixa:fixa2, varia:varia2, desp, renda:ren,
+    const desp = cart + fixa2;
+    return {ano:a, mes:m, cart, fixa:fixa2, desp, renda:ren,
             saldo: ren - desp, fixaHerdada, rendaHerdada};
   }
 
@@ -4461,7 +4462,6 @@ function renderPessoais(){
         <tr><td>Renda</td><td style="text-align:right;">${BRL(x.renda)}${x.rendaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
         <tr><td>Cartão</td><td style="text-align:right;">${BRL(x.cart)}</td></tr>
         <tr><td>Fixas</td><td style="text-align:right;">${BRL(x.fixa)}${x.fixaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
-        <tr><td>Variáveis</td><td style="text-align:right;">${BRL(x.varia)}</td></tr>
         <tr><td class="strong">Sobra do mês</td><td class="strong" style="text-align:right;color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>
         <tr><td class="hint">Acumulado até aqui</td><td class="hint" style="text-align:right;">${BRL(x.acumulado)}</td></tr>
       </tbody></table>
@@ -4488,8 +4488,8 @@ function renderPessoais(){
       <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
   };
 
-  /* os tres blocos lado a lado: da para comparar cartao, fixas e variaveis de um olhar */
-  el('pes-listas').innerHTML = `<div class="grid grid-3">${['cartao','fixa','variavel'].map(t=>{
+  /* os dois blocos lado a lado: cartao e despesas fixas */
+  el('pes-listas').innerHTML = `<div class="grid grid-2">${['cartao','fixa'].map(t=>{
     const itens = porTipo(t).slice().sort((a,b)=> (+b.valor)-(+a.valor));
     const tot = pesSoma(itens);
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a marcar */
@@ -4511,7 +4511,7 @@ function renderPessoais(){
         ${itens.map(linha).join('') || `<tr><td colspan="${colunas}" class="hint">Nada lançado neste mês.</td></tr>`}
       </tbody></table></div>`;
   }).join('')}</div>
-    <p class="hint" style="margin:6px 0 0 0;">Fixas e variáveis já quitadas neste mês: ${BRL(pago)}. A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
+    <p class="hint" style="margin:6px 0 0 0;">Despesas fixas já quitadas neste mês: ${BRL(pago)}. A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
 
   /* historico: ultimos 12 meses + renda por origem no ano */
   const meses = [];
@@ -4715,7 +4715,7 @@ function ligarAcoesPessoais(){
       for(let k=1; k<=12; k++){
         const d = new Date(pesAno, pesMes-1-k, 1);
         const a = d.getFullYear(), m = d.getMonth()+1;
-        const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo===t);
+        const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)===t);
         if(doMes.length){
           const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
             ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
@@ -4885,10 +4885,10 @@ function ligarFormulariosPessoais(){
   const rep = document.getElementById('pes-repetir');
   if(rep) rep.onclick = async ()=>{
     const d = new Date(pesAno, pesMes-2, 1), a = d.getFullYear(), m = d.getMonth()+1;
-    const fixas = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && x.tipo==='fixa');
+    const fixas = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='fixa');
     const rendas = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m);
     if(!fixas.length && !rendas.length) return alert('O mês anterior não tem fixas nem renda para repetir.');
-    const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && x.tipo==='fixa');
+    const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && pesTipo(x)==='fixa');
     if(jaTem && !confirm('Este mês já tem despesas fixas. Trazer as do mês anterior mesmo assim?')) return;
     if(fixas.length){
       const { error } = await sb().from('pes_lancamentos').insert(fixas.map(x=>({
