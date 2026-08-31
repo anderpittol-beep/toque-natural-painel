@@ -88,6 +88,18 @@
   .grid-3{grid-template-columns:repeat(3,1fr);}
   .grid-2{grid-template-columns:repeat(2,1fr);}
   @media(max-width:1000px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);}}
+  /* Formularios de lancamento ficam recolhidos: o painel abre limpo e o
+     formulario aparece so quando se clica no botao. */
+  details.add-form{margin:0 0 12px 0;}
+  details.add-form > summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:999px;border:1px solid var(--border);
+    background:var(--surface-2);color:inherit;user-select:none;}
+  details.add-form > summary::-webkit-details-marker{display:none;}
+  details.add-form > summary::before{content:'+';font-size:14px;font-weight:700;line-height:1;opacity:.75;}
+  details.add-form[open] > summary::before{content:'−';}
+  details.add-form > summary:hover{border-color:var(--baseline);}
+  details.add-form[open] > summary{margin-bottom:10px;}
+  details.add-form > .feedback-form{margin-top:0;}
   .card{background:var(--surface-card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
   .stat-tile .label{font-size:12px;color:var(--text-muted);margin-bottom:6px;}
   .stat-tile .value{font-size:24px;font-weight:600;line-height:1.1;}
@@ -335,15 +347,18 @@ window.TN_CONFIG = {
           <h3 style="font-size:14px;margin:0 0 4px 0;">Disponibilidade de recurso</h3>
           <p class="hint" style="margin:0 0 12px 0;">O que cada loja tem hoje: saldo em conta, o que a maquininha ainda vai repassar, o dinheiro em espécie e a reserva — menos o que ainda precisa ser pago. Vale sempre a <strong>última posição lançada</strong> de cada loja: cada registro é a fotografia de um dia, não uma soma. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
 
-          <form class="feedback-form" id="form-disp" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px;">
-            <input type="text" id="dp-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="dp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <input type="number" id="dp-conta" placeholder="Saldo em conta" step="0.01">
-            <input type="number" id="dp-maquininha" placeholder="A receber maquininha" step="0.01">
-            <input type="number" id="dp-especie" placeholder="Valor em espécie" step="0.01">
-            <input type="number" id="dp-reserva" placeholder="Reserva (aplicado)" step="0.01">
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar posição</button>
-          </form>
+          <details class="add-form">
+            <summary>Registrar posição de caixa</summary>
+            <form class="feedback-form" id="form-disp" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px;">
+              <input type="text" id="dp-data" placeholder="Data (dd/mm/aaaa)">
+              <select id="dp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <input type="number" id="dp-conta" placeholder="Saldo em conta" step="0.01">
+              <input type="number" id="dp-maquininha" placeholder="A receber maquininha" step="0.01">
+              <input type="number" id="dp-especie" placeholder="Valor em espécie" step="0.01">
+              <input type="number" id="dp-reserva" placeholder="Reserva (aplicado)" step="0.01">
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar posição</button>
+            </form>
+          </details>
 
           <div class="grid grid-3" id="disp-kpis" style="margin-bottom:14px;"></div>
 
@@ -376,13 +391,16 @@ window.TN_CONFIG = {
                 <button class="btn ghost" id="fx-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
               </div>
             </div>
-            <form class="feedback-form" id="form-fixa" style="grid-template-columns:2fr 1fr 1fr;margin-top:10px;">
-              <input type="text" id="fx-descricao" placeholder="Descrição" required>
-              <input type="number" id="fx-valor" placeholder="Valor" step="0.01">
-              <input type="number" id="fx-venc" placeholder="Venc. (dia)" min="1" max="31">
-              <select id="fx-loja" style="grid-column:1/-1;"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar despesa fixa</button>
-            </form>
+            <details class="add-form">
+              <summary>Lançar despesa fixa</summary>
+              <form class="feedback-form" id="form-fixa" style="grid-template-columns:2fr 1fr 1fr;margin-top:10px;">
+                <input type="text" id="fx-descricao" placeholder="Descrição" required>
+                <input type="number" id="fx-valor" placeholder="Valor" step="0.01">
+                <input type="number" id="fx-venc" placeholder="Venc. (dia)" min="1" max="31">
+                <select id="fx-loja" style="grid-column:1/-1;"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
+                <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar despesa fixa</button>
+              </form>
+            </details>
             <p class="hint" id="fx-aviso" style="margin:8px 0 0 0;"></p>
             <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-fixas"></table></div>
           </div>
@@ -400,20 +418,23 @@ window.TN_CONFIG = {
                   <button class="btn ghost" id="cp-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
                 </div>
               </div>
-              <form class="feedback-form" id="form-compra" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
-                <input type="date" id="cp-data" title="Data da compra">
-                <select id="cp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-                <input type="text" id="cp-nf" placeholder="Nº da NF">
-                <input type="text" id="cp-fornecedor" placeholder="Fornecedor" required style="grid-column:1/-1;">
-                <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
-                <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
-                <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
-                <label class="hint" style="grid-column:1/-1;display:flex;align-items:center;gap:7px;cursor:pointer;">
-                  <input type="checkbox" id="cp-gerar" checked>
-                  Gerar os boletos das parcelas automaticamente (vencimento mensal a partir da 1ª)
-                </label>
-                <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar compra</button>
-              </form>
+              <details class="add-form">
+                <summary>Lançar nova compra</summary>
+                <form class="feedback-form" id="form-compra" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
+                  <input type="date" id="cp-data" title="Data da compra">
+                  <select id="cp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+                  <input type="text" id="cp-nf" placeholder="Nº da NF">
+                  <input type="text" id="cp-fornecedor" placeholder="Fornecedor" required style="grid-column:1/-1;">
+                  <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
+                  <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
+                  <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
+                  <label class="hint" style="grid-column:1/-1;display:flex;align-items:center;gap:7px;cursor:pointer;">
+                    <input type="checkbox" id="cp-gerar" checked>
+                    Gerar os boletos das parcelas automaticamente (vencimento mensal a partir da 1ª)
+                  </label>
+                  <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar compra</button>
+                </form>
+              </details>
               <p class="hint" id="cp-aviso" style="margin:8px 0 0 0;"></p>
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-compras"></table></div>
             </div>
@@ -427,17 +448,20 @@ window.TN_CONFIG = {
                   <strong>O formulário abaixo lança os dois casos</strong>: com status <strong>Pago</strong> o boleto entra nesta lista; com <strong>Pendente</strong> ele vai para "A pagar", logo abaixo, e você marca como pago quando quitar.</p>
                 </div>
               </div>
-              <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
-                <input type="date" id="bl-data" title="Se Pago: data do pagamento. Se Pendente: data de vencimento.">
-                <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
-                <select id="bl-status" title="Pago entra nesta lista; Pendente vai para A pagar">
-                  <option value="Pago">Pago — já saiu do caixa</option>
-                  <option value="Pendente">Pendente — vai para A pagar</option>
-                </select>
-                <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
-                <input type="number" id="bl-valor" placeholder="Valor da parcela" step="0.01">
-                <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar</button>
-              </form>
+              <details class="add-form">
+                <summary>Lançar boleto</summary>
+                <form class="feedback-form" id="form-boleto" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px;">
+                  <input type="date" id="bl-data" title="Se Pago: data do pagamento. Se Pendente: data de vencimento.">
+                  <select id="bl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option><option>Todas</option></select>
+                  <select id="bl-status" title="Pago entra nesta lista; Pendente vai para A pagar">
+                    <option value="Pago">Pago — já saiu do caixa</option>
+                    <option value="Pendente">Pendente — vai para A pagar</option>
+                  </select>
+                  <input type="text" id="bl-descricao" placeholder="Descrição / fornecedor" required style="grid-column:1/-1;">
+                  <input type="number" id="bl-valor" placeholder="Valor da parcela" step="0.01">
+                  <button class="btn primary" type="submit" style="grid-column:2/-1;">Lançar</button>
+                </form>
+              </details>
               <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-boletos"></table></div>
             </div>
 
@@ -456,30 +480,32 @@ window.TN_CONFIG = {
         <p class="hint" style="border-left:3px solid var(--warning,#d9a441);padding:8px 12px;margin:0 0 14px 0;background:rgba(217,164,65,0.07);"><strong>O valor aqui é só referência de contratação e histórico.</strong> Ele não entra no caixa nem nas despesas do mês. Para o gasto contar no resultado, lance em <strong>Compras do mês</strong> (nota cheia, impacta o lucro) ou em <strong>Boletos pagos no mês</strong> (o que efetivamente saiu do caixa), conforme o caso.</p>
         <div class="grid grid-4" id="patrimonio-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Novo lançamento</h3>
-          <form class="feedback-form" id="form-patrimonio" style="grid-template-columns:1fr 1fr 1fr;">
-            <input type="text" id="pt-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="pt-tipo">
-              <option>Patrimônio</option>
-              <option>Manutenção</option>
-            </select>
-            <select id="pt-loja">
-              <option>Itaipulândia</option>
-              <option>Ouro Verde</option>
-              <option>Toledo</option>
-              <option>Todas</option>
-            </select>
-            <input type="text" id="pt-descricao" placeholder="Descrição (ex: Pintura da calçada / Impressora fiscal)" required style="grid-column:1/-1;">
-            <input type="number" id="pt-valor" placeholder="Valor (R$)" step="0.01" min="0">
-            <input type="text" id="pt-fornecedor" placeholder="Fornecedor / prestador">
-            <input type="text" id="pt-contato" placeholder="Contato do prestador (telefone)">
-            <select id="pt-status">
-              <option>Pago</option>
-              <option>Pendente</option>
-              <option>Agendado</option>
-            </select>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar</button>
-          </form>
+          <details class="add-form">
+            <summary>Novo lançamento</summary>
+            <form class="feedback-form" id="form-patrimonio" style="grid-template-columns:1fr 1fr 1fr;">
+              <input type="text" id="pt-data" placeholder="Data (dd/mm/aaaa)">
+              <select id="pt-tipo">
+                <option>Patrimônio</option>
+                <option>Manutenção</option>
+              </select>
+              <select id="pt-loja">
+                <option>Itaipulândia</option>
+                <option>Ouro Verde</option>
+                <option>Toledo</option>
+                <option>Todas</option>
+              </select>
+              <input type="text" id="pt-descricao" placeholder="Descrição (ex: Pintura da calçada / Impressora fiscal)" required style="grid-column:1/-1;">
+              <input type="number" id="pt-valor" placeholder="Valor (R$)" step="0.01" min="0">
+              <input type="text" id="pt-fornecedor" placeholder="Fornecedor / prestador">
+              <input type="text" id="pt-contato" placeholder="Contato do prestador (telefone)">
+              <select id="pt-status">
+                <option>Pago</option>
+                <option>Pendente</option>
+                <option>Agendado</option>
+              </select>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar</button>
+            </form>
+          </details>
         </div>
         <div class="card">
           <div class="toolbar filters" style="margin-bottom:12px;">
@@ -565,15 +591,18 @@ window.TN_CONFIG = {
         <div class="card" >
           <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
           <p class="hint" style="margin:0 0 12px 0;">Registre o saldo inicial, o saldo final do caixa e as saídas do dia. O fechamento do dia é calculado (saldo inicial + saldo final do caixa − saídas). A meta do dia é o que falta da meta mensal dividido pelos dias úteis que restam. O total de vendas do dia alimenta a receita da loja na Visão geral e na projeção.</p>
-          <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
-            <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
-            <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
-            <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
-            <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
-            <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
-          </form>
+          <details class="add-form">
+            <summary>Lançar fechamento do dia</summary>
+            <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
+              <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
+              <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
+              <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
+              <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
+              <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
+            </form>
+          </details>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
         </div>
 
@@ -692,15 +721,17 @@ window.TN_CONFIG = {
         </div>
         <div class="grid grid-3" id="clientes-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastrar cliente</h3>
-          <form class="feedback-form" id="form-cliente" style="grid-template-columns:1fr 1fr 1fr;">
-            <input type="text" id="cl-nome" placeholder="Nome do cliente" required>
-            <select id="cl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <input type="text" id="cl-telefone" placeholder="Telefone / WhatsApp">
-            <label class="hint" style="align-self:center;">Data da última compra</label>
-            <input type="date" id="cl-ultima">
-            <button class="btn primary" type="submit">Cadastrar cliente</button>
-          </form>
+          <details class="add-form">
+            <summary>Cadastrar cliente</summary>
+            <form class="feedback-form" id="form-cliente" style="grid-template-columns:1fr 1fr 1fr;">
+              <input type="text" id="cl-nome" placeholder="Nome do cliente" required>
+              <select id="cl-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <input type="text" id="cl-telefone" placeholder="Telefone / WhatsApp">
+              <label class="hint" style="align-self:center;">Data da última compra</label>
+              <input type="date" id="cl-ultima">
+              <button class="btn primary" type="submit">Cadastrar cliente</button>
+            </form>
+          </details>
         </div>
         <div class="card" style="margin-bottom:22px;"><div style="overflow-x:auto;"><table id="tbl-clientes"></table></div></div>
 
@@ -708,28 +739,30 @@ window.TN_CONFIG = {
         <p class="section-desc">Registre cada tentativa de reativação: quando falou com o cliente, por qual canal, o que foi oferecido e o resultado. O último contato de cada cliente também aparece na tabela acima.</p>
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card">
-            <h3 style="font-size:14px;margin:0 0 10px 0;">Registrar contato</h3>
-            <form class="feedback-form" id="form-crm">
-              <select id="crm-cliente"></select>
-              <input type="text" id="crm-data" placeholder="Data do contato (dd/mm/aaaa)">
-              <select id="crm-canal">
-                <option>WhatsApp</option>
-                <option>Ligação</option>
-                <option>SMS</option>
-                <option>E-mail</option>
-                <option>Presencial</option>
-              </select>
-              <select id="crm-resultado">
-                <option>Sem resposta</option>
-                <option>Retornou contato</option>
-                <option>Comprou</option>
-                <option>Recusou</option>
-                <option>Agendado / prometeu voltar</option>
-              </select>
-              <input type="text" id="crm-acao" placeholder="Ação / oferta tomada (ex: cupom 10%, avisou novidade)" style="grid-column:1/-1;">
-              <input type="text" id="crm-proximo" placeholder="Próximo passo (ex: retornar em 15 dias)" style="grid-column:1/-1;">
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar contato</button>
-            </form>
+            <details class="add-form">
+              <summary>Registrar contato</summary>
+              <form class="feedback-form" id="form-crm">
+                <select id="crm-cliente"></select>
+                <input type="text" id="crm-data" placeholder="Data do contato (dd/mm/aaaa)">
+                <select id="crm-canal">
+                  <option>WhatsApp</option>
+                  <option>Ligação</option>
+                  <option>SMS</option>
+                  <option>E-mail</option>
+                  <option>Presencial</option>
+                </select>
+                <select id="crm-resultado">
+                  <option>Sem resposta</option>
+                  <option>Retornou contato</option>
+                  <option>Comprou</option>
+                  <option>Recusou</option>
+                  <option>Agendado / prometeu voltar</option>
+                </select>
+                <input type="text" id="crm-acao" placeholder="Ação / oferta tomada (ex: cupom 10%, avisou novidade)" style="grid-column:1/-1;">
+                <input type="text" id="crm-proximo" placeholder="Próximo passo (ex: retornar em 15 dias)" style="grid-column:1/-1;">
+                <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar contato</button>
+              </form>
+            </details>
           </div>
           <div class="card">
             <div class="toolbar filters" style="margin-bottom:12px;">
@@ -769,25 +802,27 @@ window.TN_CONFIG = {
 
         <div>
           <div class="card">
-            <h3 style="font-size:14px;margin:0 0 10px 0;">Nova tarefa</h3>
-            <form class="feedback-form" id="form-tarefa">
-              <select id="tk-colaborador"></select>
-              <select id="tk-loja" title="Loja de destino da tarefa">
-                <option value="">Loja: todas</option>
-                <option>Itaipulândia</option>
-                <option>Ouro Verde</option>
-                <option>Toledo</option>
-              </select>
-              <input type="text" id="tk-titulo" placeholder="Descrição da tarefa" required style="grid-column:1/-1;">
-              <input type="text" id="tk-prazo" placeholder="Prazo (ex: 20/08/2026)">
-              <select id="tk-area" title="Ação do Plano de Ação"></select>
-              <select id="tk-prioridade">
-                <option>Normal</option>
-                <option>Alta</option>
-                <option>Urgente</option>
-              </select>
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Criar tarefa</button>
-            </form>
+            <details class="add-form">
+              <summary>Nova tarefa</summary>
+              <form class="feedback-form" id="form-tarefa">
+                <select id="tk-colaborador"></select>
+                <select id="tk-loja" title="Loja de destino da tarefa">
+                  <option value="">Loja: todas</option>
+                  <option>Itaipulândia</option>
+                  <option>Ouro Verde</option>
+                  <option>Toledo</option>
+                </select>
+                <input type="text" id="tk-titulo" placeholder="Descrição da tarefa" required style="grid-column:1/-1;">
+                <input type="text" id="tk-prazo" placeholder="Prazo (ex: 20/08/2026)">
+                <select id="tk-area" title="Ação do Plano de Ação"></select>
+                <select id="tk-prioridade">
+                  <option>Normal</option>
+                  <option>Alta</option>
+                  <option>Urgente</option>
+                </select>
+                <button class="btn primary" type="submit" style="grid-column:1/-1;">Criar tarefa</button>
+              </form>
+            </details>
           </div>
         </div>
 
@@ -863,32 +898,34 @@ window.TN_CONFIG = {
         <div class="grid grid-4" id="parcerias-kpis" style="margin-bottom:16px;"></div>
         <div class="grid grid-2" style="align-items:flex-start;">
           <div class="card">
-            <h3 style="font-size:14px;margin:0 0 10px 0;">Nova parceria</h3>
-            <form class="feedback-form" id="form-parceria">
-              <input type="text" id="pc-nome" placeholder="Nome do parceiro" required style="grid-column:1/-1;">
-              <select id="pc-categoria">
-                <option>Academias</option>
-                <option>Pilates</option>
-                <option>Cross</option>
-                <option>Nutricionistas</option>
-              </select>
-              <select id="pc-loja">
-                <option>Todas</option>
-                <option>Itaipulândia</option>
-                <option>Ouro Verde</option>
-                <option>Toledo</option>
-              </select>
-              <input type="text" id="pc-contato" placeholder="Contato (responsável / telefone)" style="grid-column:1/-1;">
-              <input type="text" id="pc-desconto" placeholder="Desconto ao cliente (ex: 10%)">
-              <select id="pc-status">
-                <option>Ativa</option>
-                <option>Em negociação</option>
-                <option>Pausada</option>
-              </select>
-              <input type="text" id="pc-renovacao" placeholder="Renovação (dd/mm/aaaa)" style="grid-column:1/-1;">
-              <input type="text" id="pc-obs" placeholder="Contrapartida / observação" style="grid-column:1/-1;">
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar parceria</button>
-            </form>
+            <details class="add-form">
+              <summary>Nova parceria</summary>
+              <form class="feedback-form" id="form-parceria">
+                <input type="text" id="pc-nome" placeholder="Nome do parceiro" required style="grid-column:1/-1;">
+                <select id="pc-categoria">
+                  <option>Academias</option>
+                  <option>Pilates</option>
+                  <option>Cross</option>
+                  <option>Nutricionistas</option>
+                </select>
+                <select id="pc-loja">
+                  <option>Todas</option>
+                  <option>Itaipulândia</option>
+                  <option>Ouro Verde</option>
+                  <option>Toledo</option>
+                </select>
+                <input type="text" id="pc-contato" placeholder="Contato (responsável / telefone)" style="grid-column:1/-1;">
+                <input type="text" id="pc-desconto" placeholder="Desconto ao cliente (ex: 10%)">
+                <select id="pc-status">
+                  <option>Ativa</option>
+                  <option>Em negociação</option>
+                  <option>Pausada</option>
+                </select>
+                <input type="text" id="pc-renovacao" placeholder="Renovação (dd/mm/aaaa)" style="grid-column:1/-1;">
+                <input type="text" id="pc-obs" placeholder="Contrapartida / observação" style="grid-column:1/-1;">
+                <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar parceria</button>
+              </form>
+            </details>
           </div>
           <div class="card">
             <div class="toolbar filters" style="margin-bottom:12px;">
@@ -911,21 +948,23 @@ window.TN_CONFIG = {
         <p class="section-desc">Fluxo do pedido: chega pelo WhatsApp → entra aqui → equipe separa/monta → define o entregador que faz a coleta → sai para entrega. Arraste o pedido pelas etapas com os botões de cada cartão. Filtra pela loja selecionada no topo.</p>
         <div class="grid grid-4" id="pedidos-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Novo pedido</h3>
-          <form class="feedback-form" id="form-pedido" style="grid-template-columns:1fr 1fr 1fr;">
-            <input type="text" id="pd-cliente" placeholder="Cliente" required>
-            <input type="text" id="pd-telefone" placeholder="WhatsApp / telefone">
-            <select id="pd-loja">
-              <option>Itaipulândia</option>
-              <option>Ouro Verde</option>
-              <option>Toledo</option>
-            </select>
-            <input type="text" id="pd-itens" placeholder="Itens do pedido" required style="grid-column:1/-1;">
-            <input type="text" id="pd-endereco" placeholder="Endereço de entrega" style="grid-column:1/-1;">
-            <input type="number" id="pd-valor" placeholder="Valor (R$)" step="0.01" min="0">
-            <select id="pd-entregador"></select>
-            <button class="btn primary" type="submit">Adicionar pedido</button>
-          </form>
+          <details class="add-form">
+            <summary>Novo pedido</summary>
+            <form class="feedback-form" id="form-pedido" style="grid-template-columns:1fr 1fr 1fr;">
+              <input type="text" id="pd-cliente" placeholder="Cliente" required>
+              <input type="text" id="pd-telefone" placeholder="WhatsApp / telefone">
+              <select id="pd-loja">
+                <option>Itaipulândia</option>
+                <option>Ouro Verde</option>
+                <option>Toledo</option>
+              </select>
+              <input type="text" id="pd-itens" placeholder="Itens do pedido" required style="grid-column:1/-1;">
+              <input type="text" id="pd-endereco" placeholder="Endereço de entrega" style="grid-column:1/-1;">
+              <input type="number" id="pd-valor" placeholder="Valor (R$)" step="0.01" min="0">
+              <select id="pd-entregador"></select>
+              <button class="btn primary" type="submit">Adicionar pedido</button>
+            </form>
+          </details>
         </div>
         <div class="kanban" id="pedidos-kanban" style="grid-template-columns:repeat(5,1fr);"></div>
         <div class="section-block" id="bloco-wa" style="margin-top:20px;">
@@ -968,16 +1007,19 @@ window.TN_CONFIG = {
               <button class="btn ghost" id="gt-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
             </div>
           </div>
-          <form class="feedback-form" id="form-gente" style="grid-template-columns:repeat(6,1fr);margin-top:10px;">
-            <input type="text" id="gt-pessoa" placeholder="Pessoa" required>
-            <select id="gt-papel"><option>Colaboradora</option><option>Sócia</option></select>
-            <select id="gt-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <input type="number" id="gt-salario" placeholder="Salário base" step="0.01">
-            <input type="number" id="gt-comissao" placeholder="Comissão do mês" step="0.01">
-            <input type="number" id="gt-encargo" placeholder="Encargos" step="0.01">
-            <input type="number" id="gt-vale" placeholder="Vale alimentação" step="0.01">
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar folha</button>
-          </form>
+          <details class="add-form">
+            <summary>Lançar pessoa na folha</summary>
+            <form class="feedback-form" id="form-gente" style="grid-template-columns:repeat(6,1fr);margin-top:10px;">
+              <input type="text" id="gt-pessoa" placeholder="Pessoa" required>
+              <select id="gt-papel"><option>Colaboradora</option><option>Sócia</option></select>
+              <select id="gt-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <input type="number" id="gt-salario" placeholder="Salário base" step="0.01">
+              <input type="number" id="gt-comissao" placeholder="Comissão do mês" step="0.01">
+              <input type="number" id="gt-encargo" placeholder="Encargos" step="0.01">
+              <input type="number" id="gt-vale" placeholder="Vale alimentação" step="0.01">
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Salvar folha</button>
+            </form>
+          </details>
           <p class="hint" id="gt-aviso" style="margin:8px 0 0 0;"></p>
         </div>
         <div class="card" style="margin-bottom:16px;">
@@ -991,13 +1033,16 @@ window.TN_CONFIG = {
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio</span></h3>
           <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas". O <strong>cargo define o acesso</strong>: Sócio/Sócia entra como perfil Sócio, os demais como Colaboradora.</p>
-          <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
-            <input type="text" id="eq-nome" placeholder="Nome" required>
-            <input type="email" id="eq-email" placeholder="E-mail de acesso">
-            <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
-            <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
-          </form>
+          <details class="add-form">
+            <summary>Cadastrar pessoa na equipe</summary>
+            <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
+              <input type="text" id="eq-nome" placeholder="Nome" required>
+              <input type="email" id="eq-email" placeholder="E-mail de acesso">
+              <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
+              <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
+            </form>
+          </details>
           <p class="hint" style="margin:10px 0 0 0;"><strong>convidar</strong> envia o e-mail de primeiro acesso — a pessoa cria a senha e entra já com o perfil do cargo. <strong>zerar senha</strong> manda o e-mail de nova senha para quem esqueceu a dela; a senha antiga continua valendo até ela criar a nova. Ninguém no painel vê a senha de ninguém.</p>
           <div id="equipe-list" style="margin-top:12px;"></div>
         </div>
@@ -1006,16 +1051,19 @@ window.TN_CONFIG = {
         <div class="card" id="card-feedback" style="margin-top:20px;">
           <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio</span></h3>
           <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos Sócio.</p>
-          <form class="feedback-form" id="form-feedback">
-            <select id="fb-colaborador"></select>
-            <select id="fb-tipo">
-              <option value="Reconhecimento">Reconhecimento</option>
-              <option value="Ponto de atenção">Ponto de atenção</option>
-              <option value="Desenvolvimento">Desenvolvimento</option>
-            </select>
-            <textarea id="fb-texto" placeholder="Descreva o feedback..." required></textarea>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar feedback</button>
-          </form>
+          <details class="add-form">
+            <summary>Registrar feedback</summary>
+            <form class="feedback-form" id="form-feedback">
+              <select id="fb-colaborador"></select>
+              <select id="fb-tipo">
+                <option value="Reconhecimento">Reconhecimento</option>
+                <option value="Ponto de atenção">Ponto de atenção</option>
+                <option value="Desenvolvimento">Desenvolvimento</option>
+              </select>
+              <textarea id="fb-texto" placeholder="Descreva o feedback..." required></textarea>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar feedback</button>
+            </form>
+          </details>
           <div id="feedback-list"></div>
         </div>
       </section>
@@ -1040,20 +1088,23 @@ window.TN_CONFIG = {
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
           <p class="hint" style="margin:0 0 8px 0;">Cartão, despesa fixa ou variável do mês em tela. Parcela é opcional (ex.: 2 de 6).</p>
-          <form class="feedback-form" id="form-pes" style="grid-template-columns:repeat(6,1fr);">
-            <select id="pes-tipo">
-              <option value="cartao">Cartão</option>
-              <option value="fixa">Despesa fixa</option>
-              <option value="variavel">Despesa variável</option>
-            </select>
-            <input type="text" id="pes-desc" placeholder="Descrição" required>
-            <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
-            <input type="text" id="pes-cartao" placeholder="Cartão (MASTER/VISA)">
-            <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
-            <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
-            <input type="text" id="pes-categoria" placeholder="Categoria (opcional, ajuda no IR)" style="grid-column:span 3;">
-            <button class="btn primary" type="submit" style="grid-column:span 3;">Lançar despesa</button>
-          </form>
+          <details class="add-form">
+            <summary>Lançar despesa</summary>
+            <form class="feedback-form" id="form-pes" style="grid-template-columns:repeat(6,1fr);">
+              <select id="pes-tipo">
+                <option value="cartao">Cartão</option>
+                <option value="fixa">Despesa fixa</option>
+                <option value="variavel">Despesa variável</option>
+              </select>
+              <input type="text" id="pes-desc" placeholder="Descrição" required>
+              <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
+              <input type="text" id="pes-cartao" placeholder="Cartão (MASTER/VISA)">
+              <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
+              <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
+              <input type="text" id="pes-categoria" placeholder="Categoria (opcional, ajuda no IR)" style="grid-column:span 3;">
+              <button class="btn primary" type="submit" style="grid-column:span 3;">Lançar despesa</button>
+            </form>
+          </details>
         </div>
 
         <div id="pes-listas"></div>
@@ -1064,16 +1115,19 @@ window.TN_CONFIG = {
         <details style="margin-top:8px;">
           <summary class="hint" style="cursor:pointer;">+ lançar renda de uma origem nova</summary>
           <div class="card" style="margin-top:8px;">
-            <form class="feedback-form" id="form-pes-renda" style="grid-template-columns:repeat(5,1fr);">
-              <select id="pesr-origem">
-                <option>Salário</option><option>Andreia</option><option>Prefeitura</option>
-                <option>Soja</option><option>Milho</option><option>Peixe</option><option>Outros</option>
-              </select>
-              <input type="text" id="pesr-desc" placeholder="Descrição">
-              <input type="number" id="pesr-valor" placeholder="Valor" step="0.01" required>
-              <input type="date" id="pesr-data">
-              <button class="btn primary" type="submit">Lançar renda</button>
-            </form>
+            <details class="add-form">
+              <summary>Lançar renda</summary>
+              <form class="feedback-form" id="form-pes-renda" style="grid-template-columns:repeat(5,1fr);">
+                <select id="pesr-origem">
+                  <option>Salário</option><option>Andreia</option><option>Prefeitura</option>
+                  <option>Soja</option><option>Milho</option><option>Peixe</option><option>Outros</option>
+                </select>
+                <input type="text" id="pesr-desc" placeholder="Descrição">
+                <input type="number" id="pesr-valor" placeholder="Valor" step="0.01" required>
+                <input type="date" id="pesr-data">
+                <button class="btn primary" type="submit">Lançar renda</button>
+              </form>
+            </details>
           </div>
         </details>
 
@@ -1081,65 +1135,77 @@ window.TN_CONFIG = {
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Safras — renda extra</h3>
         <p class="section-desc">Soja, milho e peixe fecham por safra, não por mês: o que entra e o que sai fica aqui, com o resultado de cada uma. Estes valores <strong>não</strong> entram na disponibilidade mensal lá de cima.</p>
         <div class="card" style="margin-bottom:12px;">
-          <form class="feedback-form" id="form-pes-safra" style="grid-template-columns:repeat(6,1fr);">
-            <input type="text" id="pess-safra" placeholder="Safra (ex.: 2025/26)" required>
-            <select id="pess-cultura"><option>Soja</option><option>Milho</option><option>Peixe</option><option>Outra</option></select>
-            <select id="pess-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
-            <input type="date" id="pess-data" required>
-            <input type="text" id="pess-desc" placeholder="Descrição">
-            <input type="number" id="pess-valor" placeholder="Valor" step="0.01" required>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar na safra</button>
-          </form>
+          <details class="add-form">
+            <summary>Lançar safra</summary>
+            <form class="feedback-form" id="form-pes-safra" style="grid-template-columns:repeat(6,1fr);">
+              <input type="text" id="pess-safra" placeholder="Safra (ex.: 2025/26)" required>
+              <select id="pess-cultura"><option>Soja</option><option>Milho</option><option>Peixe</option><option>Outra</option></select>
+              <select id="pess-tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+              <input type="date" id="pess-data" required>
+              <input type="text" id="pess-desc" placeholder="Descrição">
+              <input type="number" id="pess-valor" placeholder="Valor" step="0.01" required>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar na safra</button>
+            </form>
+          </details>
         </div>
         <div id="pes-safras"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Recados da casa</h3>
         <p class="section-desc">Tarefas particulares — os pontos de atenção dos próximos dias. Ficam aqui, e não no menu da equipe das lojas. O que está atrasado ou vence hoje aparece destacado.</p>
         <div class="card" style="margin-bottom:12px;">
-          <form class="feedback-form" id="form-pes-pend" style="grid-template-columns:repeat(5,1fr);">
-            <input type="text" id="pesp-titulo" placeholder="O que resolver" required style="grid-column:span 2;">
-            <input type="text" id="pesp-resp" placeholder="Com quem / onde">
-            <input type="number" id="pesp-valor" placeholder="Valor (opcional)" step="0.01">
-            <input type="date" id="pesp-prazo" title="Para quando">
-            <button class="btn primary" type="submit">Anotar tarefa</button>
-          </form>
+          <details class="add-form">
+            <summary>Novo recado</summary>
+            <form class="feedback-form" id="form-pes-pend" style="grid-template-columns:repeat(5,1fr);">
+              <input type="text" id="pesp-titulo" placeholder="O que resolver" required style="grid-column:span 2;">
+              <input type="text" id="pesp-resp" placeholder="Com quem / onde">
+              <input type="number" id="pesp-valor" placeholder="Valor (opcional)" step="0.01">
+              <input type="date" id="pesp-prazo" title="Para quando">
+              <button class="btn primary" type="submit">Anotar tarefa</button>
+            </form>
+          </details>
         </div>
         <div id="pes-pendencias"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Investimentos</h3>
         <p class="section-desc">Aportes e resgates, com o saldo aplicado acumulado.</p>
         <div class="card" style="margin-bottom:12px;">
-          <form class="feedback-form" id="form-pes-inv" style="grid-template-columns:repeat(6,1fr);">
-            <input type="date" id="pesi-data" required>
-            <select id="pesi-mov"><option value="aporte">Aporte</option><option value="resgate">Resgate</option></select>
-            <input type="text" id="pesi-tipo" placeholder="Tipo (CDB, ações...)">
-            <input type="text" id="pesi-inst" placeholder="Instituição">
-            <input type="text" id="pesi-desc" placeholder="Descrição">
-            <input type="number" id="pesi-valor" placeholder="Valor" step="0.01" required>
-            <input type="number" id="pesi-cdi" placeholder="% do CDI (ex.: 102)" step="0.01">
-            <input type="number" id="pesi-carencia" placeholder="Carência (dias): 90, 181, 360..." min="0" step="1">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;">
-              <input type="checkbox" id="pesi-trava"> com trava
-            </label>
-            <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar investimento</button>
-          </form>
+          <details class="add-form">
+            <summary>Lançar investimento</summary>
+            <form class="feedback-form" id="form-pes-inv" style="grid-template-columns:repeat(6,1fr);">
+              <input type="date" id="pesi-data" required>
+              <select id="pesi-mov"><option value="aporte">Aporte</option><option value="resgate">Resgate</option></select>
+              <input type="text" id="pesi-tipo" placeholder="Tipo (CDB, ações...)">
+              <input type="text" id="pesi-inst" placeholder="Instituição">
+              <input type="text" id="pesi-desc" placeholder="Descrição">
+              <input type="number" id="pesi-valor" placeholder="Valor" step="0.01" required>
+              <input type="number" id="pesi-cdi" placeholder="% do CDI (ex.: 102)" step="0.01">
+              <input type="number" id="pesi-carencia" placeholder="Carência (dias): 90, 181, 360..." min="0" step="1">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;">
+                <input type="checkbox" id="pesi-trava"> com trava
+              </label>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar investimento</button>
+            </form>
+          </details>
         </div>
         <div id="pes-investimentos"></div>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Documentos — IR e extratos</h3>
         <p class="section-desc">Guarda dos comprovantes: extratos do banco e do cartão, notas e tudo que serve para a declaração. Os arquivos ficam em área privada, só acessível por esta lista.</p>
         <div class="card" style="margin-bottom:12px;">
-          <form class="feedback-form" id="form-pes-doc" style="grid-template-columns:repeat(5,1fr);">
-            <select id="pesd-tipo">
-              <option>Extrato banco</option><option>Extrato cartão</option>
-              <option>IR</option><option>Nota / recibo</option><option>Outro</option>
-            </select>
-            <input type="text" id="pesd-titulo" placeholder="Título" required>
-            <input type="text" id="pesd-ref" placeholder="Banco / cartão">
-            <input type="date" id="pesd-data">
-            <input type="file" id="pesd-arquivo" style="grid-column:span 4;">
-            <button class="btn primary" type="submit">Guardar documento</button>
-          </form>
+          <details class="add-form">
+            <summary>Enviar documento</summary>
+            <form class="feedback-form" id="form-pes-doc" style="grid-template-columns:repeat(5,1fr);">
+              <select id="pesd-tipo">
+                <option>Extrato banco</option><option>Extrato cartão</option>
+                <option>IR</option><option>Nota / recibo</option><option>Outro</option>
+              </select>
+              <input type="text" id="pesd-titulo" placeholder="Título" required>
+              <input type="text" id="pesd-ref" placeholder="Banco / cartão">
+              <input type="date" id="pesd-data">
+              <input type="file" id="pesd-arquivo" style="grid-column:span 4;">
+              <button class="btn primary" type="submit">Guardar documento</button>
+            </form>
+          </details>
         </div>
         <div id="pes-documentos"></div>
       </section>
