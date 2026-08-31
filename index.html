@@ -1400,9 +1400,9 @@ let GENTE = [
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Ouro Verde", salario:6000, comissao:0, encargo:178.31, vale:0},
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Itaipulândia", salario:6000, comissao:0, encargo:191.15, vale:0},
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Toledo", salario:0, comissao:0, encargo:469.93, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Heloisa", papel:"Colaboradora", loja:"Ouro Verde", salario:2447, comissao:0, encargo:87.05, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", salario:2848.72, comissao:0, encargo:369.04, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", salario:2141.25, comissao:0, encargo:86.56, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Heloisa", papel:"Colaboradora", loja:"Ouro Verde", horas_dia:4, salario:2447, comissao:0, encargo:87.05, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", horas_dia:8, salario:2848.72, comissao:0, encargo:369.04, vale:0},
+ {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", horas_dia:8, salario:2141.25, comissao:0, encargo:86.56, vale:0},
 ];
 /* Comissao por faixa de faturamento da loja, cumulativa: bateu 25 mil ganha 100;
    bateu 30 mil ganha 100+150 = 250; 35 mil, 450; 40 mil, 700. */
@@ -5641,7 +5641,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
