@@ -1448,6 +1448,10 @@ function competenciasDoPainel(){
   COMPRAS.forEach(c=> marca(+c.ano, +c.mes));
   DESPESAS_FIXAS.forEach(d=> marca(+d.ano, +d.mes));
   GENTE.forEach(g=> marca(+g.ano, +g.mes));
+  BOLETOS.forEach(b=> marca(+b.ano, +b.mes));
+  /* o mes corrente sempre existe no filtro, mesmo sem lancamento nenhum:
+     e nele que o painel abre quando alguem entra */
+  marca(TODAY.getFullYear(), TODAY.getMonth()+1);
   return [...set].sort((a,b)=>a-b);
 }
 
@@ -1512,9 +1516,18 @@ function prefsAtuais(){
   return { mesesSel, anoAtivo, lojas };
 }
 function aplicarPrefs(p){
+  /* O mes sempre abre no atual, mesmo que a ultima sessao tenha ficado noutro
+     recorte — quem entra quer ver o mes que esta correndo. Loja e perfil
+     continuam vindo das preferencias. */
+  const rotuloAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
+  mesesSel = [rotuloAtual];
+  anoAtivo = String(TODAY.getFullYear()).slice(2);
+  sincronizarCompetencias();
   if(!p) return;
-  if('mesesSel' in p) mesesSel = p.mesesSel;               // null | [] | [..]
-  if(p.anoAtivo) anoAtivo = p.anoAtivo;
+  if(Array.isArray(p.lojas) && p.lojas.length){
+    document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
+  }
+  return;
   if(Array.isArray(p.lojas) && p.lojas.length){
     document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
   }
@@ -1581,6 +1594,8 @@ function sincronizarCompetencias(){
   if(typeof fxAno!=='undefined'){ fxAno=u.ano; fxMes=u.mes; }
   if(typeof cpAno!=='undefined'){ cpAno=u.ano; cpMes=u.mes; }
   if(typeof gtAno!=='undefined'){ gtAno=u.ano; gtMes=u.mes; }
+  if(typeof pesAno!=='undefined'){ pesAno=u.ano; pesMes=u.mes; }   // Financas particulares
+  if(typeof fxAno!=='undefined' && typeof renderDisponibilidade==='function'){ /* a disponibilidade segue o mesmo mes */ }
 }
 
 function renderMesFiltro(){
