@@ -1434,6 +1434,27 @@ const cent = v => Math.round((+v||0)*100)/100;
 /* Hora extra com adicional de 50% sobre o valor da hora */
 const gExtras = g => cent(gValorHora(g) * 1.5 * (+g.horas_extras||0));
 /* Comissao: o valor lancado na mao manda; sem ele, o painel calcula pela faixa */
+/* Termometro da comissao: quanto ja foi conquistado, qual o proximo degrau e
+   quanto falta para ele. Serve para a tabela de metas mostrar o caminho. */
+const COMISSAO_EMOJI = ['🔒','🎯','🔥','🚀','🏆'];
+function comissaoNiveis(fat, jornada){
+  const f = +fat||0;
+  const prop = (jornada && jornada < JORNADA_PADRAO) ? jornada/JORNADA_PADRAO : 1;
+  const batidos = COMISSAO_FAIXAS.filter(x=> f >= x.meta);
+  const valor = cent(batidos.reduce((a,x)=>a+x.valor,0) * prop);
+  const prox = COMISSAO_FAIXAS.find(x=> f < x.meta) || null;
+  const acumProx = prox ? cent((batidos.reduce((a,x)=>a+x.valor,0) + prox.valor) * prop) : 0;
+  return { valor, nivel: batidos.length, total: COMISSAO_FAIXAS.length,
+           prox, falta: prox ? cent(prox.meta - f) : 0, acumProx, prop };
+}
+/* Jornada de quem atende a loja, para a comissao sair proporcional (4h = metade) */
+function jornadaDaColaboradora(nome, loja){
+  if(!nome || nome==='—') return JORNADA_PADRAO;
+  const cands = GENTE.filter(g=> g.papel==='Colaboradora' && g.pessoa===nome && (!loja || g.loja===loja))
+                     .sort((a,b)=> (b.ano*100+b.mes)-(a.ano*100+a.mes));
+  const g = cands[0];
+  return g ? gJornada(g) : JORNADA_PADRAO;
+}
 function gComissao(g){
   if(+g.comissao > 0) return +g.comissao;
   if(g.papel !== 'Colaboradora') return 0;
@@ -2172,11 +2193,12 @@ function renderDesempenho(){
                      parcial:(FINANCEIRO.parcialPorMes||{})[rotulo]});
       });
     });
+    let comissaoRecorte = 0;
     const totRec = linhas.reduce((a,x)=>a+x.rec,0);
     const totMeta = linhas.reduce((a,x)=>a+x.meta,0);
     const pctTot = totMeta ? totRec/totMeta*100 : 0;
     hb.innerHTML = `
-      <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th></tr></thead>
+      <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th><th>Comissão</th></tr></thead>
       <tbody>${linhas.map(x=>{
         const pct = x.meta ? x.rec/x.meta*100 : 0;
         /* falta e meta por dia so fazem sentido no mes que ainda esta correndo */
@@ -2184,6 +2206,19 @@ function renderDesempenho(){
         const falta = Math.max(0, (x.meta||0) - x.rec);
         const porDia = (ehMesAtual && duRest) ? falta/duRest : null;
         const ritmo = duMes ? (x.meta||0)/duMes : 0;
+        const cm = comissaoNiveis(x.rec, jornadaDaColaboradora(x.colab, x.loja));
+        const trilha = COMISSAO_FAIXAS.map((f,i)=>{
+          const on = i < cm.nivel;
+          return `<span title="${BRL(f.meta)} → ${BRL(f.valor)}" style="color:${on?'var(--good)':'currentColor'};opacity:${on?1:.3};font-size:12px;">${on?'●':'○'}</span>`;
+        }).join('');
+        const celComissao = cm.nivel
+          ? `<div style="font-weight:700;color:var(--good);white-space:nowrap;">${COMISSAO_EMOJI[cm.nivel]} ${BRL(cm.valor)}${cm.prop<1?` <span class="hint" style="font-weight:400;">${cm.prop*JORNADA_PADRAO}h</span>`:''}</div>
+             <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;">${trilha}
+               ${cm.prox?`<span>faltam ${BRL(cm.falta)} → ${BRL(cm.acumProx)}</span>`:'<span>nível máximo 🎉</span>'}</div>`
+          : `<div class="hint" style="white-space:nowrap;">🔒 ainda não abriu</div>
+             <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;">${trilha}
+               <span>faltam ${BRL(cm.falta)} → ${BRL(cm.acumProx)}</span></div>`;
+        comissaoRecorte += cm.valor;
         return `<tr>
           <td class="strong">${esc(x.mes)}${x.parcial?` <span class="hint">até ${esc(x.parcial)}</span>`:''}</td>
           <td>${esc(x.loja)}</td>
@@ -2194,9 +2229,11 @@ function renderDesempenho(){
           <td>${ehMesAtual ? (falta>0?BRL(falta):'<span class="badge b-good"><span class="dot"></span>meta batida</span>') : '<span class="hint">—</span>'}</td>
           <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
             ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
-        </tr>`;}).join('') || `<tr><td colspan="8" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
-      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td><td colspan="2"></td></tr>`:''}</tbody>
-      <tfoot><tr><td colspan="8" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.</td></tr></tfoot>`;
+          <td>${celComissao}</td>
+        </tr>`;}).join('') || `<tr><td colspan="9" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
+      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td><td colspan="2"></td><td class="strong" style="color:var(--good);">${BRL(comissaoRecorte)}</td></tr>`:''}</tbody>
+      <tfoot><tr><td colspan="9" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.<br>
+        Comissão por faixa de faturamento da loja, cumulativa: ${COMISSAO_FAIXAS.map((f,i)=>`${COMISSAO_EMOJI[i+1]} ${BRL(f.meta)} → +${BRL(f.valor)}`).join(' · ')}. Quem faz meia jornada recebe metade.</td></tr></tfoot>`;
   }
 
   // ===== Premiações (por % da meta) =====
