@@ -584,14 +584,8 @@ window.TN_CONFIG = {
 
 
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Meta diária por loja</h3>
-          <p class="hint" style="margin:0 0 12px 0;">A meta por dia é o que ainda falta da meta mensal dividido pelos dias úteis que restam (segunda a sábado — a loja fecha domingo). Sobe quando o mês atrasa e cai quando adianta.</p>
-          <div style="overflow-x:auto;"><table id="tbl-meta-diaria"></table></div>
-        </div>
-
-        <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Histórico de faturamento por loja</h3>
-          <p class="hint" style="margin:0 0 8px 0;">Meses fechados, vindos da planilha do Drive (mesma receita da Visão geral). É o faturamento da loja que conta como realizado da colaboradora. Use os filtros de loja e de mês no topo para escolher o recorte.</p>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Faturamento e meta por loja</h3>
+          <p class="hint" style="margin:0 0 8px 0;">O faturamento da loja é o que conta como realizado da colaboradora. No mês em curso aparecem também quanto falta e a meta por dia útil que resta (segunda a sábado — a loja fecha domingo). Use os filtros de loja e de mês no topo para escolher o recorte.</p>
           <div style="overflow-x:auto;"><table id="tbl-hist-faturamento"></table></div>
         </div>
 
@@ -1956,34 +1950,9 @@ function renderDesempenho(){
 
   const vendas = vendasCompiladas().filter(v=>nomes.includes(v.colab));
 
-  // ===== Meta diária por loja =====
-  const lojasShow = [...new Set(nomes.map(lojaOf))];
+  // dias uteis do mes: usados na coluna "meta por dia" da tabela unica
   const duMes = diasUteisNoMes(TODAY.getFullYear(), TODAY.getMonth());
-  const duRest = diasUteisRestantes(TODAY, false);   // a partir de amanhã
-  const prodLoja = {};
-  vendas.forEach(v=>{ const dt=parseBR(v.data); if(dt && dt.getMonth()===TODAY.getMonth() && dt.getFullYear()===TODAY.getFullYear()) prodLoja[v.loja]=(prodLoja[v.loja]||0)+v.valor; });
-  const mdBox = document.getElementById('tbl-meta-diaria');
-  if(mdBox){
-    mdBox.innerHTML = `
-      <thead><tr><th>Loja</th><th>Meta mensal</th><th>Produzido no mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th></tr></thead>
-      <tbody>${lojasShow.map(l=>{
-        const mm=METAS_MENSAIS[l]||0;
-        const mdBase=duMes?mm/duMes:0;      // ritmo médio, só para colorir o esforço extra
-        const prod=prodLoja[l]||0;
-        const pct=mm?prod/mm*100:0;
-        const falta=Math.max(0,mm-prod);
-        const need=duRest?falta/duRest:0;
-        return `<tr>
-          <td class="strong">${esc(l)}</td>
-          <td>${BRL(mm)}</td>
-          <td>${BRL(prod)}</td>
-          <td style="color:${pctColor(pct)};font-weight:600;">${pct.toFixed(0)}%</td>
-          <td>${BRL(falta)}</td>
-          <td class="strong" style="color:${need>mdBase*1.5?'var(--critical)':'var(--text)'};">${BRL(need)}</td>
-        </tr>`;
-      }).join('') || `<tr><td colspan="6" class="hint">Sem loja para exibir.</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="6" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.</td></tr></tfoot>`;
-  }
+  const duRest = diasUteisRestantes(TODAY, false);   // a partir de amanha
 
   // agrupa por semana
   const semanas = {};
@@ -2080,9 +2049,14 @@ function renderDesempenho(){
     const totMeta = linhas.reduce((a,x)=>a+x.meta,0);
     const pctTot = totMeta ? totRec/totMeta*100 : 0;
     hb.innerHTML = `
-      <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th></tr></thead>
+      <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th></tr></thead>
       <tbody>${linhas.map(x=>{
         const pct = x.meta ? x.rec/x.meta*100 : 0;
+        /* falta e meta por dia so fazem sentido no mes que ainda esta correndo */
+        const ehMesAtual = x.mes === (MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2));
+        const falta = Math.max(0, (x.meta||0) - x.rec);
+        const porDia = (ehMesAtual && duRest) ? falta/duRest : null;
+        const ritmo = duMes ? (x.meta||0)/duMes : 0;
         return `<tr>
           <td class="strong">${esc(x.mes)}${x.parcial?` <span class="hint">até ${esc(x.parcial)}</span>`:''}</td>
           <td>${esc(x.loja)}</td>
@@ -2090,8 +2064,12 @@ function renderDesempenho(){
           <td class="strong">${BRL(x.rec)}</td>
           <td>${x.meta?BRL(x.meta):'<span class="hint">—</span>'}</td>
           <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
-        </tr>`;}).join('') || `<tr><td colspan="6" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
-      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td></tr>`:''}</tbody>`;
+          <td>${ehMesAtual ? (falta>0?BRL(falta):'<span class="badge b-good"><span class="dot"></span>meta batida</span>') : '<span class="hint">—</span>'}</td>
+          <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
+            ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
+        </tr>`;}).join('') || `<tr><td colspan="8" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
+      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td><td colspan="2"></td></tr>`:''}</tbody>
+      <tfoot><tr><td colspan="8" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.</td></tr></tfoot>`;
   }
 
   // ===== Premiações (por % da meta) =====
