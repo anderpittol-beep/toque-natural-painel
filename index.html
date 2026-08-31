@@ -5409,7 +5409,8 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
     parcelas: parseInt(document.getElementById('cp-parcelas').value)||1,
     origem: 'painel' };
   COMPRAS.push(reg);
-  await tnInsertRet('compras_nf', reg);   // devolve a linha e já preenche reg.id
+  const _c = await tnInsertRet('compras_nf', reg);   // devolve a linha e já preenche reg.id
+  if(!_c){ COMPRAS.pop(); alert(motivoDoErro('Não consegui gravar esta compra.')); return; }
 
   /* Parcelas viram boletos na hora: sem isso, uma nota em 3x só mostrava o
      compromisso da 1ª e o que vence nos meses seguintes ficava invisível. */
@@ -5478,7 +5479,7 @@ document.getElementById('form-boleto').addEventListener('submit', async e=>{
   /* grava primeiro: sem isto o boleto so existia na tela e sumia ao recarregar */
   const _salvo = await tnInsertRet('boletos', _reg);
   if(_btn){ _btn.disabled = false; _btn.textContent = _rot; }
-  if(!_salvo){ alert('Não consegui gravar este boleto. Confira sua conexão e tente de novo.'); return; }
+  if(!_salvo){ alert(motivoDoErro('Não consegui gravar este boleto.')); return; }
   BOLETOS.push({..._reg, id: _salvo.id, data: dataBR(_bd)});
   e.target.reset(); renderCaixa();
 });
@@ -5740,10 +5741,20 @@ async function tnInitApp(){
   sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ renderAll(); tnMode('setpass'); } });
   const hash = window.location.hash || '';
   const isSenhaLink = hash.includes('type=recovery') || hash.includes('type=invite');
+  /* link de e-mail vencido volta como #error=access_denied&error_code=otp_expired:
+     limpa a URL e explica, em vez de deixar o erro cru na barra de endereço */
+  const linkVencido = /error_code=otp_expired|error=access_denied/.test(hash);
+  if(linkVencido){ try{ history.replaceState(null,'',location.pathname+location.search); }catch(_){} }
   const {data:{session}}=await sb.auth.getSession();
   if(isSenhaLink){ renderAll(); tnMode('setpass'); }
   else if(session){ await tnAfterLogin(sb); }
-  else { renderAll(); tnMode('login'); }
+  else {
+    renderAll(); tnMode('login');
+    if(linkVencido){
+      const el=document.getElementById('tn-login-err');
+      if(el) el.textContent='O link do e-mail expirou. Entre com seu e-mail e senha, ou peça um novo em "Esqueci minha senha".';
+    }
+  }
 
   document.getElementById('tn-login-form').addEventListener('submit',async e=>{
     e.preventDefault();
@@ -5832,16 +5843,35 @@ function tnMode(mode){
   else if(mode==='setpass'){ title.textContent='Criar sua senha'; sub.textContent='Escolha a senha que você usará para entrar no painel.'; }
 }
 // grava no Supabase (fire-and-forget; não trava a UI se falhar)
+let TN_ULTIMO_ERRO = null;
 async function tnInsertRet(tabela,row){
+  TN_ULTIMO_ERRO = null;
   try{
     if(window.TN&&window.TN.sb){
       const {data,error}=await window.TN.sb.from(tabela).insert(row).select().maybeSingle();
-      if(error){ console.warn('insert',tabela,error.message); return null; }
+      if(error){ TN_ULTIMO_ERRO=error; console.warn('insert',tabela,error.message); return null; }
       if(data&&data.id) row.id=data.id;
       return data;
     }
-  }catch(e){ console.warn(e); }
+  }catch(e){ TN_ULTIMO_ERRO=e; console.warn(e); }
   return null;
+}
+/* Diz o que realmente aconteceu, em vez de culpar sempre a conexao */
+function motivoDoErro(prefixo){
+  const e = TN_ULTIMO_ERRO;
+  const msg = e ? String(e.message||'') : '';
+  const cod = e ? (e.code||'') : '';
+  if(!e) return prefixo + '\n\nNão consegui falar com o banco de dados. Confira sua conexão e tente de novo.';
+  if(cod==='23505')
+    return prefixo + '\n\nJá existe um lançamento idêntico: mesma loja, mesma descrição, mesma data e mesmo valor.'
+         + '\nSe for outra parcela, mude a data ou detalhe a descrição (ex.: "ALECRIM 2/3").';
+  if(cod==='42501' || /row-level security|permission denied/i.test(msg))
+    return prefixo + '\n\nSeu usuário não tem permissão para gravar aqui. Entre de novo com o login de sócio.';
+  if(/jwt|token|expired|not authenticated|401/i.test(msg))
+    return prefixo + '\n\nSua sessão expirou. Clique em Sair, entre de novo e refaça o lançamento.';
+  if(/fetch|network|failed to fetch/i.test(msg))
+    return prefixo + '\n\nSem conexão com o servidor. Confira a internet e tente de novo.';
+  return prefixo + '\n\n' + msg;
 }
 async function tnUpdate(tabela,match,valores){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).update(valores).match(match); if(error) console.warn('update',tabela,error.message);} }catch(e){ console.warn(e); } }
 async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
