@@ -347,8 +347,12 @@ window.TN_CONFIG = {
 
           <div class="grid grid-3" id="disp-kpis" style="margin-bottom:14px;"></div>
 
-          <h4 style="font-size:13px;margin:14px 0 6px 0;">Cenários</h4>
-          <div style="overflow-x:auto;"><table id="tbl-cenarios"></table></div>
+          <details id="det-cenarios" style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
+              <span id="det-cenarios-label">▸ Cenários</span>
+            </summary>
+            <div style="overflow-x:auto;margin-top:6px;"><table id="tbl-cenarios"></table></div>
+          </details>
 
           <details id="det-disp" style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
@@ -3218,6 +3222,13 @@ function renderDisponibilidade(){
   // posições registradas
   const lista = DISPONIBILIDADE.filter(d=>lojas.includes(d.loja))
     .sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || String(a.loja).localeCompare(b.loja));
+  const dc = document.getElementById('det-cenarios'), dcl = document.getElementById('det-cenarios-label');
+  if(dc && dcl){
+    const txtC = ()=> (dc.open?'▾ ':'▸ ') + 'Cenários';
+    dcl.textContent = txtC();
+    dc.ontoggle = ()=>{ dcl.textContent = txtC(); };
+  }
+
   const det = document.getElementById('det-disp'), lbl = document.getElementById('det-disp-label');
   if(det){
     det.style.display = lista.length ? '' : 'none';
