@@ -3586,7 +3586,12 @@ function renderCaixa(){
      refletidas no saldo. Para meses futuros vale tudo, pago ou não. */
   function compromissosDoMes(ano, mes, ehMesBase){
     const noMes = b => { const d = parseBR(b.data); return d && d.getFullYear()===ano && d.getMonth()+1===mes; };
-    const bol = boletos.filter(b=> b.status==='Pendente' && noMes(b)).reduce((a,b)=>a+(+b.valor||0),0);
+    /* Vencido e nao pago continua sendo dinheiro que vai sair: entra no mes base,
+       senao ficaria de fora de todos os cards. */
+    const vencido = b => { const d = parseBR(b.data); return d && (d.getFullYear()<ano || (d.getFullYear()===ano && d.getMonth()+1<mes)); };
+    const pend = boletos.filter(b=> b.status==='Pendente');
+    const atrasados = ehMesBase ? pend.filter(vencido).reduce((a,b)=>a+(+b.valor||0),0) : 0;
+    const bol = pend.filter(noMes).reduce((a,b)=>a+(+b.valor||0),0) + atrasados;
 
     const fx = fixasDaCompetencia(ano, mes)
       .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
@@ -3597,7 +3602,7 @@ function renderCaixa(){
       .filter(g=> ehMesBase ? (!g.pago || !refletida(g)) : true)
       .reduce((a,g)=>a+gTotal(g),0);
 
-    return { boletos: bol, fixas: fx, folha: fl, total: bol + fx + fl };
+    return { boletos: bol, atrasados, fixas: fx, folha: fl, total: bol + fx + fl };
   }
 
   const cardMes = (ano, mes, saldoInicial, ehMesBase) => {
@@ -3618,8 +3623,12 @@ function renderCaixa(){
   const dispFin = m1.fim;                          // o número do mês corrente
   const dispAmpla = dispFin + maqDf;
 
-  const linha = (rot, val, neg) =>
-    `<tr><td>${rot}</td><td style="text-align:right;${neg?'color:var(--critical);':''}">${neg?'− ':''}${BRL(Math.abs(val))}</td></tr>`;
+  /* neg = saida (sempre em vermelho). Sem neg, um valor negativo tambem
+     precisa aparecer com sinal — senao um saldo inicial no vermelho vira verde. */
+  const linha = (rot, val, neg) => {
+    const vermelho = neg || (+val||0) < 0;
+    return `<tr><td>${rot}</td><td style="text-align:right;${vermelho?'color:var(--critical);':''}">${vermelho?'− ':''}${BRL(Math.abs(val))}</td></tr>`;
+  };
 
   const cardHTML = (m, principal) => `
     <div class="card" style="height:100%;display:flex;flex-direction:column;
@@ -3635,7 +3644,7 @@ function renderCaixa(){
           ${principal
             ? linha('Saldo em conta', contaDf) + linha('Em espécie', especieDf)
             : linha('Saldo que entra do mês anterior', m.saldoInicial) + linha('Receita esperada', m.entra)}
-          ${linha('Boletos do mês', m.c.boletos, true)}
+          ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
           ${linha('Folha', m.c.folha, true)}
           <tr><td class="strong">Fecha o mês com</td><td class="strong" style="text-align:right;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</td></tr>
