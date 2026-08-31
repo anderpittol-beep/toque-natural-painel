@@ -5229,18 +5229,27 @@ async function gerarParcelas(compra, venc1){
   }
   return criados;
 }
-document.getElementById('form-boleto').addEventListener('submit', e=>{
+document.getElementById('form-boleto').addEventListener('submit', async e=>{
   e.preventDefault();
   const _bd = document.getElementById('bl-data').value || new Date().toISOString().slice(0,10);
   if(!dataNoPainel(_bd)){ alert('O painel só recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 os dados vêm da planilha do Drive — lançar aqui geraria duplicidade.'); return; }
-  BOLETOS.push({
+  const _reg = {
     data_pgto: _bd, ano: +_bd.slice(0,4), mes: +_bd.slice(5,7),
-    data: dataBR(_bd),
+    competencia: (MES_ABREV[+_bd.slice(5,7)]||'') + '/' + _bd.slice(2,4),
     loja: document.getElementById('bl-loja').value,
     descricao: document.getElementById('bl-descricao').value,
     valor: num(document.getElementById('bl-valor').value)||0,
     status: document.getElementById('bl-status').value,
-  });
+    origem: 'painel',
+  };
+  const _btn = e.target.querySelector('button[type="submit"]');
+  const _rot = _btn ? _btn.textContent : '';
+  if(_btn){ _btn.disabled = true; _btn.textContent = 'Lançando...'; }
+  /* grava primeiro: sem isto o boleto so existia na tela e sumia ao recarregar */
+  const _salvo = await tnInsertRet('boletos', _reg);
+  if(_btn){ _btn.disabled = false; _btn.textContent = _rot; }
+  if(!_salvo){ alert('Não consegui gravar este boleto. Confira sua conexão e tente de novo.'); return; }
+  BOLETOS.push({..._reg, id: _salvo.id, data: dataBR(_bd)});
   e.target.reset(); renderCaixa();
 });
 document.getElementById('form-patrimonio').addEventListener('submit', e=>{
