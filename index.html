@@ -3813,6 +3813,7 @@ function renderCaixa(){
         <td>${esc(b.loja)}</td>
         <td class="strong">${BRL(b.valor)}</td>
         ${socia2?`<td style="text-align:right;white-space:nowrap;">${ehDaPlanilha(b)?'<span class="hint">planilha</span>':`
+          <button class="btn ghost" data-bldespagar="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Marquei sem querer: volta para A pagar" style="padding:2px 6px;">↩︎ desfazer</button>
           <button class="btn ghost" data-bleditar="${esc(b.id||b.descricao)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button>`}</td>`:''}
       </tr>`;
@@ -3886,6 +3887,17 @@ function renderCaixa(){
       if(d){ alvo.data_pgto=d; alvo.data=dataBR(d); alvo.ano=+d.slice(0,4); alvo.mes=+d.slice(5,7); }
       if(alvo.id) tnUpdate('boletos',{id:alvo.id},{descricao:alvo.descricao,loja:alvo.loja,valor:alvo.valor,data_pgto:alvo.data_pgto,ano:alvo.ano,mes:alvo.mes});
       boletoEditando=null; renderCaixa();
+    };
+  });
+  /* desfazer o "pago": o boleto volta para A pagar, sem perder o lancamento */
+  document.querySelectorAll('[data-bldespagar]').forEach(b=>{
+    b.onclick = ()=>{
+      const alvo = BOLETOS.find(x=> (b.dataset.bldespagar && x.id===b.dataset.bldespagar) || (!b.dataset.bldespagar && x.descricao===b.dataset.bldesc && x.status==='Pago'));
+      if(!alvo) return;
+      if(!confirm('Voltar "'+alvo.descricao+'" para A pagar?')) return;
+      alvo.status = 'Pendente';
+      if(alvo.id) tnUpdate('boletos',{id:alvo.id},{status:'Pendente'});
+      renderCaixa();
     };
   });
   document.querySelectorAll('[data-blpagar]').forEach(b=>{
