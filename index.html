@@ -347,8 +347,12 @@ window.TN_CONFIG = {
 
           <div class="grid grid-3" id="disp-kpis" style="margin-bottom:14px;"></div>
 
-          <h4 style="font-size:13px;margin:14px 0 6px 0;">Cenários</h4>
-          <div style="overflow-x:auto;"><table id="tbl-cenarios"></table></div>
+          <details id="det-cenarios" style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
+              <span id="det-cenarios-label">▸ Cenários</span>
+            </summary>
+            <div style="overflow-x:auto;margin-top:6px;"><table id="tbl-cenarios"></table></div>
+          </details>
 
           <details id="det-disp" style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
@@ -3218,6 +3222,13 @@ function renderDisponibilidade(){
   // posições registradas
   const lista = DISPONIBILIDADE.filter(d=>lojas.includes(d.loja))
     .sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || String(a.loja).localeCompare(b.loja));
+  const dc = document.getElementById('det-cenarios'), dcl = document.getElementById('det-cenarios-label');
+  if(dc && dcl){
+    const txtC = ()=> (dc.open?'▾ ':'▸ ') + 'Cenários';
+    dcl.textContent = txtC();
+    dc.ontoggle = ()=>{ dcl.textContent = txtC(); };
+  }
+
   const det = document.getElementById('det-disp'), lbl = document.getElementById('det-disp-label');
   if(det){
     det.style.display = lista.length ? '' : 'none';
@@ -3614,14 +3625,13 @@ function renderCaixa(){
   };
 
   // mês base: o exibido nas fixas; depois, os dois seguintes
-  const m1 = cardMes(fxAno, fxMes, contaDf + especieDf, true);
+  const m1 = cardMes(fxAno, fxMes, contaDf + especieDf + maqDf, true);   // maquininha e recurso disponivel
   const p2 = fxMes===12 ? {ano:fxAno+1, mes:1} : {ano:fxAno, mes:fxMes+1};
   const m2 = cardMes(p2.ano, p2.mes, m1.fim, false);
   const p3 = p2.mes===12 ? {ano:p2.ano+1, mes:1} : {ano:p2.ano, mes:p2.mes+1};
   const m3 = cardMes(p3.ano, p3.mes, m2.fim, false);
 
-  const dispFin = m1.fim;                          // o número do mês corrente
-  const dispAmpla = dispFin + maqDf;
+  const dispFin = m1.fim;                          // o número do mês corrente (ja com a maquininha)
 
   /* neg = saida (sempre em vermelho). Sem neg, um valor negativo tambem
      precisa aparecer com sinal — senao um saldo inicial no vermelho vira verde. */
@@ -3643,6 +3653,7 @@ function renderCaixa(){
         <tbody>
           ${principal
             ? linha('Saldo em conta', contaDf) + linha('Em espécie', especieDf)
+              + linha('A receber maquininha', maqDf)
             : linha('Saldo que entra do mês anterior', m.saldoInicial) + linha('Receita esperada', m.entra)}
           ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
@@ -3651,8 +3662,7 @@ function renderCaixa(){
         </tbody>
       </table>
       ${principal ? `<div class="hint" style="margin-top:9px;padding-top:8px;border-top:1px solid rgba(245,236,214,0.12);">
-        Com a maquininha (+ ${BRL(maqDf)}): <strong style="color:${dispAmpla>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla)}</strong><br>
-        Com a reserva de ${BRL(reservaDf)}: <strong style="color:${(dispAmpla+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispAmpla+reservaDf)}</strong></div>` : ''}
+        Com a reserva de ${BRL(reservaDf)}: <strong style="color:${(dispFin+reservaDf)>=0?'var(--good)':'var(--critical)'};">${BRL(dispFin+reservaDf)}</strong></div>` : ''}
     </div>`;
 
   const boxDf = document.getElementById('disp-financeira');
