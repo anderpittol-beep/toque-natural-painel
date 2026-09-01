@@ -4426,7 +4426,8 @@ function renderCaixa(){
 let gtAno = TODAY.getFullYear(), gtMes = TODAY.getMonth()+1;
 let folhaEditando = null;
 function gtCompetencia(){ return MES_ABREV[gtMes] + '/' + String(gtAno).slice(2); }
-function gtGerenciavel(){ return gtAno > FIXAS_CORTE.ano || (gtAno===FIXAS_CORTE.ano && gtMes >= FIXAS_CORTE.mes); }
+/* A planilha saiu de uso em 01/09/2026: a folha de qualquer mês é editada aqui. */
+function gtGerenciavel(){ return true; }
 function gtKey(g){ return g.id || ('L:'+g.ano+'-'+g.mes+'-'+g.loja+'-'+g.pessoa+'-'+g.papel); }
 
 /* Provisões trabalhistas mensais sobre o salário base */
@@ -4468,9 +4469,7 @@ function renderFolhaHeader(){
   const lbl = document.getElementById('gt-competencia');
   if(lbl) lbl.textContent = gtCompetencia();
   const aviso = document.getElementById('gt-aviso');
-  if(aviso) aviso.textContent = gtGerenciavel()
-    ? 'Para atualizar alguém, edite direto na tabela abaixo.'
-    : 'Competência anterior a Set/26: os valores vêm da planilha e não são editáveis aqui.';
+  if(aviso) aviso.textContent = 'Para atualizar alguém, edite direto na tabela abaixo. Meses fechados também podem ser corrigidos.';
   const ant = document.getElementById('gt-mes-ant'), prox = document.getElementById('gt-mes-prox');
   if(ant) ant.onclick = ()=>{ const p=fxMesAnterior(gtAno,gtMes); gtAno=p.ano; gtMes=p.mes; folhaEditando=null; renderGente(); renderCaixa(); };
   if(prox) prox.onclick = ()=>{ if(gtMes===12){gtAno++;gtMes=1;} else gtMes++; folhaEditando=null; renderGente(); renderCaixa(); };
@@ -5758,7 +5757,6 @@ document.getElementById('form-gente').addEventListener('submit', async e=>{
     comissao:num(document.getElementById('gt-comissao').value)||0,
     encargo:num(document.getElementById('gt-encargo').value)||0,
     vale:num(document.getElementById('gt-vale').value)||0 };
-  if(!gtGerenciavel()){ alert('Escolha uma competência a partir de Set/26 para lançar a folha.'); return; }
   await gtMaterializar();
   Object.assign(reg, { competencia: gtCompetencia(), ano: gtAno, mes: gtMes, origem: 'painel' });
   const i=GENTE.findIndex(g=> +g.ano===gtAno && +g.mes===gtMes && g.pessoa.toLowerCase()===pessoa.toLowerCase() && g.papel===papel && g.loja===loja);

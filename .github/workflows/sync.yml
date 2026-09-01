@@ -1,8 +1,8 @@
 name: Sync planilha -> Supabase
 
+# A planilha saiu de uso em 01/09/2026 e a folha passou a ser editada no painel.
+# O robô continua disponível para rodar à mão, mas não sobrescreve mais sozinho.
 on:
-  schedule:
-    - cron: '0 */3 * * *'
   workflow_dispatch: {}
 
 jobs:
