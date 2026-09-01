@@ -968,6 +968,23 @@ window.TN_CONFIG = {
           </details>
         </div>
         <div class="kanban" id="pedidos-kanban" style="grid-template-columns:repeat(5,1fr);"></div>
+        <div class="card" id="card-avisos-wa" style="margin-top:16px;display:none;">
+          <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div>
+              <h3 style="font-size:14px;margin:0 0 3px 0;">Avisos automáticos ao cliente</h3>
+              <p class="hint" style="margin:0;">Quando o pedido muda de etapa, o cliente recebe a mensagem correspondente no WhatsApp da loja.
+                 Use <strong>{nome}</strong>, <strong>{itens}</strong> e <strong>{loja}</strong> — o painel troca pelo dado do pedido.</p>
+            </div>
+            <label class="hint" style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;">
+              <input type="checkbox" id="wa-avisos-ligado"> <strong>enviar automaticamente</strong>
+            </label>
+          </div>
+          <div id="wa-avisos-textos" style="margin-top:10px;display:grid;gap:8px;"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+            <button class="btn primary" id="wa-avisos-salvar" style="padding:5px 14px;">Salvar avisos</button>
+            <span class="hint" id="wa-avisos-msg"></span>
+          </div>
+        </div>
         <div class="section-block" id="bloco-wa" style="margin-top:20px;">
           <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
             <div>
@@ -2855,7 +2872,14 @@ async function tnCarregarConfig(){
   try{
     if(!window.TN || !window.TN.sb) return;
     const {data} = await window.TN.sb.from('config_painel').select('chave,valor');
-    (data||[]).forEach(r=>{ if(r.chave==='ig_padrao_link') IG_PADRAO_LINK = r.valor||''; });
+    (data||[]).forEach(r=>{
+      if(r.chave==='ig_padrao_link') IG_PADRAO_LINK = r.valor||'';
+      if(r.chave==='wa_avisos'){
+        try{ const c = JSON.parse(r.valor||'{}');
+             WA_AVISOS = { ligado: !!c.ligado, textos: { ...WA_AVISO_PADRAO, ...(c.textos||{}) } }; }
+        catch(_){}
+      }
+    });
     aplicarPadraoIG();
   }catch(e){ console.warn('config', e); }
 }
@@ -3138,6 +3162,16 @@ function renderParcerias(){
 }
 
 /* ============ RENDER: PEDIDOS & ENTREGAS ============ */
+/* Avisos automáticos ao cliente quando o pedido anda na esteira.
+   Nascem DESLIGADOS: só passam a sair depois de conferidos e ligados na tela. */
+const WA_AVISO_PADRAO = {
+  separacao: 'Oi, {nome}! Recebemos seu pedido e já estamos separando tudo. 🛒',
+  pronto:    '{nome}, seu pedido está pronto e logo sai para entrega.',
+  rota:      'Seu pedido saiu para entrega, {nome}! Já já chega aí. 🛵',
+  entregue:  'Pedido entregue! Obrigado pela preferência 💚 Qualquer coisa, é só chamar.',
+};
+let WA_AVISOS = { ligado: false, textos: { ...WA_AVISO_PADRAO } };
+
 const PEDIDO_ETAPAS = [
   {key:'novo', label:'Novo (WhatsApp)'},
   {key:'separacao', label:'Em separação'},
@@ -3182,11 +3216,89 @@ function renderPedidos(){
     }</div>`;
   }).join('');
   document.querySelectorAll('[data-ped]').forEach(b=>{
-    b.onclick = ()=>{ const p=PEDIDOS.find(x=>x.id==b.dataset.ped); if(p){ p.status=b.dataset.to; renderPedidos(); } };
+    b.onclick = async ()=>{
+      const p = PEDIDOS.find(x=>x.id==b.dataset.ped);
+      if(!p) return;
+      const etapa = b.dataset.to;
+      p.status = etapa;
+      renderPedidos();
+      if(p.id) tnUpdate('pedidos', {id: p.id}, {status: etapa});   // antes só mudava na tela
+      await waAvisarCliente(p, etapa);
+    };
   });
   document.querySelectorAll('[data-ent]').forEach(sel=>{
-    sel.onchange = ()=>{ const p=PEDIDOS.find(x=>x.id==sel.dataset.ent); if(p){ p.entregador=sel.value; } };
+    sel.onchange = ()=>{
+      const p = PEDIDOS.find(x=>x.id==sel.dataset.ent);
+      if(!p) return;
+      p.entregador = sel.value;
+      if(p.id) tnUpdate('pedidos', {id: p.id}, {entregador: sel.value});
+    };
   });
+  renderAvisosWA();
+}
+
+/* Tela de configuração dos avisos — só sócia mexe */
+function renderAvisosWA(){
+  const card = document.getElementById('card-avisos-wa');
+  if(!card) return;
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  card.style.display = socia ? '' : 'none';
+  if(!socia) return;
+  const lig = document.getElementById('wa-avisos-ligado');
+  if(lig && lig.dataset.pronto!=='1'){
+    lig.checked = !!WA_AVISOS.ligado;
+    lig.dataset.pronto = '1';
+  }
+  const box = document.getElementById('wa-avisos-textos');
+  if(box && box.dataset.pronto!=='1'){
+    box.innerHTML = PEDIDO_ETAPAS.filter(e=>e.key!=='novo').map(e=>`
+      <div>
+        <label class="hint" style="display:block;margin-bottom:2px;">Quando entra em <strong>${esc(e.label)}</strong></label>
+        <input type="text" data-aviso="${e.key}" value="${esc((WA_AVISOS.textos||{})[e.key]||'')}"
+               style="width:100%;box-sizing:border-box;" placeholder="deixe vazio para não avisar nesta etapa">
+      </div>`).join('');
+    box.dataset.pronto = '1';
+  }
+  const btn = document.getElementById('wa-avisos-salvar');
+  if(btn && btn.dataset.pronto!=='1'){
+    btn.dataset.pronto = '1';
+    btn.onclick = async ()=>{
+      const textos = {};
+      document.querySelectorAll('[data-aviso]').forEach(i=>{ textos[i.dataset.aviso] = i.value.trim(); });
+      WA_AVISOS = { ligado: !!document.getElementById('wa-avisos-ligado').checked, textos };
+      const msg = document.getElementById('wa-avisos-msg');
+      btn.disabled = true;
+      try{
+        const { error } = await window.TN.sb.from('config_painel').upsert(
+          { chave:'wa_avisos', valor: JSON.stringify(WA_AVISOS), atualizado_em: new Date().toISOString() },
+          { onConflict:'chave' });
+        if(msg) msg.textContent = error ? ('não salvou: ' + error.message)
+                                        : (WA_AVISOS.ligado ? '✓ salvo — os avisos estão ligados' : '✓ salvo — avisos desligados');
+      } finally { btn.disabled = false; }
+    };
+  }
+}
+
+/* Manda o aviso da etapa para o cliente, se os avisos estiverem ligados */
+async function waAvisarCliente(pedido, etapa){
+  if(!WA_AVISOS.ligado) return;
+  const modelo = (WA_AVISOS.textos||{})[etapa];
+  if(!modelo || !pedido.telefone) return;
+  const texto = modelo
+    .replace(/\{nome\}/g, (pedido.cliente||'').split(' ')[0] || 'tudo bem')
+    .replace(/\{itens\}/g, pedido.itens||'')
+    .replace(/\{loja\}/g, pedido.loja||'');
+  try{
+    const { data, error } = await window.TN.sb.functions.invoke('wa-enviar', {
+      body: { loja: pedido.loja, telefone: pedido.telefone, texto },
+    });
+    if(error || (data && data.erro)){
+      const motivo = (data && data.erro) || error.message || 'erro desconhecido';
+      alert('O pedido mudou de etapa, mas o aviso não foi enviado ao cliente.\n\n' + motivo);
+    }
+  }catch(e){
+    alert('O pedido mudou de etapa, mas o aviso não foi enviado ao cliente.\n\n' + (e.message||e));
+  }
 }
 
 /* ============ RENDER: PATRIMÔNIO & MANUTENÇÃO ============ */
@@ -5090,6 +5202,7 @@ function ligarFormulariosPessoais(){
    As mensagens chegam pelo webhook da Evolution, sao gravadas no Supabase e
    aparecem aqui ao vivo — a colaboradora ve so a loja dela. */
 let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
+let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
 
 const waLojasVisiveis = () => {
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
@@ -5167,7 +5280,12 @@ function renderWhatsapp(){
   const tit = document.getElementById('wa-titulo'), th = document.getElementById('wa-thread');
   if(!conv){ tit.textContent=''; th.innerHTML='<p class="hint">Escolha uma conversa à esquerda.</p>'; }
   else{
-    tit.innerHTML = `${esc(conv.nome || conv.telefone)} <span class="hint" style="font-weight:400;">· ${esc(conv.telefone)}</span>`;
+    tit.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span>${esc(conv.nome || conv.telefone)} <span class="hint" style="font-weight:400;">· ${esc(conv.telefone)}</span></span>
+      ${conv.pedido_id
+        ? `<span class="badge b-good"><span class="dot"></span>pedido #${esc(conv.pedido_id)}</span>`
+        : `<button class="btn primary" data-wapedido="1" style="padding:3px 11px;font-size:12px;">▸ virar pedido</button>`}
+    </div>`;
     const msgs = WA_MENSAGENS.filter(m=>m.conversa_id===conv.id)
       .sort((a,b)=> String(a.msg_em).localeCompare(String(b.msg_em)));
     th.innerHTML = msgs.map(m=>`
@@ -5180,6 +5298,28 @@ function renderWhatsapp(){
   document.querySelectorAll('[data-waconv]').forEach(el=>{
     el.onclick = ()=>{ waConversaSel = el.dataset.waconv; renderWhatsapp(); };
   });
+  const btnPed = document.querySelector('[data-wapedido]');
+  if(btnPed) btnPed.onclick = ()=> waVirarPedido(conv);
+}
+
+/* Leva a conversa para o formulário de pedido com o que já se sabe do cliente.
+   Itens, endereço e valor continuam com quem atende — o painel não inventa. */
+function waVirarPedido(conv){
+  if(!conv) return;
+  waPedidoDe = conv.id;
+  const f = document.getElementById('form-pedido');
+  if(!f) return;
+  const bloco = f.closest('details.add-form');
+  if(bloco) bloco.open = true;
+  const põe = (id, v)=>{ const el=document.getElementById(id); if(el) el.value = v; };
+  põe('pd-cliente', conv.nome || '');
+  põe('pd-telefone', conv.telefone || '');
+  const selLoja = document.getElementById('pd-loja');
+  if(selLoja && conv.loja) selLoja.value = conv.loja;
+  põe('pd-itens', ''); põe('pd-endereco', ''); põe('pd-valor', '');
+  f.scrollIntoView({behavior:'smooth', block:'center'});
+  const itens = document.getElementById('pd-itens');
+  if(itens) setTimeout(()=>itens.focus(), 400);
 }
 
 
@@ -5564,20 +5704,27 @@ document.getElementById('form-cliente').addEventListener('submit', e=>{
 document.getElementById('pieMetric').onchange = renderStoreShare;
 document.getElementById('parceriaCatFilter').onchange = renderParcerias;
 document.getElementById('pd-entregador').innerHTML = ENTREGADORES.map(e=>`<option>${e}</option>`).join('');
-document.getElementById('form-pedido').addEventListener('submit', e=>{
+document.getElementById('form-pedido').addEventListener('submit', async e=>{
   e.preventDefault();
-  PEDIDOS.push({
-    id: ++PEDIDO_SEQ,
-    cliente: document.getElementById('pd-cliente').value,
-    telefone: document.getElementById('pd-telefone').value,
-    loja: document.getElementById('pd-loja').value,
-    itens: document.getElementById('pd-itens').value,
-    valor: num(document.getElementById('pd-valor').value) || 0,
-    endereco: document.getElementById('pd-endereco').value,
-    entregador: document.getElementById('pd-entregador').value,
-    status: 'novo',
-  });
-  tnInsert('pedidos',{cliente:document.getElementById('pd-cliente').value,telefone:document.getElementById('pd-telefone').value,loja:document.getElementById('pd-loja').value,itens:document.getElementById('pd-itens').value,valor:num(document.getElementById('pd-valor').value)||0,endereco:document.getElementById('pd-endereco').value,entregador:document.getElementById('pd-entregador').value,status:'novo'});
+  const v = id => (document.getElementById(id)||{}).value || '';
+  const reg = {
+    cliente: v('pd-cliente'), telefone: v('pd-telefone'), loja: v('pd-loja'),
+    itens: v('pd-itens'), valor: num(v('pd-valor')) || 0,
+    endereco: v('pd-endereco'), entregador: v('pd-entregador'), status: 'novo',
+  };
+  const salvo = await tnInsertRet('pedidos', reg);
+  if(!salvo){ alert(motivoDoErro('Não consegui gravar este pedido.')); return; }
+  PEDIDOS.push({ ...reg, id: salvo.id ?? ++PEDIDO_SEQ });
+
+  /* veio de uma conversa do WhatsApp? entao ela passa a apontar para o pedido */
+  if(waPedidoDe){
+    const conv = WA_CONVERSAS.find(c=>c.id===waPedidoDe);
+    const ref = String(salvo.id ?? '').slice(0,8);
+    if(conv){ conv.pedido_id = ref; }
+    tnUpdate('wa_conversas', {id: waPedidoDe}, {pedido_id: ref});
+    waPedidoDe = null;
+    renderWhatsapp();
+  }
   e.target.reset();
   document.getElementById('pd-entregador').innerHTML = ENTREGADORES.map(x=>`<option>${x}</option>`).join('');
   renderPedidos();
