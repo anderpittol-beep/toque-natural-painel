@@ -3247,7 +3247,8 @@ function dataPagamentoFolha(ano, mes){
   return '05/' + String(m).padStart(2,'0') + '/' + a;
 }
 /* Histórico da folha: o mês em tela fica na tabela de cima; os fechados ficam
-   aqui, recolhidos — some da vista sem sumir do registro. */
+   aqui, recolhidos. Cada mês guarda os próprios valores — salário, encargos e
+   comissão daquela competência, não os de hoje. */
 function renderHistoricoFolha(){
   const box = document.getElementById('folha-historico');
   if(!box) return;
@@ -3258,17 +3259,31 @@ function renderHistoricoFolha(){
     const k = (+g.ano)*100 + (+g.mes);
     if(!k || k >= atual) return;                    // o mês em tela já está na tabela
     if(!selStores().includes(g.loja)) return;
-    if(!porMes[k]) porMes[k] = {ano:+g.ano, mes:+g.mes, pessoas:0, folha:0, comissao:0, extras:0, prov:0, pagos:0};
+    if(!porMes[k]) porMes[k] = {ano:+g.ano, mes:+g.mes, pessoas:0, folha:0, comissao:0,
+                                extras:0, prov:0, pagos:0, pagoEm:null, editadoEm:null};
     const m = porMes[k];
     m.pessoas++;
     m.folha    += gTotal(g);
     m.comissao += gComissao(g);
     m.extras   += gExtras(g);
     m.prov     += gProvisao(g).total;
-    if(g.pago) m.pagos++;
+    if(g.pago){
+      m.pagos++;
+      if(g.pago_em && (!m.pagoEm || g.pago_em > m.pagoEm)) m.pagoEm = g.pago_em;
+    }
+    if(g.atualizado_em && (!m.editadoEm || g.atualizado_em > m.editadoEm)) m.editadoEm = g.atualizado_em;
   });
   const meses = Object.keys(porMes).map(Number).sort((a,b)=>b-a).map(k=>porMes[k]);
   if(!socia || !meses.length){ box.innerHTML = ''; return; }
+
+  const dia = iso => {
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') : null;
+  };
+  const diaHora = iso => {
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? d.toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+  };
 
   box.innerHTML = `
     <details style="margin-top:12px;">
@@ -3278,10 +3293,13 @@ function renderHistoricoFolha(){
       <div style="overflow-x:auto;margin-top:6px;">
       <table class="table" style="font-size:12.5px;">
         <thead><tr><th>Competência</th><th>Pessoas</th><th>Comissões</th><th>Horas extras</th>
-          <th>Total da folha</th><th>13º + férias</th><th>Custo total</th><th>Pagamento</th></tr></thead>
+          <th>Total da folha</th><th>13º + férias</th><th>Custo total</th>
+          <th>Pagamento</th><th>Última edição</th><th></th></tr></thead>
         <tbody>${meses.map(m=>{
           const rotulo = (MES_ABREV[m.mes]||m.mes) + '/' + String(m.ano).slice(2);
           const tudoPago = m.pagos === m.pessoas;
+          const previsto = dataPagamentoFolha(m.ano, m.mes);
+          const noPainel = m.ano > FIXAS_CORTE.ano || (m.ano===FIXAS_CORTE.ano && m.mes >= FIXAS_CORTE.mes);
           return `<tr>
             <td class="strong">${esc(rotulo)}</td>
             <td>${m.pessoas}</td>
@@ -3290,12 +3308,29 @@ function renderHistoricoFolha(){
             <td class="strong">${BRL(m.folha)}</td>
             <td>${BRL(m.prov)}</td>
             <td class="strong">${BRL(m.folha + m.prov)}</td>
-            <td style="white-space:nowrap;">${esc(dataPagamentoFolha(m.ano, m.mes))}
-              ${tudoPago?'<span class="badge b-good" style="vertical-align:middle;"><span class="dot"></span>pago</span>'
-                        :'<span class="hint">· '+m.pagos+' de '+m.pessoas+' pagos</span>'}</td>
+            <td style="white-space:nowrap;">${tudoPago
+              ? `<span class="badge b-good"><span class="dot"></span>pago</span> <span class="hint">${esc(dia(m.pagoEm) || previsto)}</span>`
+              : `<span class="hint">previsto ${esc(previsto)} · ${m.pagos} de ${m.pessoas} pagos</span>`}</td>
+            <td class="hint" style="white-space:nowrap;">${esc(diaHora(m.editadoEm))}</td>
+            <td style="text-align:right;white-space:nowrap;">
+              <button class="btn ghost" data-fhabrir="${m.ano}-${m.mes}" style="padding:2px 9px;font-size:11.5px;"
+                title="${noPainel?'Abrir este mês na tabela acima para editar':'Mês da planilha: abre para consulta'}">
+                ${noPainel?'✏️ abrir e editar':'ver'}</button></td>
           </tr>`;}).join('')}</tbody>
       </table></div>
+      <p class="hint" style="margin:6px 0 0;">Cada mês guarda os próprios valores: salário, encargos e comissão são os daquela competência.
+         Meses anteriores a ${esc((MES_ABREV[FIXAS_CORTE.mes]||'') + '/' + String(FIXAS_CORTE.ano).slice(2))} vêm da planilha e abrem só para consulta.</p>
     </details>`;
+
+  box.querySelectorAll('[data-fhabrir]').forEach(b=>{
+    b.onclick = ()=>{
+      const [a, m] = b.dataset.fhabrir.split('-').map(Number);
+      gtAno = a; gtMes = m; folhaEditando = null;
+      renderGente(); renderCaixa();
+      const tab = document.getElementById('tbl-gente');
+      if(tab) tab.scrollIntoView({behavior:'smooth', block:'center'});
+    };
+  });
 }
 
 /* Tela de configuração dos avisos — só sócia mexe */
@@ -4182,7 +4217,8 @@ function renderCaixa(){
       const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
       for(const g of alvos){
         g.pago = marcado; g.pago_em = quando;
-        const campos = {pago:g.pago, pago_em:g.pago_em};
+        g.atualizado_em = new Date().toISOString();
+        const campos = {pago:g.pago, pago_em:g.pago_em, atualizado_em:g.atualizado_em};
         /* Pagou, congela: a comissão daquele mês para de acompanhar o faturamento.
            Se o pagamento for desmarcado, ela volta a ser calculada. */
         if(marcado && !g.comissao_congelada && !(+g.comissao > 0)){
@@ -4555,8 +4591,9 @@ function renderGente(){
       Object.assign(g, { pessoa:pes, papel:get('papel'), loja:get('loja'),
         salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0, vale:num(get('vale'))||0,
         horas_dia: hd==='' ? null : (num(hd)||0), horas_extras: num(get('horas_extras'))||0 });
+      g.atualizado_em = new Date().toISOString();
       if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,
-        encargo:g.encargo,vale:g.vale,horas_dia:g.horas_dia,horas_extras:g.horas_extras});
+        encargo:g.encargo,vale:g.vale,horas_dia:g.horas_dia,horas_extras:g.horas_extras,atualizado_em:g.atualizado_em});
       folhaEditando=null; renderGente(); renderCaixa();
     };
   });
@@ -6114,7 +6151,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
