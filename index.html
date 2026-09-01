@@ -1046,11 +1046,12 @@ window.TN_CONFIG = {
         </div>
         
         <div class="card">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Folha do mês <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>com provisões</span></h3>
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Folha de <span id="folha-competencia">—</span> <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>com provisões</span></h3>
           <p class="hint" style="margin:0 0 10px 0;">Salário, horas extras, comissão por faixa de faturamento, encargos e a retenção de 13º e férias — tudo na mesma linha.
              <strong>13º</strong> = 1/12 do salário; <strong>férias</strong> = (salário + 1/3) ÷ 12. Hora extra = valor da hora + 50%.</p>
           <div style="overflow-x:auto;"><table id="tbl-gente"></table></div>
           <p class="hint" id="gt-rodape" style="margin:8px 0 0 0;"></p>
+          <div id="folha-historico"></div>
         </div>
 
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
@@ -3239,6 +3240,64 @@ function renderPedidos(){
   renderAvisosWA();
 }
 
+/* A folha é paga no dia 5 do mês seguinte ao da competência */
+function dataPagamentoFolha(ano, mes){
+  const m = mes === 12 ? 1 : mes + 1;
+  const a = mes === 12 ? ano + 1 : ano;
+  return '05/' + String(m).padStart(2,'0') + '/' + a;
+}
+/* Histórico da folha: o mês em tela fica na tabela de cima; os fechados ficam
+   aqui, recolhidos — some da vista sem sumir do registro. */
+function renderHistoricoFolha(){
+  const box = document.getElementById('folha-historico');
+  if(!box) return;
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  const atual = gtAno*100 + gtMes;
+  const porMes = {};
+  (GENTE||[]).forEach(g=>{
+    const k = (+g.ano)*100 + (+g.mes);
+    if(!k || k >= atual) return;                    // o mês em tela já está na tabela
+    if(!selStores().includes(g.loja)) return;
+    if(!porMes[k]) porMes[k] = {ano:+g.ano, mes:+g.mes, pessoas:0, folha:0, comissao:0, extras:0, prov:0, pagos:0};
+    const m = porMes[k];
+    m.pessoas++;
+    m.folha    += gTotal(g);
+    m.comissao += gComissao(g);
+    m.extras   += gExtras(g);
+    m.prov     += gProvisao(g).total;
+    if(g.pago) m.pagos++;
+  });
+  const meses = Object.keys(porMes).map(Number).sort((a,b)=>b-a).map(k=>porMes[k]);
+  if(!socia || !meses.length){ box.innerHTML = ''; return; }
+
+  box.innerHTML = `
+    <details style="margin-top:12px;">
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 0;list-style:none;">
+        ▸ histórico da folha · ${meses.length} ${meses.length===1?'mês fechado':'meses fechados'}
+      </summary>
+      <div style="overflow-x:auto;margin-top:6px;">
+      <table class="table" style="font-size:12.5px;">
+        <thead><tr><th>Competência</th><th>Pessoas</th><th>Comissões</th><th>Horas extras</th>
+          <th>Total da folha</th><th>13º + férias</th><th>Custo total</th><th>Pagamento</th></tr></thead>
+        <tbody>${meses.map(m=>{
+          const rotulo = (MES_ABREV[m.mes]||m.mes) + '/' + String(m.ano).slice(2);
+          const tudoPago = m.pagos === m.pessoas;
+          return `<tr>
+            <td class="strong">${esc(rotulo)}</td>
+            <td>${m.pessoas}</td>
+            <td>${m.comissao?`<span style="color:var(--good);font-weight:600;">${BRL(m.comissao)}</span>`:'—'}</td>
+            <td>${m.extras?BRL(m.extras):'—'}</td>
+            <td class="strong">${BRL(m.folha)}</td>
+            <td>${BRL(m.prov)}</td>
+            <td class="strong">${BRL(m.folha + m.prov)}</td>
+            <td style="white-space:nowrap;">${esc(dataPagamentoFolha(m.ano, m.mes))}
+              ${tudoPago?'<span class="badge b-good" style="vertical-align:middle;"><span class="dot"></span>pago</span>'
+                        :'<span class="hint">· '+m.pagos+' de '+m.pessoas+' pagos</span>'}</td>
+          </tr>`;}).join('')}</tbody>
+      </table></div>
+    </details>`;
+}
+
 /* Tela de configuração dos avisos — só sócia mexe */
 function renderAvisosWA(){
   const card = document.getElementById('card-avisos-wa');
@@ -4447,6 +4506,10 @@ function renderGente(){
       <td class="strong">${BRL(t13)}</td>
       <td class="strong">${BRL(tFer)}</td>
       <td class="strong">${BRL(totalCusto)}</td>${podeEd?'<td></td>':''}</tr>`:''}</tbody>`;
+
+  const lblComp = document.getElementById('folha-competencia');
+  if(lblComp) lblComp.textContent = gtCompetencia() + ' · pagamento em ' + dataPagamentoFolha(gtAno, gtMes);
+  renderHistoricoFolha();
 
   const rod = document.getElementById('gt-rodape');
   if(rod) rod.innerHTML = `A reter neste mês para 13º e férias: <strong>${BRL(t13+tFer)}</strong>
