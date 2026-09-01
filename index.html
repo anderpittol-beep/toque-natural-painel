@@ -4407,7 +4407,8 @@ function viewTemDados(v){
     case 'margem': case 'produtos': case 'estoque': case 'validade': return temProdutos;
     case 'clientes':  return (CLIENTES||[]).length > 0;
     case 'parcerias': return (PARCERIAS||[]).length > 0;
-    case 'pedidos':   return (PEDIDOS||[]).length > 0;
+    case 'pedidos':   return (PEDIDOS||[]).length > 0 || (WA_CONVERSAS||[]).length > 0
+                          || (WA_INSTANCIAS||[]).some(x=>x.status==='open');
     case 'pessoais':  return true;
     default: return true;
   }
@@ -5203,6 +5204,7 @@ function ligarFormulariosPessoais(){
    aparecem aqui ao vivo — a colaboradora ve so a loja dela. */
 let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
 let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
+let WA_INSTANCIAS = [];  // WhatsApp de cada loja e seu estado de conexao
 
 const waLojasVisiveis = () => {
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
@@ -5215,13 +5217,16 @@ async function tnCarregarWhatsapp(){
   try{
     if(!window.TN || !window.TN.sb) return;
     const sb = window.TN.sb;
-    const [c, m] = await Promise.all([
+    const [c, m, i] = await Promise.all([
       sb.from('wa_conversas').select('*').order('ultima_em',{ascending:false}).limit(200),
-      sb.from('wa_mensagens').select('*').order('msg_em',{ascending:true}).limit(1000)
+      sb.from('wa_mensagens').select('*').order('msg_em',{ascending:true}).limit(1000),
+      sb.from('wa_instancias').select('*')
     ]);
     WA_CONVERSAS = c.data || [];
     WA_MENSAGENS = m.data || [];
+    WA_INSTANCIAS = i.data || [];
     renderWhatsapp();
+    if(typeof applyPerfil === 'function') applyPerfil();   // WhatsApp ligado tira a tela da marca d'água
     waAssinarTempoReal();
   }catch(e){ console.warn('whatsapp', e); }
 }
