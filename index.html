@@ -3947,6 +3947,10 @@ function renderCaixa(){
   const cxPodeEditar = socia;
   const ncols = cxPodeEditar ? 11 : 10;
   const lojasCx = ['Itaipulândia','Ouro Verde','Toledo'];
+  /* Só o dia mais recente fica à vista; os anteriores abrem quando se pede.
+     Sem isso a tela vira uma lista infinita depois de algumas semanas. */
+  const diaTopo = cxSorted.length ? cxSorted[0].data : null;
+  const diasAnteriores = [...new Set(cxSorted.filter(c=>c.data!==diaTopo).map(c=>c.data))].length;
   document.getElementById('tbl-caixa').innerHTML = `
     <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Meta do dia</th><th>Faltou / superou</th><th>% da meta</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th>${cxPodeEditar?'<th></th>':''}</tr></thead>
     <tbody>${cxSorted.map(c=>{
@@ -3974,7 +3978,8 @@ function renderCaixa(){
       const ultima = corr[0];
       const dif = vendas - meta;             // negativo = faltou
       const pct = meta>0 ? vendas/meta*100 : 0;
-      return `<tr>
+      const antigo = c.data !== diaTopo;
+      return `<tr class="${antigo?'cx-antigo':''}" ${antigo && !caixaVerTodos ? 'style="display:none;"' : ''}>
         <td>${esc(c.data)}${ultima?` <span class="badge b-warning" style="vertical-align:middle;" title="${esc(descreveCorrecao(ultima))}"><span class="dot"></span>corrigido</span>`:''}</td>
         <td>${esc(c.loja)}</td>
         <td class="strong">${BRL(vendas)}</td>
@@ -3988,7 +3993,14 @@ function renderCaixa(){
         ${cxPodeEditar?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-cxeditar="${esc(chave)}" title="Corrigir este dia" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-cxexcluir="${esc(chave)}" title="Excluir este dia" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('') || `<tr><td colspan="${ncols}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
+      </tr>`;}).join('') || `<tr><td colspan="${ncols}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}
+    ${diasAnteriores ? `<tr><td colspan="${ncols}" style="padding:6px 0;">
+      <button class="btn ghost" id="cx-ver-todos" style="padding:3px 10px;font-size:12px;">
+        ${caixaVerTodos ? '▾ mostrar só o último dia' : '▸ ver os ' + diasAnteriores + (diasAnteriores===1?' dia anterior':' dias anteriores')}
+      </button></td></tr>` : ''}</tbody>`;
+
+  const btnTodos = document.getElementById('cx-ver-todos');
+  if(btnTodos) btnTodos.onclick = ()=>{ caixaVerTodos = !caixaVerTodos; renderCaixa(); };
 
   renderCorrecoesCaixa(cxPodeEditar);
 
@@ -5297,6 +5309,7 @@ function ligarFormulariosPessoais(){
 let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
 let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
 let caixaEditando = null;   // fechamento de caixa aberto para correcao
+let caixaVerTodos = false;  // a tabela mostra so o ultimo dia; o resto abre a pedido
 let TN_EMAIL = '';          // quem esta logado, para assinar as correcoes
 let CAIXA_CORRECOES = [];   // rastro de quem mexeu em fechamento ja lancado
 let WA_INSTANCIAS = [];  // WhatsApp de cada loja e seu estado de conexao
