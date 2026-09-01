@@ -3941,10 +3941,30 @@ function renderCaixa(){
 
   // Tabela caixa diário
   const cxSorted = caixa.slice().sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || a.loja.localeCompare(b.loja));
-  const ncols = 9;
+  /* Sócio corrige o que a colaboradora lançou: o caixa do dia é a base do
+     faturamento, então um erro aqui contamina meta, comissão e projeção. */
+  const cxPodeEditar = socia;
+  const ncols = cxPodeEditar ? 11 : 10;
+  const lojasCx = ['Itaipulândia','Ouro Verde','Toledo'];
   document.getElementById('tbl-caixa').innerHTML = `
-    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Meta do dia</th><th>Faltou / superou</th><th>% da meta</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th></tr></thead>
+    <thead><tr><th>Data</th><th>Loja</th><th>Vendas do dia (bruto)</th><th>Meta do dia</th><th>Faltou / superou</th><th>% da meta</th><th>Saldo inicial</th><th>Entradas do dia</th><th>Saídas</th><th>Fechamento do dia</th>${cxPodeEditar?'<th></th>':''}</tr></thead>
     <tbody>${cxSorted.map(c=>{
+      const chave = c.id || (c.data + '|' + c.loja);
+      if(cxPodeEditar && caixaEditando === chave){
+        return `<tr>
+          <td><input type="text" data-ce="data" value="${esc(c.data)}" style="width:96px;"></td>
+          <td><select data-ce="loja">${lojasCx.map(l=>`<option ${l===c.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+          <td><input type="number" data-ce="vendas" value="${+c.vendas||0}" step="0.01" style="width:106px;"></td>
+          <td colspan="3" class="hint">recalculado ao salvar</td>
+          <td><input type="number" data-ce="inicial" value="${+c.inicial||0}" step="0.01" style="width:100px;"></td>
+          <td><input type="number" data-ce="entradas" value="${+c.entradas||0}" step="0.01" style="width:100px;"></td>
+          <td><input type="number" data-ce="saidas" value="${+c.saidas||0}" step="0.01" style="width:96px;"></td>
+          <td class="hint">—</td>
+          <td style="white-space:nowrap;">
+            <button class="btn primary" data-cxsalvar="${esc(chave)}" style="padding:2px 8px;">salvar</button>
+            <button class="btn ghost" data-cxcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
       const f=fech(c);
       const vendas = +c.vendas||0;
       const meta = metaDoDia(c.loja, c.data);
@@ -3961,7 +3981,51 @@ function renderCaixa(){
         <td>${BRL(c.entradas)}</td>
         <td>${BRL(c.saidas)}</td>
         <td class="strong" style="color:${f>=0?'var(--good)':'var(--critical)'};">${BRL(f)}</td>
-      </tr>`;}).join('') || `<tr><td colspan="${ncols+1}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
+        ${cxPodeEditar?`<td style="white-space:nowrap;text-align:right;">
+          <button class="btn ghost" data-cxeditar="${esc(chave)}" title="Corrigir este dia" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-cxexcluir="${esc(chave)}" title="Excluir este dia" style="padding:2px 6px;">🗑️</button></td>`:''}
+      </tr>`;}).join('') || `<tr><td colspan="${ncols}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
+
+  if(cxPodeEditar){
+    const acha = ch => CAIXA_DIARIO.find(x => (x.id || (x.data+'|'+x.loja)) === ch);
+    document.querySelectorAll('[data-cxeditar]').forEach(b=>{
+      b.onclick = ()=>{ caixaEditando = b.dataset.cxeditar; renderCaixa(); };
+    });
+    document.querySelectorAll('[data-cxcancelar]').forEach(b=>{
+      b.onclick = ()=>{ caixaEditando = null; renderCaixa(); };
+    });
+    document.querySelectorAll('[data-cxsalvar]').forEach(b=>{
+      b.onclick = async ()=>{
+        const c = acha(b.dataset.cxsalvar);
+        if(!c) return;
+        const tr = b.closest('tr');
+        const v = k => { const el = tr.querySelector('[data-ce="'+k+'"]'); return el ? el.value : ''; };
+        const novaData = v('data').trim();
+        if(!dataBRNoPainel(novaData)){ alert('Data inválida — use dd/mm/aaaa, a partir de 01/09/2026.'); return; }
+        Object.assign(c, { data: novaData, loja: v('loja'),
+          vendas: num(v('vendas'))||0, inicial: num(v('inicial'))||0,
+          entradas: num(v('entradas'))||0, saidas: num(v('saidas'))||0 });
+        c.final = c.inicial + c.entradas - c.saidas;
+        if(c.id){
+          tnUpdate('caixa_diario', {id: c.id}, { data: c.data, loja: c.loja, vendas: c.vendas,
+            saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saldo_final: c.final });
+        }
+        caixaEditando = null;
+        renderCaixa(); renderDesempenho(); renderAll();
+      };
+    });
+    document.querySelectorAll('[data-cxexcluir]').forEach(b=>{
+      b.onclick = ()=>{
+        const c = acha(b.dataset.cxexcluir);
+        if(!c) return;
+        if(!confirm('Excluir o fechamento de ' + c.data + ' em ' + c.loja + ' (' + BRL(c.vendas) + ' de vendas)?\n\nIsso tira o dia do faturamento e da meta.')) return;
+        const i = CAIXA_DIARIO.indexOf(c);
+        if(i >= 0) CAIXA_DIARIO.splice(i, 1);
+        if(c.id) tnDelete('caixa_diario', {id: c.id});
+        renderCaixa(); renderDesempenho(); renderAll();
+      };
+    });
+  }
 
   // Tabela despesas fixas (+ linha de folha vinda de Gente e Gestão)
   const podeEditar = socia && fxGerenciavel();
@@ -5217,6 +5281,7 @@ function ligarFormulariosPessoais(){
    aparecem aqui ao vivo — a colaboradora ve so a loja dela. */
 let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
 let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
+let caixaEditando = null;   // fechamento de caixa aberto para correcao
 let WA_INSTANCIAS = [];  // WhatsApp de cada loja e seu estado de conexao
 
 const waLojasVisiveis = () => {
@@ -5887,7 +5952,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
   try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
-  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial,entradas:+r.saldo_final,saidas:+r.saidas,conta:+r.saldo_conta})); }catch(e){}
+  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0})); }catch(e){}   /* entradas vinha lendo saldo_final */
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
