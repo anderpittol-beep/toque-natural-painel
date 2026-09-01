@@ -606,6 +606,7 @@ window.TN_CONFIG = {
             </form>
           </details>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
+          <div id="caixa-correcoes" style="display:none;"></div>
         </div>
 
         <div class="grid grid-4" id="premios" style="margin-bottom:18px;"></div>
@@ -3968,10 +3969,13 @@ function renderCaixa(){
       const f=fech(c);
       const vendas = +c.vendas||0;
       const meta = metaDoDia(c.loja, c.data);
+      const corr = (CAIXA_CORRECOES||[]).filter(x=> x.acao==='editou' &&
+        ((c.id && x.caixa_id === c.id) || (x.data_ref === c.data && x.loja === c.loja)));
+      const ultima = corr[0];
       const dif = vendas - meta;             // negativo = faltou
       const pct = meta>0 ? vendas/meta*100 : 0;
       return `<tr>
-        <td>${esc(c.data)}</td>
+        <td>${esc(c.data)}${ultima?` <span class="badge b-warning" style="vertical-align:middle;" title="${esc(descreveCorrecao(ultima))}"><span class="dot"></span>corrigido</span>`:''}</td>
         <td>${esc(c.loja)}</td>
         <td class="strong">${BRL(vendas)}</td>
         <td>${meta>0?BRL(meta):'<span class="hint">—</span>'}</td>
@@ -3985,6 +3989,8 @@ function renderCaixa(){
           <button class="btn ghost" data-cxeditar="${esc(chave)}" title="Corrigir este dia" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-cxexcluir="${esc(chave)}" title="Excluir este dia" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;}).join('') || `<tr><td colspan="${ncols}" class="hint">Nenhum dia registrado para esta loja.</td></tr>`}</tbody>`;
+
+  renderCorrecoesCaixa(cxPodeEditar);
 
   if(cxPodeEditar){
     const acha = ch => CAIXA_DIARIO.find(x => (x.id || (x.data+'|'+x.loja)) === ch);
@@ -4002,14 +4008,20 @@ function renderCaixa(){
         const v = k => { const el = tr.querySelector('[data-ce="'+k+'"]'); return el ? el.value : ''; };
         const novaData = v('data').trim();
         if(!dataBRNoPainel(novaData)){ alert('Data inválida — use dd/mm/aaaa, a partir de 01/09/2026.'); return; }
+        const antes = { data:c.data, loja:c.loja, vendas:+c.vendas||0, inicial:+c.inicial||0,
+                        entradas:+c.entradas||0, saidas:+c.saidas||0 };
         Object.assign(c, { data: novaData, loja: v('loja'),
           vendas: num(v('vendas'))||0, inicial: num(v('inicial'))||0,
           entradas: num(v('entradas'))||0, saidas: num(v('saidas'))||0 });
         c.final = c.inicial + c.entradas - c.saidas;
+        const depois = { data:c.data, loja:c.loja, vendas:c.vendas, inicial:c.inicial,
+                         entradas:c.entradas, saidas:c.saidas };
+        const mudou = JSON.stringify(antes) !== JSON.stringify(depois);
         if(c.id){
           tnUpdate('caixa_diario', {id: c.id}, { data: c.data, loja: c.loja, vendas: c.vendas,
             saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saldo_final: c.final });
         }
+        if(mudou) registrarCorrecao('editou', c, antes, depois);
         caixaEditando = null;
         renderCaixa(); renderDesempenho(); renderAll();
       };
@@ -4019,6 +4031,9 @@ function renderCaixa(){
         const c = acha(b.dataset.cxexcluir);
         if(!c) return;
         if(!confirm('Excluir o fechamento de ' + c.data + ' em ' + c.loja + ' (' + BRL(c.vendas) + ' de vendas)?\n\nIsso tira o dia do faturamento e da meta.')) return;
+        registrarCorrecao('excluiu', c,
+          { data:c.data, loja:c.loja, vendas:+c.vendas||0, inicial:+c.inicial||0,
+            entradas:+c.entradas||0, saidas:+c.saidas||0 }, null);
         const i = CAIXA_DIARIO.indexOf(c);
         if(i >= 0) CAIXA_DIARIO.splice(i, 1);
         if(c.id) tnDelete('caixa_diario', {id: c.id});
@@ -5282,6 +5297,8 @@ function ligarFormulariosPessoais(){
 let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = false;
 let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
 let caixaEditando = null;   // fechamento de caixa aberto para correcao
+let TN_EMAIL = '';          // quem esta logado, para assinar as correcoes
+let CAIXA_CORRECOES = [];   // rastro de quem mexeu em fechamento ja lancado
 let WA_INSTANCIAS = [];  // WhatsApp de cada loja e seu estado de conexao
 
 const waLojasVisiveis = () => {
@@ -5290,6 +5307,70 @@ const waLojasVisiveis = () => {
   const eu = EQUIPE.find(e=>e.nome && typeof usuarioNome!=='undefined' && e.nome===usuarioNome);
   return (eu && eu.loja && eu.loja!=='Todas') ? [eu.loja] : STORES.slice();
 };
+
+/* Descreve o que mudou, campo a campo, em português */
+const CAMPO_ROTULO = { data:'data', loja:'loja', vendas:'vendas', inicial:'saldo inicial',
+                       entradas:'entradas', saidas:'saídas' };
+function descreveCorrecao(c){
+  const a = c.antes || {}, d = c.depois || {};
+  if(c.acao === 'excluiu')
+    return 'Excluído por ' + (c.quem||'—') + ' · era ' + BRL(a.vendas||0) + ' de vendas';
+  const mudancas = Object.keys(CAMPO_ROTULO)
+    .filter(k => String(a[k]) !== String(d[k]))
+    .map(k => {
+      const eDinheiro = k !== 'data' && k !== 'loja';
+      const de = eDinheiro ? BRL(a[k]||0) : (a[k]||'—');
+      const para = eDinheiro ? BRL(d[k]||0) : (d[k]||'—');
+      return CAMPO_ROTULO[k] + ': ' + de + ' → ' + para;
+    });
+  return (mudancas.join(' · ') || 'sem alteração') + ' — por ' + (c.quem||'—');
+}
+function quandoCorrigiu(c){
+  const dt = c.criado_em ? new Date(c.criado_em) : null;
+  return dt && !isNaN(dt) ? dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+}
+/* Lista das correções, abaixo da tabela do caixa */
+function renderCorrecoesCaixa(socia){
+  const box = document.getElementById('caixa-correcoes');
+  if(!box) return;
+  const lista = (CAIXA_CORRECOES||[]).slice(0, 50);
+  if(!socia || !lista.length){ box.innerHTML = ''; box.style.display='none'; return; }
+  box.style.display = '';
+  box.innerHTML = `
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:600;padding:5px 0;list-style:none;">
+        ▸ ${lista.length} ${lista.length===1?'correção registrada':'correções registradas'} no caixa
+      </summary>
+      <table class="table" style="margin-top:6px;font-size:12.5px;">
+        <thead><tr><th>Quando</th><th>Dia / loja</th><th>O que mudou</th></tr></thead>
+        <tbody>${lista.map(c=>`
+          <tr>
+            <td class="hint" style="white-space:nowrap;">${esc(quandoCorrigiu(c))}</td>
+            <td style="white-space:nowrap;">${esc(c.data_ref||'—')} · ${esc(c.loja||'—')}</td>
+            <td>${c.acao==='excluiu'?'🗑️ ':'✏️ '}${esc(descreveCorrecao(c))}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </details>`;
+}
+
+/* Rastro das correções de caixa — só sócio enxerga (RLS garante isso) */
+async function tnCarregarCorrecoes(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    const { data } = await window.TN.sb.from('caixa_correcoes')
+      .select('*').order('criado_em', {ascending:false}).limit(200);
+    CAIXA_CORRECOES = data || [];
+    if(typeof renderCaixa === 'function') renderCaixa();
+  }catch(e){ console.warn('correcoes', e); }
+}
+function registrarCorrecao(acao, c, antes, depois){
+  const reg = { caixa_id: c.id || null, data_ref: c.data, loja: c.loja,
+                acao, quem: TN_EMAIL || 'painel', antes, depois,
+                criado_em: new Date().toISOString() };
+  CAIXA_CORRECOES.unshift(reg);
+  tnInsert('caixa_correcoes', { caixa_id: reg.caixa_id, data_ref: reg.data_ref, loja: reg.loja,
+                                acao, quem: reg.quem, antes, depois });
+}
 
 async function tnCarregarWhatsapp(){
   try{
@@ -5967,7 +6048,7 @@ async function tnLoadAll(sb){
 async function tnAfterLogin(sb){
   try{
     const {data:{user}}=await sb.auth.getUser();
-    if(user&&user.email) tnUserKey = 'tn_prefs_' + user.email;   // preferências por usuário
+    if(user&&user.email){ tnUserKey = 'tn_prefs_' + user.email; TN_EMAIL = user.email; }   // preferências por usuário
     if(user&&user.id) tnUserId = user.id;
     let q=sb.from('profiles').select('papel'); if(user&&user.id) q=q.eq('id',user.id);
     const {data:prof}=await q.maybeSingle();
@@ -5978,6 +6059,7 @@ async function tnAfterLogin(sb){
   tnCarregarConfig();
   tnCarregarPautas();
   tnCarregarWhatsapp();
+  tnCarregarCorrecoes();
   tnVerificarAcessoCasa();
 }
 
