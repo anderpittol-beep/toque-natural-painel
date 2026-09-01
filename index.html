@@ -3292,9 +3292,21 @@ async function waAvisarCliente(pedido, etapa){
     const { data, error } = await window.TN.sb.functions.invoke('wa-enviar', {
       body: { loja: pedido.loja, telefone: pedido.telefone, texto },
     });
-    if(error || (data && data.erro)){
-      const motivo = (data && data.erro) || error.message || 'erro desconhecido';
-      alert('O pedido mudou de etapa, mas o aviso não foi enviado ao cliente.\n\n' + motivo);
+    let motivo = (data && data.erro) || null;
+    /* o SDK devolve só "non-2xx"; o motivo de verdade vem no corpo da resposta */
+    if(!motivo && error){
+      motivo = error.message || 'erro desconhecido';
+      try{
+        const corpo = await error.context.json();
+        if(corpo && corpo.erro) motivo = corpo.erro;
+      }catch(_){}
+    }
+    if(motivo){
+      const ajuda = /não configurado|nao configurado/i.test(motivo)
+        ? '\n\nPara ligar o envio, cadastre EVOLUTION_URL e EVOLUTION_API_KEY em Edge Functions → Secrets, no Supabase.'
+        : (/não está conectado|nao esta conectado/i.test(motivo)
+            ? '\n\nReconecte o WhatsApp desta loja e tente de novo.' : '');
+      alert('O pedido mudou de etapa, mas o aviso não foi enviado ao cliente.\n\n' + motivo + ajuda);
     }
   }catch(e){
     alert('O pedido mudou de etapa, mas o aviso não foi enviado ao cliente.\n\n' + (e.message||e));
