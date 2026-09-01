@@ -4182,7 +4182,20 @@ function renderCaixa(){
       const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
       for(const g of alvos){
         g.pago = marcado; g.pago_em = quando;
-        if(g.id) await tnUpdate('folha', {id:g.id}, {pago:g.pago, pago_em:g.pago_em});
+        const campos = {pago:g.pago, pago_em:g.pago_em};
+        /* Pagou, congela: a comissão daquele mês para de acompanhar o faturamento.
+           Se o pagamento for desmarcado, ela volta a ser calculada. */
+        if(marcado && !g.comissao_congelada && !(+g.comissao > 0)){
+          const valor = gComissao(g);
+          if(valor > 0){
+            g.comissao = valor; g.comissao_congelada = true;
+            campos.comissao = valor; campos.comissao_congelada = true;
+          }
+        }else if(!marcado && g.comissao_congelada){
+          g.comissao = 0; g.comissao_congelada = false;
+          campos.comissao = 0; campos.comissao_congelada = false;
+        }
+        if(g.id) await tnUpdate('folha', {id:g.id}, campos);
       }
       gtAno = gAnoAnt; gtMes = gMesAnt;
       chk.disabled = false;
@@ -4396,7 +4409,7 @@ function folhaDaCompetencia(ano, mes, prof){
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
   return folhaDaCompetencia(p.ano, p.mes, prof+1)
-    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, horas_extras:0, pago:false, pago_em:null}));
+    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, comissao_congelada:false, horas_extras:0, pago:false, pago_em:null}));
 }
 async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
@@ -4475,6 +4488,7 @@ function renderGente(){
         </tr>`;
       }
       const com = gComissao(g), ext = gExtras(g), manual = +g.comissao > 0;
+      const congelada = !!g.comissao_congelada;
       const fat = g.papel==='Colaboradora' ? faturamentoLojaMes(+g.ano, +g.mes, g.loja) : 0;
       const jorn = gJornada(g);
       return `<tr>
@@ -4485,7 +4499,9 @@ function renderGente(){
         <td>${BRL(g.salario)}</td>
         <td>${ext?`${BRL(ext)} <span class="hint">${(+g.horas_extras||0)}h × ${BRL(gValorHora(g)*1.5)}</span>`:'—'}</td>
         <td>${com?`<span style="color:var(--good);font-weight:600;">${BRL(com)}</span>
-             <span class="hint">${manual?'lançada na mão':'faturou '+BRL(fat)+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':'')}</span>`
+             <span class="hint">${congelada ? 'congelada no pagamento'
+                : (manual ? 'lançada na mão'
+                          : 'faturou '+BRL(fat)+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':''))}</span>`
             :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${BRL(fat)}</span>`:'—')}</td>
         <td>${BRL(g.encargo)}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
@@ -6098,7 +6114,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
