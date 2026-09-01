@@ -601,6 +601,7 @@ window.TN_CONFIG = {
               <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
               <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
+              <p class="hint" id="cx-aviso" style="grid-column:1/-1;margin:2px 0 0;color:var(--good);min-height:15px;"></p>
             </form>
           </details>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
@@ -5357,24 +5358,49 @@ document.getElementById('form-disp').addEventListener('submit', async e=>{
   e.target.reset();
   renderDisponibilidade();
 });
-document.getElementById('form-caixa').addEventListener('submit', e=>{
+function cxDataHoje(){
+  const el = document.getElementById('cx-data');
+  if(el && !el.value) el.value = TODAY.toLocaleDateString('pt-BR');
+}
+cxDataHoje();
+document.getElementById('form-caixa').addEventListener('submit', async e=>{
   e.preventDefault();
   const cxData = document.getElementById('cx-data').value || TODAY.toLocaleDateString('pt-BR');
   if(!dataBRNoPainel(cxData)){
     alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
     return;
   }
-  CAIXA_DIARIO.push({
+  const cxLoja = document.getElementById('cx-loja').value;
+  /* o fechamento e um por dia e por loja: avisa antes de duplicar */
+  const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja);
+  if(jaTem && !confirm('O dia ' + cxData + ' já foi fechado em ' + cxLoja + ' com ' + BRL(jaTem.vendas) + '.\n\nLançar assim mesmo?')) return;
+  const cxReg = {
     data: cxData,
-    loja: document.getElementById('cx-loja').value,
+    loja: cxLoja,
     vendas: num(document.getElementById('cx-vendas').value)||0,
     inicial: num(document.getElementById('cx-inicial').value)||0,
     entradas: num(document.getElementById('cx-entradas').value)||0,
     saidas: num(document.getElementById('cx-saidas').value)||0,
     conta: 0,
-  });
-  tnInsert('caixa_diario',{data:cxData,loja:document.getElementById('cx-loja').value,vendas:num(document.getElementById('cx-vendas').value)||0,saldo_inicial:num(document.getElementById('cx-inicial').value)||0,saldo_final:num(document.getElementById('cx-entradas').value)||0,saidas:num(document.getElementById('cx-saidas').value)||0,saldo_conta:0});
-  e.target.reset(); renderCaixa(); renderDesempenho();
+  };
+  CAIXA_DIARIO.push(cxReg);
+  /* grava conferindo o retorno: antes o lancamento sumia calado quando o banco recusava */
+  const cxSalvo = await tnInsertRet('caixa_diario', {data:cxReg.data, loja:cxReg.loja, vendas:cxReg.vendas,
+    saldo_inicial:cxReg.inicial, entradas:cxReg.entradas, saidas:cxReg.saidas, saldo_final:(cxReg.inicial+cxReg.entradas-cxReg.saidas)});
+  if(!cxSalvo){
+    CAIXA_DIARIO.pop();
+    alert(motivoDoErro('Não consegui gravar o fechamento do dia ' + cxData + '.'));
+    return;
+  }
+  cxReg.id = cxSalvo.id;
+  const av = document.getElementById('cx-aviso');
+  if(av){ av.textContent = '✓ ' + cxData + ' registrado em ' + cxLoja + ' com ' + BRL(cxReg.vendas) + ' de vendas.';
+          setTimeout(()=>{ if(av.textContent.startsWith('✓ ' + cxData)) av.textContent=''; }, 8000); }
+  const _msg = av ? av.textContent : '';
+  e.target.reset();
+  if(av) av.textContent = _msg;      // o reset limpa o aviso; devolve a confirmacao
+  cxDataHoje();
+  renderCaixa(); renderDesempenho();
 });
 document.getElementById('form-fixa').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -5866,7 +5892,7 @@ function motivoDoErro(prefixo){
     return prefixo + '\n\nJá existe um lançamento idêntico: mesma loja, mesma descrição, mesma data e mesmo valor.'
          + '\nSe for outra parcela, mude a data ou detalhe a descrição (ex.: "ALECRIM 2/3").';
   if(cod==='42501' || /row-level security|permission denied/i.test(msg))
-    return prefixo + '\n\nSeu usuário não tem permissão para gravar aqui. Entre de novo com o login de sócio.';
+    return prefixo + '\n\nSeu usuário não tem permissão para gravar aqui. Confira se entrou com o seu login e avise o Anderson se persistir.';
   if(/jwt|token|expired|not authenticated|401/i.test(msg))
     return prefixo + '\n\nSua sessão expirou. Clique em Sair, entre de novo e refaça o lançamento.';
   if(/fetch|network|failed to fetch/i.test(msg))
