@@ -596,11 +596,12 @@ window.TN_CONFIG = {
             <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
               <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
               <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
-              <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto)" step="0.01">
-              <input type="number" id="cx-inicial" placeholder="Saldo inicial" step="0.01">
-              <input type="number" id="cx-entradas" placeholder="Entradas do dia (dinheiro no caixa)" step="0.01">
-              <input type="number" id="cx-saidas" placeholder="Saídas (pagamentos)" step="0.01">
+              <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto) *" step="0.01" min="0">
+              <input type="number" id="cx-inicial" placeholder="Saldo inicial (opcional)" step="0.01" min="0">
+              <input type="number" id="cx-entradas" placeholder="Entradas do dia (opcional)" step="0.01" min="0">
+              <input type="number" id="cx-saidas" placeholder="Saídas / pagamentos (opcional)" step="0.01" min="0">
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
+              <p class="hint" style="grid-column:1/-1;margin:2px 0 0;">Só o <strong>total de vendas</strong> é obrigatório. Os campos de saldo podem ficar em branco — o painel entende como zero, não precisa inventar valor.</p>
               <p class="hint" id="cx-aviso" style="grid-column:1/-1;margin:2px 0 0;color:var(--good);min-height:15px;"></p>
             </form>
           </details>
@@ -5527,6 +5528,12 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
     return;
   }
+  const cxVendas = num(document.getElementById('cx-vendas').value) || 0;
+  if(cxVendas <= 0){
+    alert('Informe o total de vendas do dia.\n\nOs campos de saldo (inicial, entradas e saídas) podem ficar em branco.');
+    const el = document.getElementById('cx-vendas'); if(el) el.focus();
+    return;
+  }
   const cxLoja = document.getElementById('cx-loja').value;
   /* o fechamento e um por dia e por loja: avisa antes de duplicar */
   const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja);
@@ -5534,7 +5541,7 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   const cxReg = {
     data: cxData,
     loja: cxLoja,
-    vendas: num(document.getElementById('cx-vendas').value)||0,
+    vendas: cxVendas,
     inicial: num(document.getElementById('cx-inicial').value)||0,
     entradas: num(document.getElementById('cx-entradas').value)||0,
     saidas: num(document.getElementById('cx-saidas').value)||0,
