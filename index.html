@@ -3748,8 +3748,9 @@ function cpGerenciavel(){ return cpAno > FIXAS_CORTE.ano || (cpAno===FIXAS_CORTE
 function comprasDaCompetencia(ano, mes){ return COMPRAS.filter(c=> +c.ano===ano && +c.mes===mes); }
 function dataBR(iso){ if(!iso) return '—'; const p=String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
 
-/* Reparte uma nota já lançada: a loja original fica com a parte dela, as outras
-   ganham uma compra própria, e os boletos são refeitos na mesma proporção. */
+/* Reparte uma nota já lançada: a loja original fica com a parte dela e as outras
+   ganham uma compra própria. Os boletos NÃO se dividem — quem comprou é quem paga,
+   então eles continuam inteiros na loja que lançou a nota. */
 async function aplicarDivisaoCompra(compra, linhas){
   const total = +compra.valor||0;
   const partes = linhas.filter(l=>l.querySelector('[data-cdm]').checked)
@@ -3760,12 +3761,13 @@ async function aplicarDivisaoCompra(compra, linhas){
   if(Math.abs(soma-total) >= 0.01 &&
      !confirm('A divisão (' + BRL(soma) + ') não fecha com a nota (' + BRL(total) + ').\n\nAplicar assim mesmo?')) return;
 
-  const antigos = compra.id ? BOLETOS.filter(b=>b.compra_id===compra.id) : [];
-  const pagos = antigos.filter(b=>b.status==='Pago').length;
+  const compradora = compra.loja;
+  const boletosDaNota = compra.id ? BOLETOS.filter(b=>b.compra_id===compra.id) : [];
   if(!confirm('Dividir “' + (compra.fornecedor||'') + '” em ' + partes.length + ' ' +
       (partes.length===1?'loja':'lojas') + '?' +
-      (antigos.length ? '\n\nOs ' + antigos.length + ' boletos desta nota serão refeitos, um conjunto por loja, com as mesmas datas'
-        + (pagos ? ' (inclusive ' + pagos + ' já marcado(s) como pago)' : '') + '.' : ''))) return;
+      '\n\nSó a despesa da nota é repartida.' +
+      (boletosDaNota.length ? ' Os ' + boletosDaNota.length + ' boletos continuam inteiros em ' + compradora
+        + ', que foi quem comprou e paga.' : ''))) return;
 
   /* a loja da compra original continua nela; as demais viram compras novas */
   const daOriginal = partes.find(p=>p.loja===compra.loja) || partes[0];
@@ -3775,7 +3777,6 @@ async function aplicarDivisaoCompra(compra, linhas){
   compra.loja = daOriginal.loja;
   if(compra.id) await tnUpdate('compras_nf', {id: compra.id}, {loja: compra.loja, valor: compra.valor});
 
-  const criadas = [{compra, parte: daOriginal}];
   for(const p of outras){
     const reg = { data: compra.data, ano: compra.ano, mes: compra.mes, loja: p.loja,
       fornecedor: compra.fornecedor, nf: compra.nf, descricao: compra.fornecedor,
@@ -3783,38 +3784,12 @@ async function aplicarDivisaoCompra(compra, linhas){
     const salvo = await tnInsertRet('compras_nf', reg);
     if(!salvo){ alert(motivoDoErro('Não consegui criar a compra de ' + p.loja + '.')); return; }
     COMPRAS.push(reg);
-    criadas.push({compra: reg, parte: p});
   }
 
-  /* boletos: apaga os da nota e refaz por loja, mantendo data e situação */
-  if(antigos.length){
-    for(const b of antigos){
-      const i = BOLETOS.indexOf(b);
-      if(i>=0) BOLETOS.splice(i,1);
-      if(b.id) await tnDelete('boletos', {id: b.id});
-    }
-    for(const {compra: cc, parte} of criadas){
-      const fatia = total ? parte.valor/total : 1;
-      let n = 0;
-      for(const b of antigos){
-        n++;
-        const iso = String(b.data_pgto || '').slice(0,10) ||
-                    (b.data ? b.data.split('/').reverse().join('-') : compra.data);
-        const dt = new Date(iso + 'T00:00:00');
-        const reg = { data_pgto: iso, ano: dt.getFullYear(), mes: dt.getMonth()+1,
-          competencia: MES_ABREV[dt.getMonth()+1] + '/' + String(dt.getFullYear()).slice(2),
-          loja: cc.loja,
-          descricao: (cc.fornecedor||'Compra') + ' ' + n + '/' + antigos.length + (cc.nf ? ' · NF ' + cc.nf : ''),
-          valor: Math.round((+b.valor||0) * fatia * 100)/100,
-          status: b.status || 'Pendente', origem: 'painel', compra_id: cc.id || null };
-        await tnInsertRet('boletos', reg);
-        BOLETOS.push({...reg, data: dataBR(iso)});
-      }
-    }
-  }
   compraDividindo = null;
   renderCaixa();
-  alert('Nota dividida entre ' + partes.map(p=>p.loja).join(', ') + '.');
+  alert('Despesa dividida entre ' + partes.map(p=>p.loja).join(', ') + '.' +
+    (boletosDaNota.length ? '\n\nOs boletos seguem em ' + compradora + '.' : ''));
 }
 
 function renderCompras(){
@@ -3871,7 +3846,7 @@ function renderCompras(){
         return `<tr><td colspan="${podeEd?7:6}" style="background:rgba(245,236,214,.05);">
           <div style="padding:8px 4px;">
             <div class="strong" style="font-size:13px;margin-bottom:3px;">Dividir “${esc(c.fornecedor||'')}” — ${BRL(total)}</div>
-            <p class="hint" style="margin:0 0 8px;">Quanto desta nota é de cada loja. Os boletos gerados por ela são refeitos na mesma proporção, mantendo as datas.</p>
+            <p class="hint" style="margin:0 0 8px;">Quanto desta nota é de cada loja. Os boletos não mudam: continuam inteiros em ${esc(c.loja)}, que foi quem comprou e paga.</p>
             ${STORES.map(l=>`
               <div data-cdl="${esc(l)}" style="display:flex;gap:8px;align-items:center;margin-bottom:5px;">
                 <label class="hint" style="display:flex;align-items:center;gap:6px;min-width:150px;cursor:pointer;">
@@ -6093,7 +6068,7 @@ function cpRenderRateio(){
 
   caixa.style.display = '';
   caixa.innerHTML = `
-    <p class="hint" style="margin:0 0 6px;">Marque as lojas e quanto da nota é de cada uma.</p>
+    <p class="hint" style="margin:0 0 6px;">Marque as lojas e quanto da nota é de cada uma. Os boletos saem inteiros em <strong>${esc(principal)}</strong> — quem compra é quem paga.</p>
     ${STORES.map(l=>{
       const ant = antigos[l];
       const marcada = ant ? ant.marcada : (l === principal);
@@ -6219,8 +6194,7 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   const parcelas = parseInt(document.getElementById('cp-parcelas').value) || 1;
   const modo = (document.getElementById('cp-modo')||{}).value || 'mensal';
 
-  /* No modo manual as datas valem para todas as lojas; o valor de cada boleto
-     entra na proporção da parte de cada uma. */
+  /* Os boletos são da nota inteira: no modo manual, cada linha já é um boleto. */
   let manuaisBase = null;
   if(modo === 'manual'){
     manuaisBase = [...document.querySelectorAll('#cp-parcelas-lista [data-cpp]')].map(l=>({
@@ -6234,7 +6208,7 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
        !confirm('A soma dos boletos (' + BRL(somaB) + ') não fecha com a nota (' + BRL(totalNota) + ').\n\nLançar assim mesmo?')) return;
   }
 
-  let criadosTotal = 0, lojasOk = [];
+  let criadosTotal = 0, lojasOk = [], criadas = [];
   for(const parte of partes){
     const reg = { data:d, ano:+d.slice(0,4), mes:+d.slice(5,7),
       loja: parte.loja, fornecedor: forn, nf: nf, descricao: forn,
@@ -6243,18 +6217,20 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
     const salvo = await tnInsertRet('compras_nf', reg);
     if(!salvo){ COMPRAS.pop(); alert(motivoDoErro('Não consegui gravar a compra de ' + parte.loja + '.')); return; }
     lojasOk.push(parte.loja);
+    criadas.push(reg);
+  }
 
-    if(modo !== 'nenhum' && parcelas >= 1){
-      const fatia = totalNota ? parte.valor / totalNota : 1;
-      const manuais = manuaisBase
-        ? manuaisBase.map(x=>({ data: x.data, valor: Math.round(x.valor * fatia * 100)/100 }))
-        : null;
-      criadosTotal += await gerarParcelas(reg, document.getElementById('cp-venc1').value, manuais) || 0;
-    }
+  /* A despesa se divide entre as lojas, mas o boleto não: quem faz o pedido é
+     quem paga, então as parcelas saem inteiras na loja que lançou a nota. */
+  if(modo !== 'nenhum' && parcelas >= 1){
+    const daPagadora = criadas.find(r=>r.loja===lojaPadrao) || criadas[0];
+    const notaCheia = {...daPagadora, loja: lojaPadrao, valor: Math.round(totalNota*100)/100};
+    criadosTotal = await gerarParcelas(notaCheia, document.getElementById('cp-venc1').value, manuaisBase) || 0;
   }
 
   if(criadosTotal) alert(criadosTotal + (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados') +
-    ' a partir desta nota' + (lojasOk.length>1 ? ' (' + lojasOk.join(', ') + ')' : '') + '.');
+    ' a partir desta nota, em ' + lojaPadrao +
+    (lojasOk.length>1 ? '.\n\nA despesa ficou dividida entre ' + lojasOk.join(', ') + '.' : '.'));
 
   e.target.reset();
   document.getElementById('cp-parcelas').value = 1;
