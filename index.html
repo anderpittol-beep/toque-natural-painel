@@ -615,7 +615,7 @@ window.TN_CONFIG = {
               <input type="number" id="cx-inicial" placeholder="Saldo inicial (opcional)" step="0.01" min="0">
               <input type="number" id="cx-entradas" placeholder="Entradas do dia (opcional)" step="0.01" min="0">
               <input type="number" id="cx-saidas" placeholder="Saídas / pagamentos (opcional)" step="0.01" min="0">
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar dia</button>
+              <button class="btn primary" type="submit" id="cx-registrar" style="grid-column:1/-1;">Registrar dia</button>
               <p class="hint" style="grid-column:1/-1;margin:2px 0 0;">Só o <strong>total de vendas</strong> é obrigatório. Os campos de saldo podem ficar em branco — o painel entende como zero, não precisa inventar valor.</p>
               <p class="hint" id="cx-aviso" style="grid-column:1/-1;margin:2px 0 0;color:var(--good);min-height:15px;"></p>
             </form>
@@ -5971,8 +5971,21 @@ function cxDataHoje(){
   if(el && !el.value) el.value = TODAY.toLocaleDateString('pt-BR');
 }
 cxDataHoje();
+let cxGravando = false;
+/* Confere no banco, e não só na memória desta aba: o dia pode ter sido fechado
+   em outro computador, e aí a lista local ainda não sabe disso. */
+async function cxJaFechado(data, loja){
+  try{
+    if(!(window.TN && window.TN.sb)) return null;
+    const {data: linhas, error} = await window.TN.sb.from('caixa_diario')
+      .select('id,data,loja,vendas').eq('data', data).eq('loja', loja);
+    if(error) return null;
+    return (linhas && linhas.length) ? linhas[0] : null;
+  }catch(e){ return null; }
+}
 document.getElementById('form-caixa').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(cxGravando) return;              // trava o clique duplo enquanto grava
   const cxData = document.getElementById('cx-data').value || TODAY.toLocaleDateString('pt-BR');
   if(!dataBRNoPainel(cxData)){
     alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
@@ -5986,8 +5999,11 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   }
   const cxLoja = document.getElementById('cx-loja').value;
   /* o fechamento e um por dia e por loja: avisa antes de duplicar */
-  const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja);
-  if(jaTem && !confirm('O dia ' + cxData + ' já foi fechado em ' + cxLoja + ' com ' + BRL(jaTem.vendas) + '.\n\nLançar assim mesmo?')) return;
+  const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja)
+             || await cxJaFechado(cxData, cxLoja);
+  if(jaTem && !confirm('O dia ' + cxData + ' já foi fechado em ' + cxLoja + ' com ' + BRL(jaTem.vendas) + ' de vendas.' +
+      '\n\nSe lançar de novo, o dia vai contar duas vezes nas vendas e na meta. Para corrigir o valor, use o lápis na linha do dia.' +
+      '\n\nLançar mesmo assim?')) return;
   const cxReg = {
     data: cxData,
     loja: cxLoja,
@@ -5999,8 +6015,13 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   };
   CAIXA_DIARIO.push(cxReg);
   /* grava conferindo o retorno: antes o lancamento sumia calado quando o banco recusava */
+  const btnCx = document.getElementById('cx-registrar');
+  cxGravando = true;
+  if(btnCx){ btnCx.disabled = true; btnCx.textContent = 'gravando…'; }
+  const soltar = ()=>{ cxGravando = false; if(btnCx){ btnCx.disabled = false; btnCx.textContent = 'Registrar dia'; } };
   const cxSalvo = await tnInsertRet('caixa_diario', {data:cxReg.data, loja:cxReg.loja, vendas:cxReg.vendas,
     saldo_inicial:cxReg.inicial, entradas:cxReg.entradas, saidas:cxReg.saidas, saldo_final:(cxReg.inicial+cxReg.entradas-cxReg.saidas)});
+  soltar();
   if(!cxSalvo){
     CAIXA_DIARIO.pop();
     alert(motivoDoErro('Não consegui gravar o fechamento do dia ' + cxData + '.'));
