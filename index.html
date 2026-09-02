@@ -4424,17 +4424,20 @@ function renderCaixa(){
                           .sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
   const totPagos = pagosMes.reduce((a,b)=>a+(+b.valor||0),0);
   const lojasB = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
+  /* usada tanto em "pagos no mês" quanto em "a pagar" — antes só a de pagos
+     tinha modo de edição, e o lápis do "a pagar" não fazia nada */
+  const linhaBoletoEdicao = b => `<tr>
+      <td><input type="date" data-be="data" value="${esc(String(b.data_pgto||'').slice(0,10))}"></td>
+      <td><input type="text" data-be="descricao" value="${esc(b.descricao)}" style="width:100%;box-sizing:border-box;"></td>
+      <td><select data-be="loja">${lojasB.map(l=>`<option ${l===b.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
+      <td><input type="number" data-be="valor" value="${+b.valor||0}" step="0.01" style="width:104px;"></td>
+      <td style="white-space:nowrap;"><button class="btn primary" data-blsalvar="1" style="padding:2px 8px;">salvar</button>
+          <button class="btn ghost" data-blcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+    </tr>`;
+  const emEdicao = b => socia2 && boletoEditando && (b.id||b.descricao)===boletoEditando;
+
   const linhaBoleto = b => {
-    if(socia2 && boletoEditando && (b.id||b.descricao)===boletoEditando){
-      return `<tr>
-        <td><input type="date" data-be="data" value="${esc(String(b.data_pgto||'').slice(0,10))}"></td>
-        <td><input type="text" data-be="descricao" value="${esc(b.descricao)}" style="width:100%;box-sizing:border-box;"></td>
-        <td><select data-be="loja">${lojasB.map(l=>`<option ${l===b.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
-        <td><input type="number" data-be="valor" value="${+b.valor||0}" step="0.01" style="width:104px;"></td>
-        <td style="white-space:nowrap;"><button class="btn primary" data-blsalvar="1" style="padding:2px 8px;">salvar</button>
-            <button class="btn ghost" data-blcancelar="1" style="padding:2px 8px;">cancelar</button></td>
-      </tr>`;
-    }
+    if(emEdicao(b)) return linhaBoletoEdicao(b);
     return `<tr>
         <td>${esc(b.data)}</td>
         <td class="strong">${esc(b.descricao)}</td>
@@ -4479,6 +4482,7 @@ function renderCaixa(){
       const resumoP = dePlan.length
         ? linhaPlanilha(chaveP, 'A pagar da planilha', dePlan, 3, socia2) : '';
       const linhas = resumoP + ((dePlan.length && !planilhaAberta[chaveP]) ? ordem.filter(b=>!ehDaPlanilha(b)) : ordem).map(b=>{
+        if(emEdicao(b)) return linhaBoletoEdicao(b);
         const d = parseBR(b.data), venceu = d && d.getTime() < hojeMs;
         return `<tr>
           <td>${esc(b.data)}${venceu?' <span class="badge b-critical" style="vertical-align:middle;"><span class="dot"></span>vencido</span>':''}</td>
