@@ -428,10 +428,12 @@ window.TN_CONFIG = {
                   <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
                   <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
                   <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
-                  <label class="hint" style="grid-column:1/-1;display:flex;align-items:center;gap:7px;cursor:pointer;">
-                    <input type="checkbox" id="cp-gerar" checked>
-                    Gerar os boletos das parcelas automaticamente (vencimento mensal a partir da 1ª)
-                  </label>
+                  <select id="cp-modo" style="grid-column:1/-1;">
+                    <option value="mensal">Boletos a cada 30 dias, a partir da 1ª parcela</option>
+                    <option value="manual">Informar a data e o valor de cada boleto</option>
+                    <option value="nenhum">Não gerar boletos agora</option>
+                  </select>
+                  <div id="cp-parcelas-lista" style="grid-column:1/-1;display:none;"></div>
                   <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar compra</button>
                 </form>
               </details>
@@ -5884,6 +5886,56 @@ document.getElementById('form-fixa').addEventListener('submit', async e=>{
   await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
 });
+/* Nem toda nota vence de 30 em 30 dias: o fornecedor manda boletos para o dia 9,
+   o 20 e o 1º do mês seguinte. No modo manual, cada linha tem data e valor. */
+function cpRenderParcelas(){
+  const caixa = document.getElementById('cp-parcelas-lista');
+  const modo = (document.getElementById('cp-modo')||{}).value;
+  if(!caixa) return;
+  if(modo !== 'manual'){ caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
+
+  const n = Math.max(1, parseInt((document.getElementById('cp-parcelas')||{}).value) || 1);
+  const total = num((document.getElementById('cp-valor')||{}).value) || 0;
+  const compra = (document.getElementById('cp-data')||{}).value || new Date().toISOString().slice(0,10);
+  const centavos = Math.round(total*100);
+  const fatia = n ? Math.floor(centavos/n) : 0;
+
+  /* mantém o que já foi digitado quando muda o número de parcelas */
+  const antigos = [...caixa.querySelectorAll('[data-cpp]')].map(l=>({
+    data: l.querySelector('[data-cppd]').value, valor: l.querySelector('[data-cppv]').value }));
+
+  caixa.style.display = '';
+  caixa.innerHTML = `
+    <p class="hint" style="margin:0 0 6px;">Vencimento e valor de cada boleto. A soma precisa fechar com o total da nota.</p>
+    ${Array.from({length:n}, (_,i)=>{
+      const sugerida = (()=>{ const d=new Date(compra+'T00:00:00'); d.setMonth(d.getMonth()+i+1); return d.toISOString().slice(0,10); })();
+      const valorSug = ((i===n-1 ? centavos - fatia*(n-1) : fatia)/100).toFixed(2);
+      const ant = antigos[i] || {};
+      return `<div data-cpp="${i}" style="display:flex;gap:7px;align-items:center;margin-bottom:5px;">
+        <span class="hint" style="min-width:64px;">${i+1}ª de ${n}</span>
+        <input type="date" data-cppd value="${esc(ant.data || sugerida)}" style="flex:0 0 148px;">
+        <input type="number" step="0.01" data-cppv value="${esc(ant.valor || valorSug)}" placeholder="valor" style="flex:0 0 120px;">
+      </div>`;
+    }).join('')}
+    <p class="hint" id="cp-soma" style="margin:4px 0 0;"></p>`;
+
+  const conferir = ()=>{
+    const soma = [...caixa.querySelectorAll('[data-cppv]')].reduce((a,i)=>a+(num(i.value)||0),0);
+    const dif = Math.round((soma - total)*100)/100;
+    const el = document.getElementById('cp-soma');
+    if(!el) return;
+    el.textContent = 'Soma dos boletos: ' + BRL(soma) + (Math.abs(dif) < 0.01 ? ' ✓ fecha com a nota'
+                     : (dif > 0 ? ' — ' + BRL(dif) + ' acima da nota' : ' — faltam ' + BRL(-dif)));
+    el.style.color = Math.abs(dif) < 0.01 ? 'var(--good)' : 'var(--warning, #d9a441)';
+  };
+  caixa.querySelectorAll('[data-cppv]').forEach(i=> i.oninput = conferir);
+  conferir();
+}
+['cp-modo','cp-parcelas','cp-valor','cp-data'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', cpRenderParcelas);
+});
+
 document.getElementById('form-compra').addEventListener('submit', async e=>{
   e.preventDefault();
   const forn = document.getElementById('cp-fornecedor').value.trim();
@@ -5905,24 +5957,38 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
 
   /* Parcelas viram boletos na hora: sem isso, uma nota em 3x só mostrava o
      compromisso da 1ª e o que vence nos meses seguintes ficava invisível. */
-  if(document.getElementById('cp-gerar').checked && reg.parcelas >= 1){
-    const criados = await gerarParcelas(reg, document.getElementById('cp-venc1').value);
+  const modo = (document.getElementById('cp-modo')||{}).value || 'mensal';
+  if(modo !== 'nenhum' && reg.parcelas >= 1){
+    let manuais = null;
+    if(modo === 'manual'){
+      manuais = [...document.querySelectorAll('#cp-parcelas-lista [data-cpp]')].map(l=>({
+        data: l.querySelector('[data-cppd]').value,
+        valor: num(l.querySelector('[data-cppv]').value) || 0 }));
+      if(manuais.some(p=>!p.data || p.valor <= 0)){
+        alert('Preencha a data e o valor de cada boleto antes de lançar.'); return;
+      }
+      const soma = manuais.reduce((a,p)=>a+p.valor, 0);
+      if(Math.abs(soma - reg.valor) >= 0.01 &&
+         !confirm('A soma dos boletos (' + BRL(soma) + ') não fecha com a nota (' + BRL(reg.valor) + ').\n\nLançar assim mesmo?')) return;
+    }
+    const criados = await gerarParcelas(reg, document.getElementById('cp-venc1').value, manuais);
     if(criados) alert(criados + (criados===1 ? ' boleto gerado' : ' boletos gerados') + ' a partir desta nota.');
   }
 
   e.target.reset();
   document.getElementById('cp-parcelas').value = 1;
-  document.getElementById('cp-gerar').checked = true;
+  document.getElementById('cp-modo').value = 'mensal';
+  cpRenderParcelas();
   cpAno = reg.ano; cpMes = reg.mes;      // mostra o mês da compra lançada
   renderCaixa();
 });
 
 /* Divide a nota em parcelas mensais. A 1ª vence na data informada ou 30 dias
    depois da compra; a última recebe a sobra dos centavos para fechar o total. */
-async function gerarParcelas(compra, venc1){
-  const n = Math.max(1, parseInt(compra.parcelas)||1);
+async function gerarParcelas(compra, venc1, manuais){
+  const n = manuais ? manuais.length : Math.max(1, parseInt(compra.parcelas)||1);
   const total = Math.round((+compra.valor||0)*100);
-  if(!total) return 0;
+  if(!total && !manuais) return 0;
 
   const base = venc1 ? new Date(venc1+'T00:00:00')
                      : (()=>{ const d=new Date(compra.data+'T00:00:00'); d.setMonth(d.getMonth()+1); return d; })();
@@ -5931,9 +5997,11 @@ async function gerarParcelas(compra, venc1){
   let criados = 0;
 
   for(let i=0;i<n;i++){
-    const venc = new Date(base.getFullYear(), base.getMonth()+i, base.getDate());
-    const iso = venc.toISOString().slice(0,10);
-    const centavos = (i===n-1) ? (total - parcela*(n-1)) : parcela;
+    const venc = manuais ? new Date(manuais[i].data + 'T00:00:00')
+                         : new Date(base.getFullYear(), base.getMonth()+i, base.getDate());
+    const iso = manuais ? manuais[i].data : venc.toISOString().slice(0,10);
+    const centavos = manuais ? Math.round(manuais[i].valor*100)
+                             : ((i===n-1) ? (total - parcela*(n-1)) : parcela);
     const reg = {
       data_pgto: iso, ano: venc.getFullYear(), mes: venc.getMonth()+1,
       competencia: MES_ABREV[venc.getMonth()+1] + '/' + String(venc.getFullYear()).slice(2),
