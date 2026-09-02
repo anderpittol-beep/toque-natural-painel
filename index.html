@@ -425,6 +425,10 @@ window.TN_CONFIG = {
                   <select id="cp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
                   <input type="text" id="cp-nf" placeholder="Nº da NF">
                   <input type="text" id="cp-fornecedor" placeholder="Fornecedor" required style="grid-column:1/-1;">
+                  <label class="hint" style="grid-column:1/-1;display:flex;align-items:center;gap:7px;cursor:pointer;">
+                    <input type="checkbox" id="cp-ratear"> Um pedido só para mais de uma loja — dividir esta nota
+                  </label>
+                  <div id="cp-rateio" style="grid-column:1/-1;display:none;"></div>
                   <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
                   <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
                   <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
@@ -2459,6 +2463,7 @@ function populateEquipeSelects(){
     fp.value = atual;
   }
   renderEquipeCad();
+  cpAplicarLojaPadrao();
 }
 let equipeEditando = null;
 /* Situação de acesso por e-mail (tem login? quando trocou a senha?), vinda do banco.
@@ -5886,6 +5891,96 @@ document.getElementById('form-fixa').addEventListener('submit', async e=>{
   await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
 });
+/* Cada sócia trabalha a partir da sua loja: Andreia em Itaipulândia, Vanessa em
+   Ouro Verde. A loja dela já vem escolhida nos lançamentos — as outras seguem
+   disponíveis, para atribuir ou dividir a nota. */
+function lojaDoUsuario(){
+  if(!TN_EMAIL) return null;
+  const e = (EQUIPE||[]).find(x => (x.email||'').toLowerCase() === TN_EMAIL.toLowerCase());
+  return (e && e.loja && STORES.includes(e.loja)) ? e.loja : null;
+}
+function cpAplicarLojaPadrao(){
+  const minha = lojaDoUsuario();
+  if(!minha) return;
+  ['cp-loja','bl-loja','fx-loja','cx-loja','pd-loja'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(sel && [...sel.options].some(o=>o.value===minha)) sel.value = minha;
+  });
+}
+
+/* Um pedido só para duas ou três lojas: a nota é dividida no ato do lançamento,
+   e cada loja fica com a sua parte da compra e dos boletos. */
+function cpRenderRateio(){
+  const caixa = document.getElementById('cp-rateio');
+  const liga = document.getElementById('cp-ratear');
+  if(!caixa || !liga) return;
+  if(!liga.checked){ caixa.style.display='none'; caixa.innerHTML=''; return; }
+
+  const total = num((document.getElementById('cp-valor')||{}).value) || 0;
+  const principal = (document.getElementById('cp-loja')||{}).value;
+  const antigos = {};
+  caixa.querySelectorAll('[data-crl]').forEach(l=>{
+    antigos[l.dataset.crl] = { marcada: l.querySelector('[data-crm]').checked,
+                               valor: l.querySelector('[data-crv]').value };
+  });
+
+  caixa.style.display = '';
+  caixa.innerHTML = `
+    <p class="hint" style="margin:0 0 6px;">Marque as lojas e quanto da nota é de cada uma.</p>
+    ${STORES.map(l=>{
+      const ant = antigos[l];
+      const marcada = ant ? ant.marcada : (l === principal);
+      const valor = ant ? ant.valor : (l === principal ? total.toFixed(2) : '');
+      return `<div data-crl="${esc(l)}" style="display:flex;gap:8px;align-items:center;margin-bottom:5px;">
+        <label class="hint" style="display:flex;align-items:center;gap:6px;min-width:150px;cursor:pointer;">
+          <input type="checkbox" data-crm ${marcada?'checked':''}> ${esc(l)}
+        </label>
+        <input type="number" step="0.01" data-crv value="${esc(valor)}" placeholder="valor desta loja" style="flex:0 0 140px;">
+        <button type="button" class="btn ghost" data-crdiv="${esc(l)}" style="padding:2px 8px;font-size:11px;">dividir igual</button>
+      </div>`;
+    }).join('')}
+    <p class="hint" id="cp-rateio-soma" style="margin:4px 0 0;"></p>`;
+
+  const conferir = ()=>{
+    const soma = [...caixa.querySelectorAll('[data-crl]')]
+      .filter(l=>l.querySelector('[data-crm]').checked)
+      .reduce((a,l)=>a+(num(l.querySelector('[data-crv]').value)||0),0);
+    const dif = Math.round((soma-total)*100)/100;
+    const el = document.getElementById('cp-rateio-soma');
+    if(!el) return;
+    el.textContent = 'Somando as lojas: ' + BRL(soma) +
+      (Math.abs(dif)<0.01 ? ' ✓ fecha com a nota' : (dif>0 ? ' — ' + BRL(dif) + ' acima da nota' : ' — faltam ' + BRL(-dif)));
+    el.style.color = Math.abs(dif)<0.01 ? 'var(--good)' : 'var(--warning, #d9a441)';
+  };
+  const dividirIgual = ()=>{
+    const marcadas = [...caixa.querySelectorAll('[data-crl]')].filter(l=>l.querySelector('[data-crm]').checked);
+    if(!marcadas.length) return;
+    const centavos = Math.round(total*100), fatia = Math.floor(centavos/marcadas.length);
+    marcadas.forEach((l,i)=>{
+      const v = (i===marcadas.length-1) ? centavos - fatia*(marcadas.length-1) : fatia;
+      l.querySelector('[data-crv]').value = (v/100).toFixed(2);
+    });
+    conferir();
+  };
+  caixa.querySelectorAll('[data-crv]').forEach(i=> i.oninput = conferir);
+  caixa.querySelectorAll('[data-crm]').forEach(i=> i.onchange = conferir);
+  caixa.querySelectorAll('[data-crdiv]').forEach(b=> b.onclick = dividirIgual);
+  conferir();
+}
+['cp-ratear','cp-loja','cp-valor'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', cpRenderRateio);
+});
+/* Lojas marcadas no rateio, ou só a loja escolhida quando não há divisão */
+function cpLojasDaNota(valorTotal, lojaPadrao){
+  const liga = document.getElementById('cp-ratear');
+  if(!liga || !liga.checked) return [{loja: lojaPadrao, valor: valorTotal}];
+  return [...document.querySelectorAll('#cp-rateio [data-crl]')]
+    .filter(l=>l.querySelector('[data-crm]').checked)
+    .map(l=>({ loja: l.dataset.crl, valor: num(l.querySelector('[data-crv]').value)||0 }))
+    .filter(x=>x.valor > 0);
+}
+
 /* Nem toda nota vence de 30 em 30 dias: o fornecedor manda boletos para o dia 9,
    o 20 e o 1º do mês seguinte. No modo manual, cada linha tem data e valor. */
 function cpRenderParcelas(){
@@ -5944,42 +6039,63 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   const d = document.getElementById('cp-data').value || hoje;
   if(!dataNoPainel(d)){ alert('O painel só recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 os dados vêm da planilha do Drive — lançar aqui geraria duplicidade.'); return; }
   if(!confirmaMesRef(d, cpAno, cpMes)) return;
-  const reg = { data:d, ano:+d.slice(0,4), mes:+d.slice(5,7),
-    loja: document.getElementById('cp-loja').value,
-    fornecedor: forn, nf: document.getElementById('cp-nf').value.trim(),
-    descricao: forn,
-    valor: num(document.getElementById('cp-valor').value)||0,
-    parcelas: parseInt(document.getElementById('cp-parcelas').value)||1,
-    origem: 'painel' };
-  COMPRAS.push(reg);
-  const _c = await tnInsertRet('compras_nf', reg);   // devolve a linha e já preenche reg.id
-  if(!_c){ COMPRAS.pop(); alert(motivoDoErro('Não consegui gravar esta compra.')); return; }
 
-  /* Parcelas viram boletos na hora: sem isso, uma nota em 3x só mostrava o
-     compromisso da 1ª e o que vence nos meses seguintes ficava invisível. */
+  const totalNota = num(document.getElementById('cp-valor').value) || 0;
+  const lojaPadrao = document.getElementById('cp-loja').value;
+  const partes = cpLojasDaNota(totalNota, lojaPadrao);
+  if(!partes.length){ alert('Marque ao menos uma loja e informe o valor dela.'); return; }
+  const somaPartes = partes.reduce((a,p)=>a+p.valor, 0);
+  if(partes.length > 1 && Math.abs(somaPartes - totalNota) >= 0.01 &&
+     !confirm('A divisão entre as lojas (' + BRL(somaPartes) + ') não fecha com a nota (' + BRL(totalNota) + ').\n\nLançar assim mesmo?')) return;
+
+  const nf = document.getElementById('cp-nf').value.trim();
+  const parcelas = parseInt(document.getElementById('cp-parcelas').value) || 1;
   const modo = (document.getElementById('cp-modo')||{}).value || 'mensal';
-  if(modo !== 'nenhum' && reg.parcelas >= 1){
-    let manuais = null;
-    if(modo === 'manual'){
-      manuais = [...document.querySelectorAll('#cp-parcelas-lista [data-cpp]')].map(l=>({
-        data: l.querySelector('[data-cppd]').value,
-        valor: num(l.querySelector('[data-cppv]').value) || 0 }));
-      if(manuais.some(p=>!p.data || p.valor <= 0)){
-        alert('Preencha a data e o valor de cada boleto antes de lançar.'); return;
-      }
-      const soma = manuais.reduce((a,p)=>a+p.valor, 0);
-      if(Math.abs(soma - reg.valor) >= 0.01 &&
-         !confirm('A soma dos boletos (' + BRL(soma) + ') não fecha com a nota (' + BRL(reg.valor) + ').\n\nLançar assim mesmo?')) return;
+
+  /* No modo manual as datas valem para todas as lojas; o valor de cada boleto
+     entra na proporção da parte de cada uma. */
+  let manuaisBase = null;
+  if(modo === 'manual'){
+    manuaisBase = [...document.querySelectorAll('#cp-parcelas-lista [data-cpp]')].map(l=>({
+      data: l.querySelector('[data-cppd]').value,
+      valor: num(l.querySelector('[data-cppv]').value) || 0 }));
+    if(manuaisBase.some(p=>!p.data || p.valor <= 0)){
+      alert('Preencha a data e o valor de cada boleto antes de lançar.'); return;
     }
-    const criados = await gerarParcelas(reg, document.getElementById('cp-venc1').value, manuais);
-    if(criados) alert(criados + (criados===1 ? ' boleto gerado' : ' boletos gerados') + ' a partir desta nota.');
+    const somaB = manuaisBase.reduce((a,p)=>a+p.valor, 0);
+    if(Math.abs(somaB - totalNota) >= 0.01 &&
+       !confirm('A soma dos boletos (' + BRL(somaB) + ') não fecha com a nota (' + BRL(totalNota) + ').\n\nLançar assim mesmo?')) return;
   }
+
+  let criadosTotal = 0, lojasOk = [];
+  for(const parte of partes){
+    const reg = { data:d, ano:+d.slice(0,4), mes:+d.slice(5,7),
+      loja: parte.loja, fornecedor: forn, nf: nf, descricao: forn,
+      valor: Math.round(parte.valor*100)/100, parcelas, origem: 'painel' };
+    COMPRAS.push(reg);
+    const salvo = await tnInsertRet('compras_nf', reg);
+    if(!salvo){ COMPRAS.pop(); alert(motivoDoErro('Não consegui gravar a compra de ' + parte.loja + '.')); return; }
+    lojasOk.push(parte.loja);
+
+    if(modo !== 'nenhum' && parcelas >= 1){
+      const fatia = totalNota ? parte.valor / totalNota : 1;
+      const manuais = manuaisBase
+        ? manuaisBase.map(x=>({ data: x.data, valor: Math.round(x.valor * fatia * 100)/100 }))
+        : null;
+      criadosTotal += await gerarParcelas(reg, document.getElementById('cp-venc1').value, manuais) || 0;
+    }
+  }
+
+  if(criadosTotal) alert(criadosTotal + (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados') +
+    ' a partir desta nota' + (lojasOk.length>1 ? ' (' + lojasOk.join(', ') + ')' : '') + '.');
 
   e.target.reset();
   document.getElementById('cp-parcelas').value = 1;
   document.getElementById('cp-modo').value = 'mensal';
-  cpRenderParcelas();
-  cpAno = reg.ano; cpMes = reg.mes;      // mostra o mês da compra lançada
+  document.getElementById('cp-ratear').checked = false;
+  cpAplicarLojaPadrao();
+  cpRenderParcelas(); cpRenderRateio();
+  cpAno = +d.slice(0,4); cpMes = +d.slice(5,7);      // mostra o mês da compra lançada
   renderCaixa();
 });
 
@@ -6284,6 +6400,7 @@ async function tnAfterLogin(sb){
   tnCarregarWhatsapp();
   tnCarregarCorrecoes();
   congelarFolhaFechada();
+  cpAplicarLojaPadrao();   // cada sócia abre na própria loja
   tnVerificarAcessoCasa();
 }
 
