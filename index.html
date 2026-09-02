@@ -3707,6 +3707,75 @@ function cpGerenciavel(){ return cpAno > FIXAS_CORTE.ano || (cpAno===FIXAS_CORTE
 function comprasDaCompetencia(ano, mes){ return COMPRAS.filter(c=> +c.ano===ano && +c.mes===mes); }
 function dataBR(iso){ if(!iso) return '—'; const p=String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
 
+/* Reparte uma nota já lançada: a loja original fica com a parte dela, as outras
+   ganham uma compra própria, e os boletos são refeitos na mesma proporção. */
+async function aplicarDivisaoCompra(compra, linhas){
+  const total = +compra.valor||0;
+  const partes = linhas.filter(l=>l.querySelector('[data-cdm]').checked)
+    .map(l=>({ loja: l.dataset.cdl, valor: num(l.querySelector('[data-cdv]').value)||0 }))
+    .filter(x=>x.valor > 0);
+  if(!partes.length){ alert('Marque as lojas e informe o valor de cada uma.'); return; }
+  const soma = partes.reduce((a,p)=>a+p.valor,0);
+  if(Math.abs(soma-total) >= 0.01 &&
+     !confirm('A divisão (' + BRL(soma) + ') não fecha com a nota (' + BRL(total) + ').\n\nAplicar assim mesmo?')) return;
+
+  const antigos = compra.id ? BOLETOS.filter(b=>b.compra_id===compra.id) : [];
+  const pagos = antigos.filter(b=>b.status==='Pago').length;
+  if(!confirm('Dividir “' + (compra.fornecedor||'') + '” em ' + partes.length + ' ' +
+      (partes.length===1?'loja':'lojas') + '?' +
+      (antigos.length ? '\n\nOs ' + antigos.length + ' boletos desta nota serão refeitos, um conjunto por loja, com as mesmas datas'
+        + (pagos ? ' (inclusive ' + pagos + ' já marcado(s) como pago)' : '') + '.' : ''))) return;
+
+  /* a loja da compra original continua nela; as demais viram compras novas */
+  const daOriginal = partes.find(p=>p.loja===compra.loja) || partes[0];
+  const outras = partes.filter(p=>p !== daOriginal);
+
+  compra.valor = Math.round(daOriginal.valor*100)/100;
+  compra.loja = daOriginal.loja;
+  if(compra.id) await tnUpdate('compras_nf', {id: compra.id}, {loja: compra.loja, valor: compra.valor});
+
+  const criadas = [{compra, parte: daOriginal}];
+  for(const p of outras){
+    const reg = { data: compra.data, ano: compra.ano, mes: compra.mes, loja: p.loja,
+      fornecedor: compra.fornecedor, nf: compra.nf, descricao: compra.fornecedor,
+      valor: Math.round(p.valor*100)/100, parcelas: compra.parcelas||1, origem: 'painel' };
+    const salvo = await tnInsertRet('compras_nf', reg);
+    if(!salvo){ alert(motivoDoErro('Não consegui criar a compra de ' + p.loja + '.')); return; }
+    COMPRAS.push(reg);
+    criadas.push({compra: reg, parte: p});
+  }
+
+  /* boletos: apaga os da nota e refaz por loja, mantendo data e situação */
+  if(antigos.length){
+    for(const b of antigos){
+      const i = BOLETOS.indexOf(b);
+      if(i>=0) BOLETOS.splice(i,1);
+      if(b.id) await tnDelete('boletos', {id: b.id});
+    }
+    for(const {compra: cc, parte} of criadas){
+      const fatia = total ? parte.valor/total : 1;
+      let n = 0;
+      for(const b of antigos){
+        n++;
+        const iso = String(b.data_pgto || '').slice(0,10) ||
+                    (b.data ? b.data.split('/').reverse().join('-') : compra.data);
+        const dt = new Date(iso + 'T00:00:00');
+        const reg = { data_pgto: iso, ano: dt.getFullYear(), mes: dt.getMonth()+1,
+          competencia: MES_ABREV[dt.getMonth()+1] + '/' + String(dt.getFullYear()).slice(2),
+          loja: cc.loja,
+          descricao: (cc.fornecedor||'Compra') + ' ' + n + '/' + antigos.length + (cc.nf ? ' · NF ' + cc.nf : ''),
+          valor: Math.round((+b.valor||0) * fatia * 100)/100,
+          status: b.status || 'Pendente', origem: 'painel', compra_id: cc.id || null };
+        await tnInsertRet('boletos', reg);
+        BOLETOS.push({...reg, data: dataBR(iso)});
+      }
+    }
+  }
+  compraDividindo = null;
+  renderCaixa();
+  alert('Nota dividida entre ' + partes.map(p=>p.loja).join(', ') + '.');
+}
+
 function renderCompras(){
   const lbl = document.getElementById('cp-competencia');
   if(lbl) lbl.textContent = cpCompetencia();
@@ -3756,6 +3825,25 @@ function renderCompras(){
               <button class="btn ghost" data-cpcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
       }
+      if(editavel(c) && compraDividindo && c.id===compraDividindo){
+        const total = +c.valor||0;
+        return `<tr><td colspan="${podeEd?7:6}" style="background:rgba(245,236,214,.05);">
+          <div style="padding:8px 4px;">
+            <div class="strong" style="font-size:13px;margin-bottom:3px;">Dividir “${esc(c.fornecedor||'')}” — ${BRL(total)}</div>
+            <p class="hint" style="margin:0 0 8px;">Quanto desta nota é de cada loja. Os boletos gerados por ela são refeitos na mesma proporção, mantendo as datas.</p>
+            ${STORES.map(l=>`
+              <div data-cdl="${esc(l)}" style="display:flex;gap:8px;align-items:center;margin-bottom:5px;">
+                <label class="hint" style="display:flex;align-items:center;gap:6px;min-width:150px;cursor:pointer;">
+                  <input type="checkbox" data-cdm ${l===c.loja?'checked':''}> ${esc(l)}
+                </label>
+                <input type="number" step="0.01" data-cdv value="${l===c.loja?total.toFixed(2):''}" placeholder="valor desta loja" style="flex:0 0 140px;">
+              </div>`).join('')}
+            <p class="hint" id="cd-soma" style="margin:4px 0 8px;"></p>
+            <button class="btn ghost" data-cddiv="1" style="padding:2px 9px;font-size:11.5px;">dividir igual</button>
+            <button class="btn primary" data-cdsalvar="${esc(c.id)}" style="padding:3px 12px;margin-left:6px;">Aplicar divisão</button>
+            <button class="btn ghost" data-cdcancelar="1" style="padding:3px 10px;">cancelar</button>
+          </div></td></tr>`;
+      }
       return `<tr>
         <td>${dataBR(c.data)}</td>
         <td class="strong">${esc(c.fornecedor||'—')}</td>
@@ -3765,12 +3853,45 @@ function renderCompras(){
         <td class="strong">${BRL(c.valor)}</td>
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">${editavel(c)?`
           <button class="btn ghost" data-cpeditar="${esc(c.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-cpdividir="${esc(c.id||'')}" title="Dividir esta nota entre lojas" style="padding:2px 6px;">➗</button>
           <button class="btn ghost" data-cpexcluir="${esc(c.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button>`:'<span class="hint">planilha</span>'}</td>`:''}
       </tr>`;}).join('') || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`);
     })()}
     <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
 
-  tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; renderCaixa(); }; });
+  tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; compraDividindo=null; renderCaixa(); }; });
+  tb.querySelectorAll('[data-cpdividir]').forEach(b=>{ b.onclick=()=>{ compraDividindo=b.dataset.cpdividir; compraEditando=null; renderCaixa(); }; });
+  tb.querySelectorAll('[data-cdcancelar]').forEach(b=>{ b.onclick=()=>{ compraDividindo=null; renderCaixa(); }; });
+  (()=>{
+    const painel = tb.querySelector('[data-cdsalvar]');
+    if(!painel) return;
+    const compra = COMPRAS.find(x=>x.id===compraDividindo);
+    if(!compra) return;
+    const total = +compra.valor||0;
+    const linhas = [...tb.querySelectorAll('[data-cdl]')];
+    const conferir = ()=>{
+      const soma = linhas.filter(l=>l.querySelector('[data-cdm]').checked)
+        .reduce((a,l)=>a+(num(l.querySelector('[data-cdv]').value)||0),0);
+      const dif = Math.round((soma-total)*100)/100;
+      const el = tb.querySelector('#cd-soma');
+      if(!el) return;
+      el.textContent = 'Somando as lojas: ' + BRL(soma) +
+        (Math.abs(dif)<0.01 ? ' ✓ fecha com a nota' : (dif>0 ? ' — ' + BRL(dif) + ' acima da nota' : ' — faltam ' + BRL(-dif)));
+      el.style.color = Math.abs(dif)<0.01 ? 'var(--good)' : 'var(--warning, #d9a441)';
+    };
+    linhas.forEach(l=>{ l.querySelector('[data-cdv]').oninput = conferir; l.querySelector('[data-cdm]').onchange = conferir; });
+    const btnDiv = tb.querySelector('[data-cddiv]');
+    if(btnDiv) btnDiv.onclick = ()=>{
+      const marcadas = linhas.filter(l=>l.querySelector('[data-cdm]').checked);
+      if(!marcadas.length) return;
+      const cent = Math.round(total*100), fatia = Math.floor(cent/marcadas.length);
+      marcadas.forEach((l,i)=>{ const v = (i===marcadas.length-1) ? cent-fatia*(marcadas.length-1) : fatia;
+        l.querySelector('[data-cdv]').value = (v/100).toFixed(2); });
+      conferir();
+    };
+    conferir();
+    painel.onclick = ()=> aplicarDivisaoCompra(compra, linhas);
+  })();
   tb.querySelectorAll('[data-cpcancelar]').forEach(b=>{ b.onclick=()=>{ compraEditando=null; renderCaixa(); }; });
   tb.querySelectorAll('[data-cpsalvar]').forEach(b=>{
     b.onclick=()=>{
@@ -5442,6 +5563,7 @@ let WA_CONVERSAS = [], WA_MENSAGENS = [], waConversaSel = null, waInscrito = fal
 let waPedidoDe = null;   // conversa que deu origem ao pedido sendo digitado
 let caixaEditando = null;   // fechamento de caixa aberto para correcao
 let caixaVerTodos = false;  // a tabela mostra so o ultimo dia; o resto abre a pedido
+let compraDividindo = null; // compra ja lancada sendo repartida entre lojas
 let TN_EMAIL = '';          // quem esta logado, para assinar as correcoes
 let CAIXA_CORRECOES = [];   // rastro de quem mexeu em fechamento ja lancado
 let WA_INSTANCIAS = [];  // WhatsApp de cada loja e seu estado de conexao
