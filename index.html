@@ -6166,6 +6166,71 @@ document.getElementById('form-fixa').addEventListener('submit', async e=>{
   await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
 });
+/* Lembrete às 18h: sócia lança a posição de caixa do dia, colaboradora lança
+   o fechamento do dia em Vendas & caixa diário. Confere sempre o lançamento
+   de HOJE — se já foi feito, não aparece; se ainda não, some pra sempre (não
+   a cada F5) só depois que a pessoa lançar ou clicar em "mais tarde" reabre
+   na próxima checagem. */
+function hojeBR(){ return TODAY.toLocaleDateString('pt-BR'); }
+function lembreteChave(){ return 'tn_lembrete_' + hojeBR() + '_' + (TN_EMAIL||'anon'); }
+function lembreteJaDispensadoHoje(){
+  try{ return sessionStorage.getItem(lembreteChave()) === '1'; }catch(e){ return false; }
+}
+function dispensarLembreteHoje(){
+  try{ sessionStorage.setItem(lembreteChave(), '1'); }catch(e){}
+}
+function mostrarLembrete(titulo, texto, aba){
+  if(document.getElementById('tn-lembrete')) return;
+  const div = document.createElement('div');
+  div.id = 'tn-lembrete';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  div.innerHTML = `<div style="background:var(--surface,#fff);color:var(--text-primary,#111);max-width:360px;width:100%;padding:22px;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.3);text-align:center;">
+    <div style="font-size:30px;margin-bottom:6px;">⏰</div>
+    <div class="strong" style="font-size:16px;margin-bottom:6px;">${esc(titulo)}</div>
+    <p class="hint" style="margin:0 0 16px;">${esc(texto)}</p>
+    <button class="btn primary" id="tn-lembrete-ir" style="width:100%;margin-bottom:8px;">Lançar agora</button>
+    <button class="btn ghost" id="tn-lembrete-depois" style="width:100%;">Lembrar mais tarde</button>
+  </div>`;
+  document.body.appendChild(div);
+  document.getElementById('tn-lembrete-ir').onclick = ()=>{
+    dispensarLembreteHoje();
+    div.remove();
+    setView(aba);
+    const detalhe = document.querySelector('#view-'+aba+' details.add-form');
+    if(detalhe) detalhe.open = true;
+  };
+  document.getElementById('tn-lembrete-depois').onclick = ()=>{ dispensarLembreteHoje(); div.remove(); };
+}
+/* Confere se o lançamento de HOJE já existe — não é "lançou algum dia", é
+   "lançou hoje". Só cobra depois das 18h e uma vez por sessão. */
+function checarLembreteDiario(){
+  if(lembreteJaDispensadoHoje()) return;
+  if(new Date().getHours() < 18) return;
+  const hj = hojeBR();
+  if(perfil === 'socia'){
+    const minha = lojaDoUsuario();
+    const lojasAConferir = minha ? [minha] : STORES;
+    const faltam = lojasAConferir.filter(l => !DISPONIBILIDADE.some(d=>d.loja===l && d.data===hj));
+    if(faltam.length){
+      mostrarLembrete('Falta lançar a posição de hoje',
+        'Ainda não há posição de caixa de ' + faltam.join(', ') + ' hoje (' + hj + '). Registre em Despesas & compras → Disponibilidade de recurso.',
+        'caixa');
+    }
+  } else {
+    const minha = lojaDoUsuario();
+    if(!minha) return;   // sem loja mapeada no cadastro da equipe, nao sabemos o que cobrar
+    const feito = CAIXA_DIARIO.some(c=>c.loja===minha && c.data===hj);
+    if(!feito){
+      mostrarLembrete('Falta lançar o caixa de hoje',
+        'O fechamento de ' + minha + ' de hoje (' + hj + ') ainda não foi registrado. Registre em Vendas & caixa diário.',
+        'desempenho');
+    }
+  }
+}
+function iniciarLembreteDiario(){
+  checarLembreteDiario();
+  setInterval(checarLembreteDiario, 60000);   // repassa a cada minuto, caso a pagina fique aberta ate as 18h
+}
 /* Cada sócia trabalha a partir da sua loja: Andreia em Itaipulândia, Vanessa em
    Ouro Verde. A loja dela já vem escolhida nos lançamentos — as outras seguem
    disponíveis, para atribuir ou dividir a nota. */
@@ -6682,6 +6747,7 @@ async function tnAfterLogin(sb){
   tnCarregarCorrecoes();
   congelarFolhaFechada();
   cpAplicarLojaPadrao();   // cada sócia abre na própria loja
+  iniciarLembreteDiario();
   tnVerificarAcessoCasa();
 }
 
