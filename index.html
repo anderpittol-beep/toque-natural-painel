@@ -3458,6 +3458,7 @@ async function waAvisarCliente(pedido, etapa){
 }
 
 /* ============ RENDER: PATRIMÔNIO & MANUTENÇÃO ============ */
+let ptEditando = null;
 function renderPatrimonio(){
   const s = currentStore();
   const tipo = document.getElementById('patrimonioTipoFilter').value;
@@ -3498,10 +3499,33 @@ function renderPatrimonio(){
   rows = rows.slice().sort((a,b)=>(parseBR(b.data)||0)-(parseBR(a.data)||0));
   const stBadge = {'Pago':'good','Pendente':'warning','Agendado':'muted'};
   const tipoBadge = t => t==='Patrimônio' ? 'b-good' : 'b-serious';
+  /* Corrigir e apagar é coisa de sócio, e só nas linhas lançadas pelo painel:
+     as que vieram da planilha continuam sendo a planilha. */
+  const ptSocia = (typeof perfil!=='undefined' && perfil==='socia');
+  const ptEditavel = p => ptSocia && !!p.id && dataBRNoPainel(p.data);
+  const ncolsPt = ptSocia ? 9 : 8;
+  const lojasPt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
+  const tiposPt = ['Patrimônio','Manutenção'];
+  const statusPt = ['Pago','Pendente','Agendado'];
+  const opts = (vals, atual) => vals.map(v=>`<option ${v===atual?'selected':''}>${esc(v)}</option>`).join('');
   document.getElementById('tbl-patrimonio').innerHTML = `
-    <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Loja</th><th>Fornecedor</th><th>Contato</th><th>Valor (referência)</th><th>Status</th></tr></thead>
-    <tbody>${rows.map(p=>`
-      <tr>
+    <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Loja</th><th>Fornecedor</th><th>Contato</th><th>Valor (referência)</th><th>Status</th>${ptSocia?'<th></th>':''}</tr></thead>
+    <tbody>${rows.map(p=>{
+      if(ptEditando && p.id===ptEditando){
+        return `<tr>
+          <td><input type="text" data-pe="data" value="${esc(p.data)}" style="width:100px;"></td>
+          <td><select data-pe="tipo">${opts(tiposPt, p.tipo)}</select></td>
+          <td><input type="text" data-pe="descricao" value="${esc(p.descricao||'')}" style="width:100%;box-sizing:border-box;"></td>
+          <td><select data-pe="loja">${opts(lojasPt, p.loja)}</select></td>
+          <td><input type="text" data-pe="fornecedor" value="${esc(p.fornecedor||'')}" style="width:120px;"></td>
+          <td><input type="text" data-pe="contato" value="${esc(p.contato||'')}" style="width:120px;"></td>
+          <td><input type="number" data-pe="valor" value="${+p.valor||0}" step="0.01" style="width:108px;"></td>
+          <td><select data-pe="status">${opts(statusPt, p.status)}</select></td>
+          <td style="white-space:nowrap;"><button class="btn primary" data-ptsalvar="1" style="padding:2px 8px;">salvar</button>
+              <button class="btn ghost" data-ptcancelar="1" style="padding:2px 8px;">cancelar</button></td>
+        </tr>`;
+      }
+      return `<tr>
         <td>${esc(p.data)}</td>
         <td><span class="badge ${tipoBadge(p.tipo)}"><span class="dot"></span>${esc(p.tipo)}</span></td>
         <td class="strong">${esc(p.descricao)}</td>
@@ -3510,8 +3534,43 @@ function renderPatrimonio(){
         <td>${esc(p.contato||'—')}</td>
         <td class="strong">${BRL(p.valor)}</td>
         <td><span class="badge ${badgeClass(stBadge[p.status]||'muted')}"><span class="dot"></span>${esc(p.status)}</span></td>
-      </tr>`).join('') || '<tr><td colspan="8" class="hint">Nenhum lançamento para este filtro.</td></tr>'}
-      ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido <span class="hint" style="font-weight:400;">(referência — não entra no caixa nem nas despesas)</span></td><td class="strong">${BRL(soma(rows))}</td><td></td></tr>`:''}</tbody>`;
+        ${ptSocia?`<td style="white-space:nowrap;text-align:right;">${ptEditavel(p)?`
+          <button class="btn ghost" data-pteditar="${esc(p.id)}" title="Editar" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-ptexcluir="${esc(p.id)}" title="Excluir" style="padding:2px 6px;">🗑️</button>`:'<span class="hint">planilha</span>'}</td>`:''}
+      </tr>`;}).join('') || `<tr><td colspan="${ncolsPt}" class="hint">Nenhum lançamento para este filtro.</td></tr>`}
+      ${rows.length? `<tr><td colspan="6" class="strong" style="text-align:right;">Total exibido <span class="hint" style="font-weight:400;">(referência — não entra no caixa nem nas despesas)</span></td><td class="strong">${BRL(soma(rows))}</td><td></td>${ptSocia?'<td></td>':''}</tr>`:''}</tbody>`;
+
+  const tbPt = document.getElementById('tbl-patrimonio');
+  tbPt.querySelectorAll('[data-pteditar]').forEach(b=>{ b.onclick=()=>{ ptEditando=b.dataset.pteditar; renderPatrimonio(); }; });
+  tbPt.querySelectorAll('[data-ptcancelar]').forEach(b=>{ b.onclick=()=>{ ptEditando=null; renderPatrimonio(); }; });
+  tbPt.querySelectorAll('[data-ptsalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const tr = b.closest('tr'), p = PATRIMONIO.find(x=>x.id===ptEditando);
+      if(!p) return;
+      const g = k => { const el = tr.querySelector('[data-pe="'+k+'"]'); return el ? el.value.trim() : ''; };
+      const novaData = g('data');
+      if(!dataBRNoPainel(novaData)){ alert('Data inválida — use dd/mm/aaaa, a partir de 01/09/2026.'); return; }
+      const dados = { data: novaData, tipo: g('tipo'), loja: g('loja'), descricao: g('descricao'),
+                      fornecedor: g('fornecedor'), contato: g('contato'),
+                      valor: num(g('valor'))||0, status: g('status') };
+      Object.assign(p, dados);
+      await tnUpdate('patrimonio', {id: p.id}, dados);
+      ptEditando = null;
+      renderPatrimonio(); renderDisponibilidade();
+    };
+  });
+  tbPt.querySelectorAll('[data-ptexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      const i = PATRIMONIO.findIndex(x=>x.id===b.dataset.ptexcluir);
+      if(i<0) return;
+      const p = PATRIMONIO[i];
+      if(!confirm('Excluir “' + (p.descricao||'') + '” de ' + p.data + ' em ' + p.loja + ' (' + BRL(p.valor) + ')?')) return;
+      PATRIMONIO.splice(i,1);
+      await tnDelete('patrimonio', {id: p.id});
+      ptEditando = null;
+      renderPatrimonio(); renderDisponibilidade();
+    };
+  });
 }
 
 /* ===== DISPONIBILIDADE DE RECURSO =====
@@ -6375,14 +6434,14 @@ document.getElementById('form-boleto').addEventListener('submit', async e=>{
   BOLETOS.push({..._reg, id: _salvo.id, data: dataBR(_bd)});
   e.target.reset(); renderCaixa();
 });
-document.getElementById('form-patrimonio').addEventListener('submit', e=>{
+document.getElementById('form-patrimonio').addEventListener('submit', async e=>{
   e.preventDefault();
   const ptData = document.getElementById('pt-data').value || TODAY.toLocaleDateString('pt-BR');
   if(!dataBRNoPainel(ptData)){
     alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
     return;
   }
-  PATRIMONIO.push({
+  const ptReg = {
     data: ptData,
     tipo: document.getElementById('pt-tipo').value,
     loja: document.getElementById('pt-loja').value,
@@ -6391,8 +6450,12 @@ document.getElementById('form-patrimonio').addEventListener('submit', e=>{
     fornecedor: document.getElementById('pt-fornecedor').value,
     contato: document.getElementById('pt-contato').value,
     status: document.getElementById('pt-status').value,
-  });
-  tnInsert('patrimonio',{data:ptData,tipo:document.getElementById('pt-tipo').value,loja:document.getElementById('pt-loja').value,descricao:document.getElementById('pt-descricao').value,valor:num(document.getElementById('pt-valor').value)||0,fornecedor:document.getElementById('pt-fornecedor').value,contato:document.getElementById('pt-contato').value,status:document.getElementById('pt-status').value});
+  };
+  /* grava conferindo o retorno, e guardando o id: sem ele a linha nasce sem
+     lapis nem lixeira ate a proxima recarga */
+  const ptSalvo = await tnInsertRet('patrimonio', ptReg);
+  if(!ptSalvo){ alert(motivoDoErro('Não consegui gravar este lançamento de patrimônio.')); return; }
+  PATRIMONIO.push({...ptReg});
   e.target.reset();
   renderPatrimonio();
   renderDisponibilidade();
@@ -6587,7 +6650,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
   try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}
-  try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
+  try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({id:r.id,data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
   try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
