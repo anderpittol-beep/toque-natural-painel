@@ -3548,6 +3548,11 @@ const dispCarimbo = p => { const t = Date.parse((p&&(p.atualizado_em||p.criado_e
 function dispAtualPorLoja(loja){
   const doLoja = DISPONIBILIDADE
     .filter(d => d.loja===loja)
+    /* Uma posição com tudo zerado não é a posição da loja: é formulário em
+       branco. O lançamento já não aceita mais nenhuma, e as que ficaram de
+       antes não podem continuar apagando a posição real — inclusive quando
+       foram registradas alguns segundos DEPOIS dela. */
+    .filter(d => dispTotal(d) !== 0)
     /* Havendo duas posições no mesmo dia, vale a mais recente pela hora de
        registro. Para as linhas antigas, que entraram antes de existir essa
        hora, o desempate continua sendo o maior total — assim uma posição
