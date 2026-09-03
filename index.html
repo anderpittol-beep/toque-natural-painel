@@ -364,7 +364,7 @@ window.TN_CONFIG = {
               <input type="number" id="dp-maquininha" placeholder="A receber maquininha" step="0.01">
               <input type="number" id="dp-especie" placeholder="Valor em espécie" step="0.01">
               <input type="number" id="dp-reserva" placeholder="Reserva (aplicado)" step="0.01">
-              <button class="btn primary" type="submit" style="grid-column:1/-1;">Registrar posição</button>
+              <button class="btn primary" type="submit" id="dp-registrar" style="grid-column:1/-1;">Registrar posição</button>
             </form>
           </details>
 
@@ -3532,7 +3532,10 @@ function dispTotal(p){
 function dispAtualPorLoja(loja){
   const doLoja = DISPONIBILIDADE
     .filter(d => d.loja===loja)
-    .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0));
+    /* Havendo duas posições no mesmo dia, vale a de maior total: sem hora de
+       registro no banco, é o único desempate que impede uma posição vazia,
+       lançada por engano, apagar a posição real da loja. */
+    .sort((a,b)=> ((parseBR(b.data)||0) - (parseBR(a.data)||0)) || (dispTotal(b) - dispTotal(a)));
   return doLoja[0] || null;
 }
 
@@ -5961,8 +5964,24 @@ document.getElementById('form-disp').addEventListener('submit', async e=>{
     reserva: num(document.getElementById('dp-reserva').value)||0,
     origem: 'painel',
   };
-  const id = await tnInsertRet('disponibilidade', reg);
-  DISPONIBILIDADE.push(id ? {...reg, id} : reg);
+  /* Posicao zerada nao e posicao: era assim que um formulario em branco virava
+     registro e derrubava a disponibilidade da loja para zero. */
+  if(dispTotal(reg) === 0){
+    alert('Preencha ao menos um valor da posição de ' + reg.loja + '.\n\nUma posição toda zerada vira o saldo atual da loja e zera a disponibilidade dela.');
+    return;
+  }
+  const mesmoDia = DISPONIBILIDADE.find(d=> d.data===reg.data && d.loja===reg.loja);
+  if(mesmoDia && !confirm('Já existe uma posição de ' + reg.loja + ' em ' + reg.data + ', de ' + BRL(dispTotal(mesmoDia)) + '.' +
+      '\n\nPara corrigir aquele valor use o lápis na linha. Registrar outra posição no mesmo dia?')) return;
+
+  const btnDp = document.getElementById('dp-registrar');
+  if(btnDp){ btnDp.disabled = true; btnDp.textContent = 'gravando…'; }
+  const salvo = await tnInsertRet('disponibilidade', reg);
+  if(btnDp){ btnDp.disabled = false; btnDp.textContent = 'Registrar posição'; }
+  if(!salvo){ alert(motivoDoErro('Não consegui gravar a posição de ' + reg.loja + '.')); return; }
+  /* tnInsertRet ja devolve o id dentro de reg; antes gravavamos aqui o objeto
+     inteiro no lugar do id, e o lapis e a lixeira dessa linha nao achavam o registro */
+  DISPONIBILIDADE.push({...reg});
   e.target.reset();
   renderDisponibilidade();
 });
