@@ -3522,6 +3522,21 @@ let dispEditando = null;
 
 /* O que uma posição representa: conta + o que a maquininha ainda repassa + o
    dinheiro em caixa. */
+/* Hora em que a linha entrou (ou foi editada). Serve para desempatar dois
+   registros do mesmo dia e para saber depois o que aconteceu. */
+function horaBR(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  return d.toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function selosDoRegistro(r){
+  const partes = [];
+  if(r && r.criado_em) partes.push('registrado em ' + horaBR(r.criado_em));
+  if(r && r.atualizado_em) partes.push('editado em ' + horaBR(r.atualizado_em));
+  return partes.join(' · ');
+}
+const AGORA_ISO = ()=> new Date().toISOString();
 function dispTotal(p){
   if(!p) return 0;
   return (+p.saldo_conta||0) + (+p.a_receber_maquininha||0) + (+p.especie||0) + (+p.reserva||0);
@@ -3529,13 +3544,17 @@ function dispTotal(p){
 /* Última posição registrada de cada loja: é ela que vale como saldo atual.
    Não somamos as posições — cada registro é uma fotografia do dia, e entre um
    e outro pode ter havido pagamento. */
+const dispCarimbo = p => { const t = Date.parse((p&&(p.atualizado_em||p.criado_em))||''); return isNaN(t) ? 0 : t; };
 function dispAtualPorLoja(loja){
   const doLoja = DISPONIBILIDADE
     .filter(d => d.loja===loja)
-    /* Havendo duas posições no mesmo dia, vale a de maior total: sem hora de
-       registro no banco, é o único desempate que impede uma posição vazia,
-       lançada por engano, apagar a posição real da loja. */
-    .sort((a,b)=> ((parseBR(b.data)||0) - (parseBR(a.data)||0)) || (dispTotal(b) - dispTotal(a)));
+    /* Havendo duas posições no mesmo dia, vale a mais recente pela hora de
+       registro. Para as linhas antigas, que entraram antes de existir essa
+       hora, o desempate continua sendo o maior total — assim uma posição
+       vazia lançada por engano não apaga a posição real da loja. */
+    .sort((a,b)=> ((parseBR(b.data)||0) - (parseBR(a.data)||0))
+               || (dispCarimbo(b) - dispCarimbo(a))
+               || (dispTotal(b) - dispTotal(a)));
   return doLoja[0] || null;
 }
 
@@ -3594,9 +3613,12 @@ function renderDisponibilidade(){
   const maquininha = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.a_receber_maquininha||0) : 0); }, 0);
   const especie    = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.especie||0) : 0); }, 0);
   const reserva    = lojas.reduce((a,l)=>{ const p=dispAtualPorLoja(l); return a + (p ? (+p.reserva||0) : 0); }, 0);
-  /* Data da posição mais recente entre as lojas exibidas — é dela que sai tudo */
-  const ultimaPos = lojas.map(l=>dispAtualPorLoja(l)).filter(Boolean)
-    .map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
+  /* Cada loja entra com a SUA última posição, mesmo que sejam de dias
+     diferentes: Itaipulândia pode estar no dia 2 e Ouro Verde ainda no dia 1.
+     O rótulo precisa dizer isso, senão parece que tudo é do mesmo dia. */
+  const porLoja = lojas.map(l=>({loja:l, pos:dispAtualPorLoja(l)})).filter(x=>x.pos);
+  const datasPos = [...new Set(porLoja.map(x=>x.pos.data))];
+  const detalhePos = porLoja.map(x=>x.loja + ' ' + x.pos.data).join(' · ');
 
   // a pagar no mês corrente: recorrente do mês + boletos que vencem até o fim dele
   const fimMes = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0);
@@ -3604,10 +3626,12 @@ function renderDisponibilidade(){
                   + boletosAteData(fimMes, lojas);
   const sobra = conta + maquininha + especie - aPagarMes;
 
-  const dataPos = ultimaPos ? ultimaPos.toLocaleDateString('pt-BR') : '—';
+  const rotuloPos = !datasPos.length ? 'sem posição registrada'
+    : (datasPos.length === 1 ? 'posição de ' + datasPos[0]
+       : 'última posição de cada loja — dias diferentes');
   const disponivel = conta + maquininha + especie;
   document.getElementById('disp-kpis').innerHTML = `
-    <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div><div class="hint">posição de ${esc(dataPos)}</div></div>
+    <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div><div class="hint" title="${esc(detalhePos)}">${esc(rotuloPos)}</div></div>
     <div class="card stat-tile"><div class="label">A receber maquininha</div><div class="value">${BRL(maquininha)}</div><div class="hint">ainda vai cair na conta</div></div>
     <div class="card stat-tile"><div class="label">Em espécie</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro em caixa</div></div>
     <div class="card stat-tile"><div class="label">Reserva</div><div class="value">${BRL(reserva)}</div><div class="hint">guardado, fora do dia a dia</div></div>
@@ -3667,7 +3691,7 @@ function renderDisponibilidade(){
         </tr>`;
       }
       return `<tr>
-        <td>${esc(d.data)}</td>
+        <td title="${esc(selosDoRegistro(d))}">${esc(d.data)}${d.atualizado_em?' <span class="hint">·editada</span>':''}</td>
         <td>${esc(d.loja)}</td>
         <td>${BRL(d.saldo_conta)}</td>
         <td>${BRL(d.a_receber_maquininha)}</td>
@@ -3690,8 +3714,10 @@ function renderDisponibilidade(){
       if(!dataBRNoPainel(nova)){ alert('O painel recebe lançamentos a partir de 01/09/2026.'); return; }
       Object.assign(d,{ data:nova, loja:get('loja'), saldo_conta:num(get('saldo_conta'))||0,
         a_receber_maquininha:num(get('a_receber_maquininha'))||0, especie:num(get('especie'))||0, reserva:num(get('reserva'))||0 });
+      d.atualizado_em = AGORA_ISO();
       if(d.id) tnUpdate('disponibilidade',{id:d.id},{data:d.data,loja:d.loja,saldo_conta:d.saldo_conta,
-        a_receber_maquininha:d.a_receber_maquininha, especie:d.especie, reserva:d.reserva});
+        a_receber_maquininha:d.a_receber_maquininha, especie:d.especie, reserva:d.reserva,
+        atualizado_em: d.atualizado_em});
       dispEditando=null; renderDisponibilidade();
     };
   });
@@ -4221,7 +4247,7 @@ function renderCaixa(){
       const pct = meta>0 ? vendas/meta*100 : 0;
       const antigo = c.data !== diaTopo;
       return `<tr class="${antigo?'cx-antigo':''}" ${antigo && !caixaVerTodos ? 'style="display:none;"' : ''}>
-        <td>${esc(c.data)}${ultima?` <span class="badge b-warning" style="vertical-align:middle;" title="${esc(descreveCorrecao(ultima))}"><span class="dot"></span>corrigido</span>`:''}</td>
+        <td title="${esc(selosDoRegistro(c))}">${esc(c.data)}${ultima?` <span class="badge b-warning" style="vertical-align:middle;" title="${esc(descreveCorrecao(ultima))}"><span class="dot"></span>corrigido</span>`:''}</td>
         <td>${esc(c.loja)}</td>
         <td class="strong">${BRL(vendas)}</td>
         <td>${meta>0?BRL(meta):'<span class="hint">—</span>'}</td>
@@ -4271,8 +4297,10 @@ function renderCaixa(){
                          entradas:c.entradas, saidas:c.saidas };
         const mudou = JSON.stringify(antes) !== JSON.stringify(depois);
         if(c.id){
+          c.atualizado_em = AGORA_ISO();
           tnUpdate('caixa_diario', {id: c.id}, { data: c.data, loja: c.loja, vendas: c.vendas,
-            saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saldo_final: c.final });
+            saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saldo_final: c.final,
+            atualizado_em: c.atualizado_em });
         }
         if(mudou) registrarCorrecao('editou', c, antes, depois);
         caixaEditando = null;
@@ -5981,7 +6009,7 @@ document.getElementById('form-disp').addEventListener('submit', async e=>{
   if(!salvo){ alert(motivoDoErro('Não consegui gravar a posição de ' + reg.loja + '.')); return; }
   /* tnInsertRet ja devolve o id dentro de reg; antes gravavamos aqui o objeto
      inteiro no lugar do id, e o lapis e a lixeira dessa linha nao achavam o registro */
-  DISPONIBILIDADE.push({...reg});
+  DISPONIBILIDADE.push({...reg, criado_em: (salvo && salvo.criado_em) || AGORA_ISO()});
   e.target.reset();
   renderDisponibilidade();
 });
@@ -6047,6 +6075,7 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     return;
   }
   cxReg.id = cxSalvo.id;
+  cxReg.criado_em = cxSalvo.criado_em || AGORA_ISO();
   const av = document.getElementById('cx-aviso');
   if(av){ av.textContent = '✓ ' + cxData + ' registrado em ' + cxLoja + ' com ' + BRL(cxReg.vendas) + ' de vendas.';
           setTimeout(()=>{ if(av.textContent.startsWith('✓ ' + cxData)) av.textContent=''; }, 8000); }
@@ -6552,11 +6581,11 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
-  try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem})); }catch(e){}
+  try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
   try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
-  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0})); }catch(e){}   /* entradas vinha lendo saldo_final */
+  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
