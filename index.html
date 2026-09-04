@@ -4666,7 +4666,18 @@ function renderCaixa(){
 }
 
 /* ===== FOLHA POR COMPETÊNCIA (mesma lógica das despesas fixas) ===== */
-let gtAno = TODAY.getFullYear(), gtMes = TODAY.getMonth()+1;
+/* Ao abrir Gente e Gestão, mostra por padrao o mes que ainda precisa de
+   atenção para o pagamento — o anterior, ate o dia 19 (o pagamento e no dia
+   5, mas ate meados do mes e comum a socia ainda estar conferindo e
+   corrigindo antes de marcar como pago). No dia 20 vira o mes corrente,
+   pra tela nao ficar presa num mes que ja foi fechado e pago. Vale para
+   qualquer socia que abrir a tela, nao e uma preferencia pessoal. */
+function gtCompetenciaPadrao(){
+  return TODAY.getDate() < 20
+    ? fxMesAnterior(TODAY.getFullYear(), TODAY.getMonth()+1)
+    : {ano: TODAY.getFullYear(), mes: TODAY.getMonth()+1};
+}
+let gtAno = gtCompetenciaPadrao().ano, gtMes = gtCompetenciaPadrao().mes;
 let folhaEditando = null;
 function gtCompetencia(){ return MES_ABREV[gtMes] + '/' + String(gtAno).slice(2); }
 /* Janela de edição da folha: o mês corrente, o anterior e os que vierem.
