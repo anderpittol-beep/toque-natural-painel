@@ -1446,12 +1446,25 @@ let GENTE = [
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", horas_dia:8, salario:2848.72, comissao:0, encargo:369.04, vale:0},
  {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", horas_dia:8, salario:2141.25, comissao:0, encargo:86.56, vale:0},
 ];
-/* Comissao por faixa de faturamento da loja, cumulativa: bateu 25 mil ganha 100;
-   bateu 30 mil ganha 100+150 = 250; 35 mil, 450; 40 mil, 700. */
-const COMISSAO_FAIXAS = [ {meta:25000, valor:100}, {meta:30000, valor:150},
-                          {meta:35000, valor:200}, {meta:40000, valor:250} ];
-function comissaoDaFaixa(fat){
-  return COMISSAO_FAIXAS.reduce((a,f)=> a + ((+fat||0) >= f.meta ? f.valor : 0), 0);
+/* Comissao por % da META da loja, cumulativa, valendo de Ago/26 em diante:
+   80% da meta ganha 100; 100% ganha 100+150 = 250; 120%, 450; 140%, 700.
+   Ate Jul/26 valia a regra antiga, por valor faturado — os meses fechados
+   continuam como estavam, para nao mexer no que ja foi pago. */
+const COMISSAO_FAIXAS_PCT = [ {pct:80, valor:100}, {pct:100, valor:150},
+                              {pct:120, valor:200}, {pct:140, valor:250} ];
+const COMISSAO_FAIXAS_VALOR = [ {meta:25000, valor:100}, {meta:30000, valor:150},
+                                {meta:35000, valor:200}, {meta:40000, valor:250} ];
+const COMISSAO_PCT_DESDE = 202608;   // Ago/26
+function comissaoPorPercentual(ano, mes){ return ((+ano||0)*100 + (+mes||0)) >= COMISSAO_PCT_DESDE; }
+/* Degraus que valem para a competencia, ja convertidos em valor de faturamento:
+   no regime novo o alvo e uma fatia da meta da loja; no antigo, um valor fixo. */
+function comissaoFaixas(ano, mes, meta){
+  if(comissaoPorPercentual(ano, mes)){
+    const m = +meta || 0;
+    return COMISSAO_FAIXAS_PCT.map(f=>({ alvo: cent(m * f.pct / 100), valor: f.valor,
+                                         rotulo: f.pct + '% da meta', pct: f.pct }));
+  }
+  return COMISSAO_FAIXAS_VALOR.map(f=>({ alvo: f.meta, valor: f.valor, rotulo: BRL(f.meta) }));
 }
 /* Faturamento da loja no mes: caixa diario a partir do corte, planilha antes dele */
 let _fatCache = {};
@@ -1479,15 +1492,18 @@ const gExtras = g => cent(gValorHora(g) * 1.5 * (+g.horas_extras||0));
 /* Termometro da comissao: quanto ja foi conquistado, qual o proximo degrau e
    quanto falta para ele. Serve para a tabela de metas mostrar o caminho. */
 const COMISSAO_EMOJI = ['🔒','🎯','🔥','🚀','🏆'];
-function comissaoNiveis(fat, jornada){
+function comissaoNiveis(fat, jornada, ano, mes, meta){
   const f = +fat||0;
   const prop = (jornada && jornada < JORNADA_PADRAO) ? jornada/JORNADA_PADRAO : 1;
-  const batidos = COMISSAO_FAIXAS.filter(x=> f >= x.meta);
-  const valor = cent(batidos.reduce((a,x)=>a+x.valor,0) * prop);
-  const prox = COMISSAO_FAIXAS.find(x=> f < x.meta) || null;
-  const acumProx = prox ? cent((batidos.reduce((a,x)=>a+x.valor,0) + prox.valor) * prop) : 0;
-  return { valor, nivel: batidos.length, total: COMISSAO_FAIXAS.length,
-           prox, falta: prox ? cent(prox.meta - f) : 0, acumProx, prop };
+  /* Sem meta lancada para a loja o regime por % nao tem base de calculo:
+     nesse caso nao ha degrau nenhum, em vez de virar comissao de graca. */
+  const faixas = comissaoFaixas(ano, mes, meta).filter(x=> x.alvo > 0);
+  const batidos = faixas.filter(x=> f >= x.alvo);
+  const bruto = batidos.reduce((a,x)=>a+x.valor,0);
+  const prox = faixas.find(x=> f < x.alvo) || null;
+  return { valor: cent(bruto * prop), nivel: batidos.length, total: faixas.length, faixas,
+           prox, falta: prox ? cent(prox.alvo - f) : 0,
+           acumProx: prox ? cent((bruto + prox.valor) * prop) : 0, prop };
 }
 /* Jornada de quem atende a loja, para a comissao sair proporcional (4h = metade) */
 function jornadaDaColaboradora(nome, loja){
@@ -1500,8 +1516,8 @@ function jornadaDaColaboradora(nome, loja){
 function gComissao(g){
   if(+g.comissao > 0) return +g.comissao;
   if(g.papel !== 'Colaboradora') return 0;
-  const faixa = comissaoDaFaixa(faturamentoLojaMes(+g.ano, +g.mes, g.loja));
-  return cent(faixa * (gJornada(g) / JORNADA_PADRAO));
+  const fat = faturamentoLojaMes(+g.ano, +g.mes, g.loja);
+  return comissaoNiveis(fat, gJornada(g), +g.ano, +g.mes, METAS_MENSAIS[g.loja]||0).valor;
 }
 const gTotal = g => (g.salario||0)+gComissao(g)+gExtras(g)+(g.encargo||0)+(g.vale||0);
 /* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
@@ -2281,10 +2297,14 @@ function renderDesempenho(){
         const falta = Math.max(0, (x.meta||0) - x.rec);
         const porDia = (ehMesAtual && duRest) ? falta/duRest : null;
         const ritmo = duMes ? (x.meta||0)/duMes : 0;
-        const cm = comissaoNiveis(x.rec, jornadaDaColaboradora(x.colab, x.loja));
-        const trilha = COMISSAO_FAIXAS.map((f,i)=>{
+        /* cada linha e de uma competencia: a regra segue o mes dela, nao o de hoje */
+        const cPart = String(x.mes).split('/');
+        const cMes = MES_ABREV.indexOf(cPart[0]), cAno = 2000 + (+cPart[1]);
+        const cm = comissaoNiveis(x.rec, jornadaDaColaboradora(x.colab, x.loja), cAno, cMes, x.meta);
+        const trilha = cm.faixas.map((f,i)=>{
           const on = i < cm.nivel;
-          return `<span title="${BRL(f.meta)} → ${BRL(f.valor)}" style="color:${on?'var(--good)':'currentColor'};opacity:${on?1:.3};font-size:12px;">${on?'●':'○'}</span>`;
+          const alvoTxt = f.pct ? f.rotulo + ' = ' + BRL(f.alvo) : BRL(f.alvo);
+          return `<span title="${esc(alvoTxt)} → +${BRL(f.valor)}" style="color:${on?'var(--good)':'currentColor'};opacity:${on?1:.3};font-size:12px;">${on?'●':'○'}</span>`;
         }).join('');
         const celComissao = cm.nivel
           ? `<div style="font-weight:700;color:var(--good);white-space:nowrap;">${COMISSAO_EMOJI[cm.nivel]} ${BRL(cm.valor)}${cm.prop<1?` <span class="hint" style="font-weight:400;">${cm.prop*JORNADA_PADRAO}h</span>`:''}</div>
@@ -2308,7 +2328,7 @@ function renderDesempenho(){
         </tr>`;}).join('') || `<tr><td colspan="9" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
       ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td><td colspan="2"></td><td class="strong" style="color:var(--good);">${BRL(comissaoRecorte)}</td></tr>`:''}</tbody>
       <tfoot><tr><td colspan="9" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.<br>
-        Comissão por faixa de faturamento da loja, cumulativa: ${COMISSAO_FAIXAS.map((f,i)=>`${COMISSAO_EMOJI[i+1]} ${BRL(f.meta)} → +${BRL(f.valor)}`).join(' · ')}. Quem faz meia jornada recebe metade.</td></tr></tfoot>`;
+        Comissão por <strong>% da meta da loja</strong>, cumulativa, de Ago/26 em diante: ${COMISSAO_FAIXAS_PCT.map((f,i)=>`${COMISSAO_EMOJI[i+1]} ${f.pct}% → +${BRL(f.valor)}`).join(' · ')} — quem bate 140% da meta recebe ${BRL(COMISSAO_FAIXAS_PCT.reduce((a,f)=>a+f.valor,0))}. Até Jul/26 a regra era por valor faturado. Quem faz meia jornada recebe metade.</td></tr></tfoot>`;
   }
 
   // ===== Premiações (por % da meta) =====
@@ -4785,7 +4805,7 @@ function renderGente(){
           <td><input type="number" data-ge="horas_dia" value="${g.horas_dia==null?'':+g.horas_dia}" step="0.5" placeholder="h/dia" style="width:66px;"></td>
           <td><input type="number" data-ge="salario" value="${+g.salario||0}" step="0.01" style="width:100px;"></td>
           <td><input type="number" data-ge="horas_extras" value="${+g.horas_extras||0}" step="0.5" title="Quantidade de horas extras no mês" style="width:74px;"></td>
-          <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" title="0 = o painel calcula pela faixa de faturamento" style="width:92px;"></td>
+          <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" title="0 = o painel calcula pela % da meta da loja" style="width:92px;"></td>
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:92px;"></td>
           <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:88px;"></td>
           <td class="strong">—</td><td>—</td><td>—</td><td>—</td>
@@ -4797,6 +4817,11 @@ function renderGente(){
       const congelada = !!g.comissao_congelada;
       const fat = g.papel==='Colaboradora' ? faturamentoLojaMes(+g.ano, +g.mes, g.loja) : 0;
       const jorn = gJornada(g);
+      /* Com a regra por % da meta, so o valor faturado nao diz nada: mostramos
+         quanto isso representa da meta da loja naquele mes. */
+      const metaG = METAS_MENSAIS[g.loja] || 0;
+      const pctG = (comissaoPorPercentual(+g.ano, +g.mes) && metaG) ? (fat/metaG*100) : null;
+      const fatTxt = BRL(fat) + (pctG!=null ? ' · ' + pctG.toFixed(0) + '% da meta' : '');
       return `<tr>
         <td class="strong">${esc(g.pessoa)}</td>
         <td>${esc(g.papel)}${g.papel==='Sócia'?' <span class="hint">(informal)</span>':''}</td>
@@ -4807,8 +4832,8 @@ function renderGente(){
         <td>${com?`<span style="color:var(--good);font-weight:600;">${BRL(com)}</span>
              <span class="hint">${congelada ? 'congelada no pagamento'
                 : (manual ? 'lançada na mão'
-                          : 'faturou '+BRL(fat)+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':''))}</span>`
-            :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${BRL(fat)}</span>`:'—')}</td>
+                          : 'faturou '+fatTxt+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':''))}</span>`
+            :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${fatTxt}</span>`:'—')}</td>
         <td>${BRL(g.encargo)}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
@@ -4836,8 +4861,12 @@ function renderGente(){
   const rod = document.getElementById('gt-rodape');
   if(rod) rod.innerHTML = `A reter neste mês para 13º e férias: <strong>${BRL(t13+tFer)}</strong>
     (13º ${BRL(t13)} · férias ${BRL(tFer)}) — acumulado no ano: <strong>${BRL((t13+tFer)*gtMes)}</strong> em ${gtMes} ${gtMes>1?'meses':'mês'}.
-    Comissão por faixa de faturamento da loja: ${COMISSAO_FAIXAS.map(f=>BRL(f.meta)+' → '+BRL(f.valor)).join(' · ')} — cumulativa
-    (bateu ${BRL(30000)}, recebe ${BRL(250)}). Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.`;
+    ${comissaoPorPercentual(gtAno, gtMes)
+      ? `Comissão por <strong>% da meta da loja</strong>, cumulativa: ${COMISSAO_FAIXAS_PCT.map(f=>f.pct+'% → +'+BRL(f.valor)).join(' · ')}
+         (bateu 100% da meta, recebe ${BRL(250)}; 140%, ${BRL(700)}).`
+      : `Comissão por faixa de faturamento da loja: ${COMISSAO_FAIXAS_VALOR.map(f=>BRL(f.meta)+' → '+BRL(f.valor)).join(' · ')} — cumulativa
+         (regra antiga, até Jul/26).`}
+    Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.`;
 
   // ===== ações de editar / excluir =====
   document.querySelectorAll('[data-geditar]').forEach(b=>{
