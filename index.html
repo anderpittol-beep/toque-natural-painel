@@ -1719,7 +1719,7 @@ function aplicarPrefs(p){
   const rotuloAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
   mesesSel = [rotuloAtual];
   anoAtivo = String(TODAY.getFullYear()).slice(2);
-  sincronizarCompetencias();
+  sincronizarCompetencias(false);   // nao mexe no mes padrao de Gente e Gestao
   if(!p) return;
   if(Array.isArray(p.lojas) && p.lojas.length){
     document.querySelectorAll('.store-chk').forEach(c=>{ c.checked = p.lojas.includes(c.value); });
@@ -1785,12 +1785,19 @@ function mesUnicoSel(){
   const mes = MES_ABREV.indexOf(p[0]), ano = 2000 + (+p[1]);
   return (mes && ano) ? {ano, mes} : null;
 }
-function sincronizarCompetencias(){
+/* incluirGente=false só na carga inicial da página: o filtro "Meses" do topo
+   é forçado para o mês corrente sempre que a página abre (ver aplicarPrefs),
+   mas Gente e Gestão tem sua própria regra de mês padrão (o que falta pagar,
+   até o dia 20) e não pode ser atropelada por esse reset automático. Quando
+   a sócia clica num mês do filtro por conta própria, sincroniza normalmente
+   — inclusive Gente e Gestão, que é o comportamento já esperado nas outras
+   telas por competência. */
+function sincronizarCompetencias(incluirGente){
   const u = mesUnicoSel();
   if(!u) return;
   if(typeof fxAno!=='undefined'){ fxAno=u.ano; fxMes=u.mes; }
   if(typeof cpAno!=='undefined'){ cpAno=u.ano; cpMes=u.mes; }
-  if(typeof gtAno!=='undefined'){ gtAno=u.ano; gtMes=u.mes; }
+  if(incluirGente!==false && typeof gtAno!=='undefined'){ gtAno=u.ano; gtMes=u.mes; }
   if(typeof pesAno!=='undefined'){ pesAno=u.ano; pesMes=u.mes; }   // Financas particulares
   if(typeof fxAno!=='undefined' && typeof renderDisponibilidade==='function'){ /* a disponibilidade segue o mesmo mes */ }
 }
