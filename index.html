@@ -1518,6 +1518,10 @@ function gComissao(g){
   return comissaoNiveis(fat, gJornada(g), +g.ano, +g.mes, METAS_MENSAIS[g.loja]||0).valor;
 }
 const gTotal = g => (g.salario||0)+gComissao(g)+gExtras(g)+(g.encargo||0)+(g.vale||0);
+/* O que vai para a mao da pessoa: salario + comissao + horas extras + vale.
+   Encargo fica de fora de proposito — encargo e imposto da empresa, nao entra
+   no pagamento dela. Este e o numero que quem paga procura. */
+const gAPagar = g => cent((g.salario||0)+gComissao(g)+gExtras(g)+(g.vale||0));
 /* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
 let BOLETOS = [];
 
@@ -4788,12 +4792,13 @@ function renderGente(){
   const t13  = prov.reduce((a,x)=>a+x.p.t13,0), tFer = prov.reduce((a,x)=>a+x.p.fer,0);
   const tExtras = rows.reduce((a,g)=>a+gExtras(g),0);
   const totalFolha = soma(list), totalCusto = totalFolha + t13 + tFer;
-  const COLS = podeEd ? 14 : 13;
+  const totalAPagar = rows.reduce((a,g)=>a+gAPagar(g),0);
+  const COLS = podeEd ? 15 : 14;
 
   document.getElementById('tbl-gente').innerHTML = `
     <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Jornada</th><th>Salário base</th><th>Horas extras</th>
       <th>Comissão</th><th>Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
-      <th>Custo total</th>${podeEd?'<th></th>':''}</tr></thead>
+      <th>Custo total</th><th title="Salário + comissão + horas extras + vale. É o valor a pagar para a pessoa — encargo não entra.">A pagar</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${prov.map(({g,p})=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
@@ -4806,7 +4811,7 @@ function renderGente(){
           <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" title="0 = o painel calcula pela % da meta da loja" style="width:92px;"></td>
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:92px;"></td>
           <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:88px;"></td>
-          <td class="strong">—</td><td>—</td><td>—</td><td>—</td>
+          <td class="strong">—</td><td>—</td><td>—</td><td>—</td><td>—</td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -4838,6 +4843,7 @@ function renderGente(){
         <td>${BRL(p.t13)}</td>
         <td>${BRL(p.fer)}</td>
         <td class="strong">${BRL(gTotal(g)+p.total)}</td>
+        <td class="strong" style="color:var(--good);font-size:14px;white-space:nowrap;">${BRL(gAPagar(g))}</td>
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
@@ -4850,7 +4856,8 @@ function renderGente(){
       <td class="strong">${BRL(totalFolha)}</td>
       <td class="strong">${BRL(t13)}</td>
       <td class="strong">${BRL(tFer)}</td>
-      <td class="strong">${BRL(totalCusto)}</td>${podeEd?'<td></td>':''}</tr>`:''}</tbody>`;
+      <td class="strong">${BRL(totalCusto)}</td>
+      <td class="strong" style="color:var(--good);font-size:15px;">${BRL(totalAPagar)}</td>${podeEd?'<td></td>':''}</tr>`:''}</tbody>`;
 
   const lblComp = document.getElementById('folha-competencia');
   if(lblComp) lblComp.textContent = gtCompetencia() + ' · pagamento em ' + dataPagamentoFolha(gtAno, gtMes);
