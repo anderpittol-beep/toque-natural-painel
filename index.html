@@ -1437,15 +1437,13 @@ let DESPESAS_FIXAS = [
  {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Assemetra", valor:80, venc:""},
  {ano:2026,mes:8,competencia:"Ago/26",loja:"Itaipulândia", descricao:"Cartão de Crédito", valor:2742.23, venc:""},
 ];
-/* GENTE E GESTÃO — folha por pessoa: salário + comissão do mês + encargos. Confidencial (só perfil Sócia). */
-let GENTE = [
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Ouro Verde", salario:6000, comissao:0, encargo:178.31, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Itaipulândia", salario:6000, comissao:0, encargo:191.15, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Sócias (Andreia/Vanessa)", papel:"Sócia", loja:"Toledo", salario:0, comissao:0, encargo:469.93, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Heloisa", papel:"Colaboradora", loja:"Ouro Verde", horas_dia:4, salario:2447, comissao:0, encargo:87.05, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Tainara", papel:"Colaboradora", loja:"Itaipulândia", horas_dia:8, salario:2848.72, comissao:0, encargo:369.04, vale:0},
- {ano:2026,mes:8,competencia:"Ago/26",pessoa:"Mayara", papel:"Colaboradora", loja:"Toledo", horas_dia:8, salario:2141.25, comissao:0, encargo:86.56, vale:0},
-];
+/* GENTE E GESTÃO — folha por pessoa: salário + comissão do mês + encargos.
+   Confidencial (só perfil Sócia). Nasce VAZIA de proposito: a folha vem toda
+   do Supabase, protegida por RLS. Antes havia salarios nominais escritos aqui
+   e este arquivo e publico — alem de vazar a folha, um valor desatualizado
+   daqui era herdado para o mes seguinte quando o carregamento falhava, e foi
+   assim que a Heloisa apareceu com R$ 2.447,00 em Set/26. Nao repovoar. */
+let GENTE = [];
 /* Comissao por % da META da loja, cumulativa, valendo de Ago/26 em diante:
    80% da meta ganha 100; 100% ganha 100+150 = 250; 120%, 450; 140%, 700.
    Ate Jul/26 valia a regra antiga, por valor faturado — os meses fechados
