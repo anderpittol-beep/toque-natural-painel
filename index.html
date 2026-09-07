@@ -1522,6 +1522,22 @@ const gTotal = g => (g.salario||0)+gComissao(g)+gExtras(g)+(g.encargo||0)+(g.val
    Encargo fica de fora de proposito — encargo e imposto da empresa, nao entra
    no pagamento dela. Este e o numero que quem paga procura. */
 const gAPagar = g => cent((g.salario||0)+gComissao(g)+gExtras(g)+(g.vale||0));
+/* Encargo = FGTS, 8% do salario BRUTO. O painel guarda o liquido no campo
+   salario, e o bruto e sempre um pouco maior (o INSS ja saiu dele), entao o
+   FGTS correto cai entre ~8% e ~9,5% do que esta gravado. Fora dessa faixa o
+   valor quase certamente esta desatualizado ou e outra coisa. Nao calculamos
+   automatico de proposito: o valor oficial e o do holerite. */
+const FGTS_ALIQUOTA = 0.08;
+const encargoFaixa = g => { const s = +g.salario||0; return {min: cent(s*0.075), max: cent(s*0.10)}; };
+function encargoSuspeito(g){
+  if(g.papel !== 'Colaboradora') return null;        // socia nao tem FGTS sobre pro-labore
+  const s = +g.salario||0; if(!s) return null;
+  const e = +g.encargo||0, f = encargoFaixa(g);
+  if(e === 0) return 'sem encargo lançado — o FGTS deveria ser ~' + BRL(cent(s*FGTS_ALIQUOTA));
+  if(e < f.min) return 'abaixo do FGTS esperado (~' + BRL(cent(s*FGTS_ALIQUOTA)) + ') — confira no holerite';
+  if(e > f.max) return 'acima do FGTS esperado (~' + BRL(cent(s*FGTS_ALIQUOTA)) + ') — confira no holerite';
+  return null;
+}
 /* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
 let BOLETOS = [];
 
@@ -4810,7 +4826,7 @@ function renderGente(){
 
   document.getElementById('tbl-gente').innerHTML = `
     <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Jornada</th><th>Salário base</th><th>Horas extras</th>
-      <th>Comissão</th><th>Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
+      <th>Comissão</th><th title="FGTS — 8% do salário bruto. Campo manual: o valor oficial é o do holerite. Sócia não tem FGTS sobre pró-labore.">Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
       <th>Custo total</th><th title="Salário + comissão + horas extras + vale. É o valor a pagar para a pessoa — encargo não entra.">A pagar</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${prov.map(({g,p})=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
@@ -4850,7 +4866,9 @@ function renderGente(){
                 : (manual ? 'lançada na mão'
                           : 'faturou '+fatTxt+(jorn&&jorn<JORNADA_PADRAO?' · '+jorn+'h':''))}</span>`
             :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${fatTxt}</span>`:'—')}</td>
-        <td>${BRL(g.encargo)}</td>
+        <td>${(()=>{ const av = encargoSuspeito(g);
+            return av ? `<span style="color:var(--warning,#d9a441);font-weight:600;" title="${esc(av)}">${BRL(g.encargo)} ⚠</span>`
+                      : BRL(g.encargo); })()}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
         <td>${BRL(p.t13)}</td>
@@ -4884,7 +4902,9 @@ function renderGente(){
          (bateu 100% da meta, recebe ${BRL(250)}; 140%, ${BRL(700)}).`
       : `Comissão por faixa de faturamento da loja: ${COMISSAO_FAIXAS_VALOR.map(f=>BRL(f.meta)+' → '+BRL(f.valor)).join(' · ')} — cumulativa
          (regra antiga, até Jul/26).`}
-    Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.`;
+    Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.
+    <br><strong>Encargos</strong> = FGTS, 8% do salário bruto (o valor oficial é o do holerite). O ⚠ marca a linha em que o
+    valor lançado está longe disso e precisa de conferência. Sócia não tem FGTS sobre pró-labore.`;
 
   // ===== ações de editar / excluir =====
   document.querySelectorAll('[data-geditar]').forEach(b=>{
