@@ -1528,9 +1528,15 @@ const gAPagar = g => cent((g.salario||0)+gComissao(g)+gExtras(g)+(g.vale||0));
    valor quase certamente esta desatualizado ou e outra coisa. Nao calculamos
    automatico de proposito: o valor oficial e o do holerite. */
 const FGTS_ALIQUOTA = 0.08;
+const gVinculo = g => (g.vinculo === 'MEI') ? 'MEI' : 'CLT';
 const encargoFaixa = g => { const s = +g.salario||0; return {min: cent(s*0.075), max: cent(s*0.10)}; };
+/* O que o encargo significa depende do vinculo:
+   CLT  -> FGTS, 8% do salario bruto, entao da para conferir contra o salario.
+   MEI  -> o DAS do mes, um valor fixo que nao acompanha o que ela recebe.
+           Nao ha FGTS nenhum, e cobrar 8% aqui seria alarme falso. */
 function encargoSuspeito(g){
   if(g.papel !== 'Colaboradora') return null;        // socia nao tem FGTS sobre pro-labore
+  if(gVinculo(g) === 'MEI') return null;             // MEI paga DAS, valor fixo
   const s = +g.salario||0; if(!s) return null;
   const e = +g.encargo||0, f = encargoFaixa(g);
   if(e === 0) return 'sem encargo lançado — o FGTS deveria ser ~' + BRL(cent(s*FGTS_ALIQUOTA));
@@ -1538,6 +1544,8 @@ function encargoSuspeito(g){
   if(e > f.max) return 'acima do FGTS esperado (~' + BRL(cent(s*FGTS_ALIQUOTA)) + ') — confira no holerite';
   return null;
 }
+const encargoRotulo = g => (g.papel !== 'Colaboradora') ? 'encargo'
+                        : (gVinculo(g)==='MEI' ? 'DAS do MEI' : 'FGTS');
 /* Boletos pagos e a pagar — carregados do Supabase (planilha até Ago/26, painel a partir de Set/26) */
 let BOLETOS = [];
 
@@ -4826,7 +4834,7 @@ function renderGente(){
 
   document.getElementById('tbl-gente').innerHTML = `
     <thead><tr><th>Pessoa</th><th>Papel</th><th>Loja</th><th>Jornada</th><th>Salário base</th><th>Horas extras</th>
-      <th>Comissão</th><th title="FGTS — 8% do salário bruto. Campo manual: o valor oficial é o do holerite. Sócia não tem FGTS sobre pró-labore.">Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
+      <th>Comissão</th><th title="CLT: FGTS, 8% do salário bruto (o oficial é o do holerite). MEI: o DAS do mês, valor fixo. Sócia: pró-labore não tem FGTS.">Encargos</th><th>Vale alim.</th><th>Total folha</th><th>13º (1/12)</th><th>Férias (1/12 + 1/3)</th>
       <th>Custo total</th><th title="Salário + comissão + horas extras + vale. É o valor a pagar para a pessoa — encargo não entra.">A pagar</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${prov.map(({g,p})=>{
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
@@ -4856,7 +4864,8 @@ function renderGente(){
       const fatTxt = BRL(fat) + (pctG!=null ? ' · ' + pctG.toFixed(0) + '% da meta' : '');
       return `<tr>
         <td class="strong">${esc(g.pessoa)}</td>
-        <td>${esc(g.papel)}${g.papel==='Sócia'?' <span class="hint">(informal)</span>':''}</td>
+        <td>${esc(g.papel)}${g.papel==='Sócia'?' <span class="hint">(informal)</span>'
+             : (gVinculo(g)==='MEI'?' <span class="hint">(MEI · serviço)</span>':' <span class="hint">(CLT)</span>')}</td>
         <td>${esc(g.loja)}</td>
         <td>${jorn?`${jorn}h/dia <span class="hint">${Math.round(gHorasMes(g))}h/mês</span>`:'—'}</td>
         <td>${BRL(g.salario)}</td>
@@ -4868,7 +4877,7 @@ function renderGente(){
             :(g.papel==='Colaboradora'?`— <span class="hint">faturou ${fatTxt}</span>`:'—')}</td>
         <td>${(()=>{ const av = encargoSuspeito(g);
             return av ? `<span style="color:var(--warning,#d9a441);font-weight:600;" title="${esc(av)}">${BRL(g.encargo)} ⚠</span>`
-                      : BRL(g.encargo); })()}</td>
+                      : `<span title="${esc(encargoRotulo(g))}">${BRL(g.encargo)}</span>`; })()}</td>
         <td>${g.vale?BRL(g.vale):'—'}</td>
         <td class="strong">${BRL(gTotal(g))}</td>
         <td>${BRL(p.t13)}</td>
@@ -4903,8 +4912,9 @@ function renderGente(){
       : `Comissão por faixa de faturamento da loja: ${COMISSAO_FAIXAS_VALOR.map(f=>BRL(f.meta)+' → '+BRL(f.valor)).join(' · ')} — cumulativa
          (regra antiga, até Jul/26).`}
     Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.
-    <br><strong>Encargos</strong> = FGTS, 8% do salário bruto (o valor oficial é o do holerite). O ⚠ marca a linha em que o
-    valor lançado está longe disso e precisa de conferência. Sócia não tem FGTS sobre pró-labore.`;
+    <br><strong>Encargos</strong>: quem é <strong>CLT</strong> tem FGTS, 8% do salário bruto — o ⚠ marca a linha em que o valor
+    lançado está longe disso e precisa de conferência contra o holerite. Quem é <strong>MEI</strong> não tem FGTS: ali o valor é o
+    <strong>DAS do mês</strong>, fixo, e por isso não é cobrado o percentual. Sócia não tem FGTS sobre pró-labore.`;
 
   // ===== ações de editar / excluir =====
   document.querySelectorAll('[data-geditar]').forEach(b=>{
@@ -6792,7 +6802,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,vinculo:r.vinculo||'CLT',loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
