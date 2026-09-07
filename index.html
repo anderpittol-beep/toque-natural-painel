@@ -4760,8 +4760,13 @@ function gtKey(g){ return g.id || ('L:'+g.ano+'-'+g.mes+'-'+g.loja+'-'+g.pessoa+
 const PROV_13 = sal => (+sal||0)/12;                 // 1/12 do salário
 const PROV_FERIAS = sal => ((+sal||0)*(4/3))/12;     // (salário + 1/3) / 12
 function gProvisao(g){
-  // Colaboradoras: provisão legal. Sócias: reserva informal sobre o pró-labore,
-  // por decisão das sócias — a despesa é retida mensalmente do mesmo jeito.
+  /* 13o e ferias sao retidos para todo mundo, mas por motivos diferentes:
+     CLT   -> obrigacao legal.
+     MEI   -> nao ha obrigacao (a Heloisa presta servico), mas as socias pagam
+              13o e ferias normalmente, entao a reserva tem que existir igual.
+     Socia -> reserva informal sobre o pro-labore, por decisao delas.
+     Em todos os casos a despesa sai do caixa do mesmo jeito, e e isso que a
+     provisao precisa refletir. */
   const t13 = PROV_13(g.salario), fer = PROV_FERIAS(g.salario);
   return {t13, fer, total:t13+fer};
 }
@@ -4914,7 +4919,9 @@ function renderGente(){
     Jornada de ${JORNADA_PADRAO}h recebe a faixa cheia; ${'4'}h recebe metade.
     <br><strong>Encargos</strong>: quem é <strong>CLT</strong> tem FGTS, 8% do salário bruto — o ⚠ marca a linha em que o valor
     lançado está longe disso e precisa de conferência contra o holerite. Quem é <strong>MEI</strong> não tem FGTS: ali o valor é o
-    <strong>DAS do mês</strong>, fixo, e por isso não é cobrado o percentual. Sócia não tem FGTS sobre pró-labore.`;
+    <strong>DAS do mês</strong>, fixo, e por isso não é cobrado o percentual. Sócia não tem FGTS sobre pró-labore.
+    <br><strong>13º e férias</strong> são retidos para todos — por lei no caso da CLT e por decisão das sócias no caso do MEI e do
+    pró-labore. Sai do caixa do mesmo jeito, então entra na provisão igual.`;
 
   // ===== ações de editar / excluir =====
   document.querySelectorAll('[data-geditar]').forEach(b=>{
