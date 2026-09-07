@@ -165,8 +165,10 @@
   .grid{display:grid;gap:14px;}
   .grid-4{grid-template-columns:repeat(4,1fr);}
   .grid-3{grid-template-columns:repeat(3,1fr);}
+  .grid-5{grid-template-columns:repeat(5,1fr);}
   .grid-2{grid-template-columns:repeat(2,1fr);}
-  @media(max-width:1000px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:1000px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);} .grid-5{grid-template-columns:repeat(2,1fr);}}
+  @media(min-width:1001px) and (max-width:1450px){.grid-5{grid-template-columns:repeat(3,1fr);}}
   /* Formularios de lancamento ficam recolhidos: o painel abre limpo e o
      formulario aparece so quando se clica no botao. */
   details.add-form{margin:0 0 12px 0;}
@@ -675,7 +677,7 @@ window.TN_CONFIG = {
         <h2 class="section-title">Vendas &amp; caixa diário</h2>
         <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café para quem superou a meta da semana, almoço para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="equipe-fotos" id="equipe-fotos" style="margin:0 0 16px;"></div>
-        <div class="grid grid-4" id="caixadia-kpis" style="margin-bottom:16px;"></div>
+        <div class="grid grid-5" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
         <div class="card" >
           <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
@@ -2452,6 +2454,53 @@ function vendasCompiladas(){
   CAIXA_DIARIO.forEach(c=>{ const emp=EQUIPE.find(e=>e.cargo==='Colaboradora'&&e.loja===c.loja); const bruto=(c.vendas||0); if(emp&&bruto>0) out.push({data:c.data,colab:emp.nome,loja:c.loja,valor:bruto}); });
   VENDAS_DIARIAS.forEach(v=>out.push(v));
   return out;
+}
+/* Ritmo do mes.
+   "19% da meta" sozinho nao permite decidir nada: 19% no dia 3 e otimo, 19% no
+   dia 25 e problema. Entao comparamos o que foi vendido com o que se esperaria
+   ter vendido a esta altura do mes, rateando a meta pelos dias uteis (seg-sab,
+   que e como o painel ja conta em todo o resto).
+
+   Um cuidado: o dia sem lancamento parece dia sem venda. Por isso o cartao
+   conta os dias uteis ja corridos e quantos deles tem fechamento registrado —
+   se faltar lancamento, ele avisa, em vez de acusar a loja de estar defasada. */
+function ritmoTile(r, refLabel){
+  if(!r) return '<div class="card stat-tile"><div class="label">Ritmo do mês</div>' +
+                '<div class="value" style="font-size:17px;">—</div>' +
+                '<div class="delta">Defina a meta mensal da loja para acompanhar o ritmo.</div></div>';
+  const atras = r.dif < 0;
+  const linha = (atras ? 'Faltam ' : 'À frente ') + BRL(Math.abs(cent(r.dif))) +
+                ' para o esperado de ' + BRL(cent(r.esperado)) +
+                ' (' + r.pctEsperado.toFixed(0) + '% da meta no dia útil ' +
+                r.duCorridos + ' de ' + r.duMes + ').';
+  const aviso = r.semLancar > 0
+    ? '<div class="delta" style="color:var(--warning);">' + r.semLancar +
+      (r.semLancar === 1 ? ' dia útil ainda sem fechamento lançado — o número pode estar melhor do que parece.'
+                         : ' dias úteis ainda sem fechamento lançado — o número pode estar melhor do que parece.') +
+      '</div>'
+    : '';
+  return '<div class="card stat-tile"><div class="label">Ritmo de ' + esc(refLabel) + '</div>' +
+         '<div class="value" style="font-size:20px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
+         '<div class="delta">' + esc(linha) + '</div>' + aviso + '</div>';
+}
+function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
+  const ano = refMes.getFullYear(), mes = refMes.getMonth();
+  const duMes = diasUteisNoMes(ano, mes);
+  const mesCorrente = (ano === TODAY.getFullYear() && mes === TODAY.getMonth());
+  /* mes fechado cobra o mes inteiro; mes correndo cobra so ate hoje */
+  const duCorridos = mesCorrente ? (duMes - diasUteisRestantes(TODAY, false)) : duMes;
+  if(!meta || !duMes || !duCorridos) return null;
+  const esperado = meta * duCorridos / duMes;
+  const razao = esperado > 0 ? vendas / esperado : 0;
+  const dif = vendas - esperado;
+  const semLancar = Math.max(0, duCorridos - (diasRegistrados||0));
+  let rotulo, cor;
+  if(razao >= 1.10){ rotulo = 'Acima do esperado'; cor = 'var(--good)'; }
+  else if(razao >= 1.00){ rotulo = 'No ritmo'; cor = 'var(--good)'; }
+  else if(razao >= 0.85){ rotulo = 'Pouco atrás'; cor = 'var(--warning)'; }
+  else { rotulo = 'Defasada'; cor = 'var(--critical)'; }
+  return {rotulo, cor, esperado, dif, razao, duCorridos, duMes, semLancar,
+          pctEsperado: duCorridos / duMes * 100};
 }
 function pctColor(p){ return p>=100?'var(--good)':(p>=70?'var(--warning)':'var(--critical)'); }
 function diasUteisNoMes(ano,mes){ // conta seg–sáb (exclui domingo)
@@ -4455,11 +4504,19 @@ function renderCaixa(){
                          .reduce((a,c)=>a+(+c.vendas||0),0);
   const refLabel = MES_ABREV[refMes.getMonth()+1] + '/' + String(refMes.getFullYear()).slice(2);
   const pctMes = metaMesLojas>0 ? vendasMes/metaMesLojas*100 : 0;
+  /* dias do mes de referencia que ja tem fechamento lancado, por loja:
+     tres lojas fechando o mesmo dia contam como um dia so */
+  const diasComLancamento = new Set(caixa.filter(c=>{
+    const d = parseBR(c.data);
+    return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth();
+  }).map(c=>c.data)).size;
+  const ritmo = ritmoDoMes(vendasMes, metaMesLojas, refMes, diasComLancamento);
   document.getElementById('caixadia-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Vendas de ${esc(refLabel)}</div><div class="value">${BRL(vendasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Meta de ${esc(refLabel)}</div><div class="value">${BRL(metaMesLojas)}</div></div>
     <div class="card stat-tile" style="color:${pctColor(pctMes)};"><div class="label">% da meta de ${esc(refLabel)}</div><div class="value">${pctMes.toFixed(0)}%</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
+    ${ritmoTile(ritmo, refLabel)}
   `;
   /* Ao lado das fixas, o que mais sai no mês: a nota cheia das compras (afeta o
      lucro) e os boletos efetivamente pagos (afetam o caixa). São coisas
