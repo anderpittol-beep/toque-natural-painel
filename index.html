@@ -2473,6 +2473,8 @@ function ritmoTile(r, refLabel){
                 ' para o esperado de ' + BRL(cent(r.esperado)) +
                 ' (' + r.pctEsperado.toFixed(0) + '% da meta no dia útil ' +
                 r.duCorridos + ' de ' + r.duMes + ').';
+  const fer = r.feriados.length
+    ? '<div class="delta">Fora da conta: ' + esc(r.feriados.join(' · ')) + '.</div>' : '';
   const aviso = r.semLancar > 0
     ? '<div class="delta" style="color:var(--warning);">' + r.semLancar +
       (r.semLancar === 1 ? ' dia útil ainda sem fechamento lançado — o número pode estar melhor do que parece.'
@@ -2481,7 +2483,7 @@ function ritmoTile(r, refLabel){
     : '';
   return '<div class="card stat-tile"><div class="label">Ritmo de ' + esc(refLabel) + '</div>' +
          '<div class="value" style="font-size:20px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
-         '<div class="delta">' + esc(linha) + '</div>' + aviso + '</div>';
+         '<div class="delta">' + esc(linha) + '</div>' + fer + aviso + '</div>';
 }
 function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
   const ano = refMes.getFullYear(), mes = refMes.getMonth();
@@ -2500,19 +2502,73 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
   else if(razao >= 0.85){ rotulo = 'Pouco atrás'; cor = 'var(--warning)'; }
   else { rotulo = 'Defasada'; cor = 'var(--critical)'; }
   return {rotulo, cor, esperado, dif, razao, duCorridos, duMes, semLancar,
+          feriados: feriadosDoMes(ano, mes),
           pctEsperado: duCorridos / duMes * 100};
 }
 function pctColor(p){ return p>=100?'var(--good)':(p>=70?'var(--warning)':'var(--critical)'); }
-function diasUteisNoMes(ano,mes){ // conta seg–sáb (exclui domingo)
+/* Feriados: dia de loja fechada nao e dia util. Sem isso a meta do dia se
+   diluia em dias que nunca venderiam, e o "ritmo do mes" cobrava venda de um
+   feriado. Sao os feriados nacionais mais a emancipacao do Parana; feriado
+   municipal de Itaipulandia, Ouro Verde do Oeste e Toledo NAO esta aqui — se a
+   loja fecha em algum, e so acrescentar em FERIADOS_FIXOS. */
+const FERIADOS_FIXOS = {
+  '01-01':'Confraternização Universal', '04-21':'Tiradentes',
+  '05-01':'Dia do Trabalho',           '09-07':'Independência',
+  '10-12':'Nossa Senhora Aparecida',   '11-02':'Finados',
+  '11-15':'Proclamação da República',  '11-20':'Consciência Negra',
+  '12-19':'Emancipação do Paraná',     '12-25':'Natal'
+};
+/* Pascoa pelo algoritmo de Meeus/Jones/Butcher — dela saem carnaval,
+   sexta-feira santa e corpus christi, que mudam de data todo ano. */
+function pascoa(ano){
+  const a=ano%19, b=Math.floor(ano/100), c=ano%100;
+  const d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3), i=(19*a+b-d-g+15)%30;
+  const k=Math.floor(c/4), l=c%4, m=(32+2*e+2*k-i-l)%7;
+  const n=Math.floor((a+11*i+22*m)/451);
+  const mes=Math.floor((i+m-7*n+114)/31), dia=((i+m-7*n+114)%31)+1;
+  return new Date(ano, mes-1, dia);
+}
+const _feriadosMoveis = {};
+function feriadosMoveis(ano){
+  if(_feriadosMoveis[ano]) return _feriadosMoveis[ano];
+  const p = pascoa(ano), chave = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const desloca = n => { const d=new Date(p); d.setDate(d.getDate()+n); return d; };
+  const m = {};
+  m[chave(desloca(-48))] = 'Carnaval';
+  m[chave(desloca(-47))] = 'Carnaval';
+  m[chave(desloca(-2))]  = 'Sexta-feira Santa';
+  m[chave(desloca(60))]  = 'Corpus Christi';
+  return (_feriadosMoveis[ano] = m);
+}
+function feriadoDe(d){
+  const fixo = FERIADOS_FIXOS[String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')];
+  if(fixo) return fixo;
+  const k = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return feriadosMoveis(d.getFullYear())[k] || null;
+}
+/* dia util = a loja abre: segunda a sabado, fora feriado */
+function ehDiaUtil(d){ return d.getDay() !== 0 && !feriadoDe(d); }
+function diasUteisNoMes(ano,mes){
   let d=new Date(ano,mes,1), c=0;
-  while(d.getMonth()===mes){ if(d.getDay()!==0) c++; d.setDate(d.getDate()+1); }
+  while(d.getMonth()===mes){ if(ehDiaUtil(d)) c++; d.setDate(d.getDate()+1); }
   return c;
 }
-function diasUteisRestantes(ref, incluirRef){ // até o fim do mês, seg–sáb (domingo a loja fecha)
+function diasUteisRestantes(ref, incluirRef){
   const m=ref.getMonth();
   let d=new Date(ref.getFullYear(),m,ref.getDate()+(incluirRef?0:1)), c=0;
-  while(d.getMonth()===m){ if(d.getDay()!==0) c++; d.setDate(d.getDate()+1); }
+  while(d.getMonth()===m){ if(ehDiaUtil(d)) c++; d.setDate(d.getDate()+1); }
   return c;
+}
+/* feriados do mes, para o painel poder dizer por que sobrou menos dia util */
+function feriadosDoMes(ano,mes){
+  const out=[]; let d=new Date(ano,mes,1);
+  while(d.getMonth()===mes){
+    const f=feriadoDe(d);
+    if(f && d.getDay()!==0) out.push(d.getDate()+'/'+String(mes+1).padStart(2,'0')+' '+f);
+    d.setDate(d.getDate()+1);
+  }
+  return out;
 }
 function renderDesempenho(){
   const nomes = vendedorasAtuais();
