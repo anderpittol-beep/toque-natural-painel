@@ -1234,6 +1234,7 @@ window.TN_CONFIG = {
               <input type="text" id="pes-cartao" placeholder="Cartão (MASTER/VISA)">
               <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
               <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
+              <input type="number" id="pes-dia" placeholder="Dia que debita" min="1" max="31" step="1" title="Dia do mês em que a despesa debita na conta">
               <input type="text" id="pes-categoria" placeholder="Categoria (opcional, ajuda no IR)" style="grid-column:span 3;">
               <button class="btn primary" type="submit" style="grid-column:span 3;">Lançar despesa</button>
             </form>
@@ -5474,6 +5475,20 @@ function ultimaRenda(origem){
 }
 
 const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
+/* Dia do debito e coluna opcional: enquanto o banco nao tiver dia_debito, a
+   tela ignora o campo em vez de quebrar os lancamentos. */
+const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
+/* mostra "10/09"; alerta em amarelo o que ja passou do dia e nao foi marcado pago */
+function pesDebitoHTML(x){
+  const d = +x.dia_debito || 0;
+  if(!d) return '<span class="hint">—</span>';
+  const txt = String(d).padStart(2,'0') + '/' + String(pesMes).padStart(2,'0');
+  const mesCorrente = (pesAno === TODAY.getFullYear() && pesMes === TODAY.getMonth()+1);
+  const venceu = mesCorrente && d < TODAY.getDate() && !x.pago;
+  return venceu
+    ? '<span style="color:var(--warning);" title="Passou do dia e ainda não está marcado como pago">' + txt + '</span>'
+    : txt;
+}
 /* 'variavel' foi unificado em 'fixa'; registro antigo continua lendo como fixa */
 const pesTipo = x => (x && x.tipo==='variavel') ? 'fixa' : (x ? x.tipo : x);
 const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
@@ -5632,6 +5647,7 @@ function renderPessoais(){
     <p class="hint" style="margin:6px 0 0 0;">O acumulado encadeia os meses: a sobra (ou o buraco) de um entra no seguinte. "Prevista" quer dizer que o mês ainda não tem lançamento próprio e repetiu o anterior.</p>`;
 
   const podeMexer = ACESSO_CASA;
+  const colDebito = temDiaDebito();
   const linha = x => {
     const p = (x.parcela_num && x.parcela_total) ? `${x.parcela_num}/${x.parcela_total}` : '';
     /* x.id e null na linha herdada; sem o teste de veracidade,
@@ -5640,6 +5656,7 @@ function renderPessoais(){
       return `<tr data-peid="${esc(x.id)}">
         <td><input type="text" data-pe2="descricao" value="${esc(x.descricao)}" style="width:100%;"></td>
         <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;"></td>
+        ${colDebito?`<td><input type="number" data-pe2="dia" value="${x.dia_debito||''}" min="1" max="31" placeholder="dia" style="width:60px;" title="Dia do mês em que debita"></td>`:''}
         <td><input type="number" data-pe2="valor" value="${+x.valor}" step="0.01" style="width:100px;"></td>
         <td colspan="2"><button class="btn primary" data-pesalvar="${esc(x.id)}" style="padding:2px 9px;font-size:11.5px;">salvar</button>
         <button class="btn ghost" data-pecancelar="1" style="padding:2px 9px;font-size:11.5px;">cancelar</button></td></tr>`;
@@ -5647,6 +5664,7 @@ function renderPessoais(){
     return `<tr>
       <td>${esc(x.descricao)}${x.categoria?` <span class="hint">· ${esc(x.categoria)}</span>`:''}${x.cartao?` <span class="hint">· ${esc(x.cartao)}</span>`:''}</td>
       <td class="hint">${p||'—'}</td>
+      ${colDebito?`<td>${pesDebitoHTML(x)}</td>`:''}
       <td class="strong">${BRL(+x.valor)}</td>
       ${x.tipo==='cartao' ? '' : `<td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>`}
       <td style="white-space:nowrap;">${!podeMexer?'':(x.id
@@ -5654,7 +5672,10 @@ function renderPessoais(){
            <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`
         : `<button class="btn ghost" data-petrazered="${esc(pesTipo(x))}" data-pedesc="${esc(x.descricao)}"
              title="Esta linha ainda é a repetição do mês anterior. Editar traz as despesas para este mês primeiro."
-             style="padding:1px 6px;">✏️</button>`)}</td></tr>`;
+             style="padding:1px 6px;">✏️</button>
+           <button class="btn ghost" data-petrazerdel="${esc(pesTipo(x))}" data-pedesc="${esc(x.descricao)}"
+             title="Excluir do mês. As despesas viram lançamentos deste mês e só esta é removida."
+             style="padding:1px 6px;">🗑️</button>`)}</td></tr>`;
   };
 
   /* os dois blocos lado a lado: cartao e despesas fixas */
@@ -5663,7 +5684,8 @@ function renderPessoais(){
     const tot = pesSoma(itens);
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a marcar */
     const comCheck = t !== 'cartao';
-    const colunas = comCheck ? 5 : 4;
+    const colDeb = colDebito;
+    const colunas = (comCheck ? 5 : 4) + (colDeb ? 1 : 0);
     const herdado = itens.length && itens[0].herdada;
     return `<div class="card">
       <div class="toolbar" style="justify-content:space-between;align-items:center;">
@@ -5675,7 +5697,7 @@ function renderPessoais(){
         <button class="btn ghost" data-petrazer="${t}" style="padding:2px 8px;font-size:11px;">trazer para este mês</button>
       </div>`:''}
       <table class="table" style="margin-top:8px;"><thead><tr>
-        <th>Descrição</th><th>Parcela</th><th>Valor</th>${comCheck?'<th>Situação</th>':''}<th></th>
+        <th>Descrição</th><th>Parcela</th>${colDeb?'<th>Debita em</th>':''}<th>Valor</th>${comCheck?'<th>Situação</th>':''}<th></th>
       </tr></thead><tbody>
         ${itens.map(linha).join('') || `<tr><td colspan="${colunas}" class="hint">Nada lançado neste mês.</td></tr>`}
       </tbody></table></div>`;
@@ -5887,6 +5909,7 @@ function ligarAcoesPessoais(){
         const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
           ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
           cartao:x.cartao||null, categoria:x.categoria||null,
+          ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
           parcela_num:x.parcela_num||null, parcela_total:x.parcela_total||null })));
         if(error){ erro(error); return false; }
         break;
@@ -5922,11 +5945,34 @@ function ligarAcoesPessoais(){
       const dados = { descricao: v('descricao'), valor: +v('valor')||0,
                       parcela_num: par[0] ? parseInt(par[0]) : null,
                       parcela_total: par[1] ? parseInt(par[1]) : null };
+      if(tr.querySelector('[data-pe2="dia"]')){
+        const dd = parseInt(v('dia'));
+        if(v('dia') && (!(dd>=1 && dd<=31))) return alert('O dia do débito precisa estar entre 1 e 31.');
+        dados.dia_debito = v('dia') ? dd : null;
+      }
       if(!dados.descricao) return alert('A descrição não pode ficar vazia.');
       const { data, error } = await sb().from('pes_lancamentos').update(dados).eq('id', b.dataset.pesalvar).select();
       if(error) return erro(error);
       if(!data || !data.length) return alert('Este lançamento não é seu para editar.');
       pesEditando = null; await recarregar();
+    };
+  });
+  /* Excluir uma linha ainda repetida do mes anterior: como ela nao existe no
+     banco, apagar so a linha nao adiantaria — ela voltaria na proxima abertura,
+     porque e derivada do mes passado. Entao materializa o mes e remove so ela. */
+  document.querySelectorAll('[data-petrazerdel]').forEach(b=>{
+    b.onclick = async ()=>{
+      const t = b.dataset.petrazerdel, desc = b.dataset.pedesc;
+      if(!confirm('Excluir "' + desc + '" deste mês?\n\n' +
+                  'As despesas ainda são a repetição do mês anterior: elas viram lançamentos ' +
+                  'deste mês e só esta é removida. O mês anterior não muda.')) return;
+      if(!await pesTrazerMes(t)) return;
+      const alvo = PES_LANC.find(x=> +x.ano===pesAno && +x.mes===pesMes &&
+                                     pesTipo(x)===t && x.descricao===desc);
+      if(!alvo) return alert('Não encontrei a despesa depois de trazer o mês. Nada foi excluído.');
+      const { error } = await sb().from('pes_lancamentos').delete().eq('id', alvo.id);
+      if(error) return erro(error);
+      await recarregar();
     };
   });
   document.querySelectorAll('[data-peexcluir]').forEach(b=>{
@@ -6076,7 +6122,8 @@ function ligarFormulariosPessoais(){
     if(jaTem && !confirm('Este mês já tem despesas fixas. Trazer as do mês anterior mesmo assim?')) return;
     if(fixas.length){
       const { error } = await sb().from('pes_lancamentos').insert(fixas.map(x=>({
-        ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor, categoria:x.categoria })));
+        ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor, categoria:x.categoria,
+        ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}) })));
       if(error) return erro(error);
     }
     if(rendas.length){
@@ -6095,6 +6142,7 @@ function ligarFormulariosPessoais(){
                     parcela_num: val('pes-pnum') ? +val('pes-pnum') : null,
                     parcela_total: val('pes-ptot') ? +val('pes-ptot') : null,
                     categoria: val('pes-categoria')||null };
+    if(temDiaDebito()) dados.dia_debito = val('pes-dia') ? +val('pes-dia') : null;
     const { error } = await sb().from('pes_lancamentos').insert(dados);
     if(error) return erro(error);
     f.reset(); await tnCarregarPessoais();
