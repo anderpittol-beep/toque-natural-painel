@@ -5634,7 +5634,9 @@ function renderPessoais(){
   const podeMexer = ACESSO_CASA;
   const linha = x => {
     const p = (x.parcela_num && x.parcela_total) ? `${x.parcela_num}/${x.parcela_total}` : '';
-    if(pesEditando === x.id){
+    /* x.id e null na linha herdada; sem o teste de veracidade,
+       null === null abria todas as linhas em edicao de uma vez */
+    if(x.id && pesEditando === x.id){
       return `<tr data-peid="${esc(x.id)}">
         <td><input type="text" data-pe2="descricao" value="${esc(x.descricao)}" style="width:100%;"></td>
         <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;"></td>
@@ -5647,8 +5649,12 @@ function renderPessoais(){
       <td class="hint">${p||'—'}</td>
       <td class="strong">${BRL(+x.valor)}</td>
       ${x.tipo==='cartao' ? '' : `<td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>`}
-      <td style="white-space:nowrap;">${podeMexer?`<button class="btn ghost" data-peeditar="${esc(x.id)}" style="padding:1px 6px;">✏️</button>
-      <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`:''}</td></tr>`;
+      <td style="white-space:nowrap;">${!podeMexer?'':(x.id
+        ? `<button class="btn ghost" data-peeditar="${esc(x.id)}" title="Editar" style="padding:1px 6px;">✏️</button>
+           <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`
+        : `<button class="btn ghost" data-petrazered="${esc(pesTipo(x))}" data-pedesc="${esc(x.descricao)}"
+             title="Esta linha ainda é a repetição do mês anterior. Editar traz as despesas para este mês primeiro."
+             style="padding:1px 6px;">✏️</button>`)}</td></tr>`;
   };
 
   /* os dois blocos lado a lado: cartao e despesas fixas */
@@ -5699,7 +5705,7 @@ function renderPessoais(){
       <table class="table"><thead><tr><th>Origem</th><th>Total no ano</th><th>Último lançamento</th><th></th></tr></thead><tbody>
       ${listaOrigens.map(([o,v])=>{
         const u = ultimaRenda(o);
-        if(u && rendaEditando === u.id){
+        if(u && u.id && rendaEditando === u.id){
           return `<tr>
             <td class="strong">${esc(o)}</td>
             <td class="hint">${BRL(v)}</td>
@@ -5871,27 +5877,42 @@ function ligarAcoesPessoais(){
       renderPessoais();
     };
   });
-  document.querySelectorAll('[data-petrazer]').forEach(b=>{
-    b.onclick = async ()=>{
-      const t = b.dataset.petrazer;
-      /* repete no mes em tela o que veio do mes anterior, ai vira lancamento de verdade */
-      for(let k=1; k<=12; k++){
-        const d = new Date(pesAno, pesMes-1-k, 1);
-        const a = d.getFullYear(), m = d.getMonth()+1;
-        const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)===t);
-        if(doMes.length){
-          const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
-            ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
-            cartao:x.cartao||null, categoria:x.categoria||null,
-            parcela_num:x.parcela_num||null, parcela_total:x.parcela_total||null })));
-          if(error) return erro(error);
-          break;
-        }
+  /* repete no mes em tela o que veio do mes anterior, ai vira lancamento de verdade */
+  async function pesTrazerMes(t){
+    for(let k=1; k<=12; k++){
+      const d = new Date(pesAno, pesMes-1-k, 1);
+      const a = d.getFullYear(), m = d.getMonth()+1;
+      const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)===t);
+      if(doMes.length){
+        const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
+          ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
+          cartao:x.cartao||null, categoria:x.categoria||null,
+          parcela_num:x.parcela_num||null, parcela_total:x.parcela_total||null })));
+        if(error){ erro(error); return false; }
+        break;
       }
-      await recarregar();
-    };
+    }
+    await recarregar();
+    return true;
+  }
+  document.querySelectorAll('[data-petrazer]').forEach(b=>{
+    b.onclick = ()=> pesTrazerMes(b.dataset.petrazer);
   });
   document.querySelectorAll('[data-peeditar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = b.dataset.peeditar; renderPessoais(); }; });
+  /* Editar uma linha repetida do mes anterior: ela ainda nao existe no banco.
+     Materializa o mes e reabre ja na mesma despesa, para o clique parecer um so. */
+  document.querySelectorAll('[data-petrazered]').forEach(b=>{
+    b.onclick = async ()=>{
+      const t = b.dataset.petrazered, desc = b.dataset.pedesc;
+      if(!confirm('Estas despesas ainda são a repetição do mês anterior.\n\n' +
+                  'Para editar, elas precisam virar lançamentos deste mês. Trazer agora?')) return;
+      await pesTrazerMes(t);
+      const nova = PES_LANC.find(x=> +x.ano===pesAno && +x.mes===pesMes &&
+                                     pesTipo(x)===t && x.descricao===desc);
+      pesEditando = nova ? nova.id : null;
+      renderPessoais();
+    };
+  });
   document.querySelectorAll('[data-pecancelar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = null; renderPessoais(); }; });
   document.querySelectorAll('[data-pesalvar]').forEach(b=>{
     b.onclick = async ()=>{
