@@ -1926,15 +1926,28 @@ function renderProjecao(){
   const lojas = selStores();
   const gR = (num(document.getElementById('growReceita').value) ?? 0)/100;
   const gD = (num(document.getElementById('growDespesa').value) ?? 0)/100;
-  /* Só mês fechado serve de base: mês sem receita lançada (o próximo, que já tem
-     despesa fixa herdada) e mês ainda em curso puxariam a média para baixo e
-     jogariam a projeção inteira para o negativo. */
+  /* Só mês fechado serve de base. O mês corrente é o caso mais perigoso: ele já
+     carrega a despesa fixa do mês inteiro, mas só parte do faturamento — no dia
+     7 entram 7 dias de venda contra 30 dias de conta. Entrar na média joga a
+     projeção toda para o vermelho.
+     Antes o corte dependia da marca "parcial" que a planilha do Drive gravava;
+     com a planilha desligada essa marca parou de vir, e o mês em curso passou a
+     ser tratado como fechado. Agora o corte é pela data — não depende de
+     ninguém lançar nada. */
   const totalReceitaMes = i => STORES.reduce((a,l)=> a + ((FINANCEIRO[l] && FINANCEIRO[l].receita[i]) || 0), 0);
   const parcial = i => !!(FINANCEIRO.parcialPorMes || {})[FINANCEIRO.meses[i]];
-  const fechados = FINANCEIRO.meses.map((_,i)=>i).filter(i => totalReceitaMes(i) > 0 && !parcial(i));
+  const compAtual = TODAY.getFullYear()*100 + (TODAY.getMonth()+1);
+  const compDoMes = i => { const p = String(FINANCEIRO.meses[i]||'').split('/');
+                           const mm = MES_ABREV.indexOf(p[0]);
+                           return (mm > 0 && p[1]) ? (2000 + (+p[1]))*100 + mm : 0; };
+  const naoFechado = i => { const c = compDoMes(i); return !c || c >= compAtual; };
+  const fechados = FINANCEIRO.meses.map((_,i)=>i)
+    .filter(i => totalReceitaMes(i) > 0 && !parcial(i) && !naoFechado(i));
   const ignorados = FINANCEIRO.meses.map((m,i)=>({m,i}))
     .filter(x => !fechados.includes(x.i))
-    .map(x => x.m + (parcial(x.i) ? ' (em curso)' : ' (sem receita lançada)'));
+    .map(x => x.m + (compDoMes(x.i) === compAtual ? ' (mês em curso — ainda não fechou)'
+                     : (compDoMes(x.i) > compAtual ? ' (mês futuro)'
+                     : (parcial(x.i) ? ' (em curso)' : ' (sem receita lançada)'))));
 
   const jv = document.getElementById('baseJanela').value;
   const nAvail = fechados.length;
