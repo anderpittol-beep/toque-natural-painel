@@ -4754,7 +4754,12 @@ function renderCaixa(){
       .filter(d=> ehMesBase ? (!d.pago || !refletida(d)) : true)
       .reduce((a,d)=>a+(+d.valor||0),0);
 
-    const fl = folhaDaCompetencia(ano, mes).filter(g=> inStore(g.loja))
+    /* A folha paga num mes e a do mes ANTERIOR (pagamento dia 05), como a tela
+       de Despesas ja mostra e onde o check grava. Este cartao lia a folha do
+       proprio mes, entao marcar pago em Despesas nao mexia aqui — eram dois
+       registros diferentes. */
+    const fc = fxMesAnterior(ano, mes);
+    const fl = folhaDaCompetencia(fc.ano, fc.mes).filter(g=> inStore(g.loja))
       .filter(g=> ehMesBase ? (!g.pago || !refletida(g)) : true)
       .reduce((a,g)=>a+gTotal(g),0);
 
