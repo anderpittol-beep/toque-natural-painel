@@ -5502,6 +5502,33 @@ const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
 /* Dia do debito e coluna opcional: enquanto o banco nao tiver dia_debito, a
    tela ignora o campo em vez de quebrar os lancamentos. */
 const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
+/* Ao repetir o mes, a parcela precisa ANDAR: 65/114 vira 66/114. Antes ela
+   era copiada igual (ou perdida, no "repetir mes anterior"), entao o
+   financiamento ficava parado no mesmo numero para sempre.
+   Devolve null quando a ultima parcela ja foi paga — despesa encerrada nao
+   se repete. */
+function pesProximaParcela(x){
+  const num = +x.parcela_num || 0, tot = +x.parcela_total || 0;
+  if(!num || !tot) return {parcela_num: x.parcela_num||null, parcela_total: x.parcela_total||null};
+  if(num >= tot) return null;                       // acabou de pagar
+  return {parcela_num: num + 1, parcela_total: tot};
+}
+/* separa o que segue do que encerrou, para poder avisar em vez de sumir */
+function pesSeparaEncerradas(lista){
+  const segue = [], encerradas = [];
+  lista.forEach(x=>{
+    const p = pesProximaParcela(x);
+    if(p) segue.push({x, p}); else encerradas.push(x);
+  });
+  return {segue, encerradas};
+}
+function pesAvisaEncerradas(encerradas){
+  if(!encerradas.length) return;
+  alert('Não repeti ' + encerradas.length + ' despesa(s) porque a última parcela já foi paga:\n\n' +
+        encerradas.map(x=>'• ' + x.descricao + ' (' + x.parcela_num + '/' + x.parcela_total + ')').join('\n') +
+        '\n\nSe alguma continuar, lance manualmente com a parcela nova.');
+}
+
 /* mostra "10/09"; alerta em amarelo o que ja passou do dia e nao foi marcado pago */
 function pesDebitoHTML(x){
   const d = +x.dia_debito || 0;
@@ -5930,12 +5957,16 @@ function ligarAcoesPessoais(){
       const a = d.getFullYear(), m = d.getMonth()+1;
       const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)===t);
       if(doMes.length){
-        const { error } = await sb().from('pes_lancamentos').insert(doMes.map(x=>({
-          ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
-          cartao:x.cartao||null, categoria:x.categoria||null,
-          ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
-          parcela_num:x.parcela_num||null, parcela_total:x.parcela_total||null })));
-        if(error){ erro(error); return false; }
+        const {segue, encerradas} = pesSeparaEncerradas(doMes);
+        if(segue.length){
+          const { error } = await sb().from('pes_lancamentos').insert(segue.map(({x,p})=>({
+            ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
+            cartao:x.cartao||null, categoria:x.categoria||null,
+            ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+            parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+          if(error){ erro(error); return false; }
+        }
+        pesAvisaEncerradas(encerradas);
         break;
       }
     }
@@ -6145,10 +6176,18 @@ function ligarFormulariosPessoais(){
     const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && pesTipo(x)==='fixa');
     if(jaTem && !confirm('Este mês já tem despesas fixas. Trazer as do mês anterior mesmo assim?')) return;
     if(fixas.length){
-      const { error } = await sb().from('pes_lancamentos').insert(fixas.map(x=>({
-        ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor, categoria:x.categoria,
-        ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}) })));
-      if(error) return erro(error);
+      /* antes este botao jogava fora parcela_num/parcela_total: quem tinha
+         financiamento perdia o controle das parcelas ao repetir o mes */
+      const {segue, encerradas} = pesSeparaEncerradas(fixas);
+      if(segue.length){
+        const { error } = await sb().from('pes_lancamentos').insert(segue.map(({x,p})=>({
+          ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor,
+          categoria:x.categoria, cartao:x.cartao||null,
+          ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+          parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+        if(error) return erro(error);
+      }
+      pesAvisaEncerradas(encerradas);
     }
     if(rendas.length){
       const { error } = await sb().from('pes_rendas').insert(rendas.map(x=>({
