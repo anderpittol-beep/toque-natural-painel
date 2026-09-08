@@ -4479,9 +4479,22 @@ function renderCompras(){
       const forn=get('fornecedor');
       if(!forn){ alert('Informe o fornecedor.'); return; }
       const d=get('data')||c.data;
+      /* Mudar a data para outro mes tira a compra da competencia em tela: ela
+         sumia calada e o total ia a zero, parecendo que a edicao se perdeu.
+         Agora avisa e, confirmando, leva a tela junto para o mes novo. */
+      const novoAno=+String(d).slice(0,4), novoMes=+String(d).slice(5,7);
+      const mudouDeMes = (novoAno!==cpAno || novoMes!==cpMes);
+      if(mudouDeMes){
+        const alvo = (MES_ABREV[novoMes]||novoMes) + '/' + String(novoAno).slice(2);
+        const atual = cpCompetencia();
+        if(!confirm('A data ' + dataBR(d) + ' é de ' + alvo + ', e a tela está em ' + atual + '.\n\n' +
+                    'OK — salva e leva você para ' + alvo + ', onde a compra passa a aparecer.\n' +
+                    'Cancelar — voltar e corrigir a data.')) return;
+      }
       Object.assign(c,{ data:d, fornecedor:forn, nf:get('nf'), loja:get('loja'),
         parcelas:parseInt(get('parcelas'))||1, valor:num(get('valor'))||0,
-        ano:+String(d).slice(0,4), mes:+String(d).slice(5,7) });
+        ano:novoAno, mes:novoMes });
+      if(mudouDeMes){ cpAno=novoAno; cpMes=novoMes; }
       if(c.id) tnUpdate('compras_nf',{id:c.id},{data:c.data,ano:c.ano,mes:c.mes,fornecedor:c.fornecedor,nf:c.nf,loja:c.loja,parcelas:c.parcelas,valor:c.valor});
       compraEditando=null; renderCaixa();
     };
