@@ -5608,6 +5608,17 @@ function fatParse(texto){
    financiamento ficava parado no mesmo numero para sempre.
    Devolve null quando a ultima parcela ja foi paga — despesa encerrada nao
    se repete. */
+/* Mes em que a assinatura fecha o ciclo e renova, contado da competencia em
+   tela: faltam (total - atual) meses ate a ultima, e a proxima e a renovacao. */
+function pesRenovacao(x){
+  const n = +x.parcela_num||0, t = +x.parcela_total||0;
+  if(!ehAssinatura(x) || !n || !t) return null;
+  const faltam = t - n;
+  const ult = new Date(pesAno, (pesMes-1) + faltam, 1);
+  const ren = new Date(pesAno, (pesMes-1) + faltam + 1, 1);
+  const rot = d => (MES_ABREV[d.getMonth()+1]||'') + '/' + String(d.getFullYear()).slice(2);
+  return {ultima: rot(ult), renova: rot(ren), faltam};
+}
 /* Tres coisas diferentes moram na mesma lista do cartao:
    - PARCELADA: tem 3/10, anda todo mes e acaba sozinha na ultima;
    - ASSINATURA: volta todo mes sem numero de parcela, ate ser cancelada;
@@ -5620,9 +5631,14 @@ const pesRecorrencia = x => String((x && x.recorrencia) || '').toLowerCase();
 const ehAssinatura = x => pesRecorrencia(x) === 'assinatura';
 function pesProximaParcela(x){
   if(pesRecorrencia(x) === 'avulsa') return null;   // compra unica: nao volta
-  /* Assinatura vence a parcela: cobranca anual dividida em 12x renova quando
-     chega na ultima, entao parar em 12/12 apagaria uma despesa que continua. */
-  if(ehAssinatura(x)) return {parcela_num: null, parcela_total: null, recorrencia: 'assinatura'};
+  /* Assinatura com ciclo: 2/6 anda ate 6/6 e RENOVA em 1/6, em vez de acabar.
+     Assim a despesa nunca some — plano anual em 12x renova mesmo — e o numero
+     da parcela continua vivo, que e o que diz quando o contrato vira. */
+  if(ehAssinatura(x)){
+    const n = +x.parcela_num||0, t = +x.parcela_total||0;
+    if(!n || !t) return {parcela_num: null, parcela_total: null, recorrencia: 'assinatura'};
+    return {parcela_num: (n >= t ? 1 : n + 1), parcela_total: t, recorrencia: 'assinatura'};
+  }
   const num = +x.parcela_num || 0, tot = +x.parcela_total || 0;
   if(!num || !tot) return {parcela_num: null, parcela_total: null,
                            recorrencia: x.recorrencia || null};
@@ -5851,8 +5867,17 @@ function renderPessoais(){
     }
     return `<tr>
       <td>${esc(x.descricao)}${x.categoria?` <span class="hint">· ${esc(x.categoria)}</span>`:''}${x.cartao?` <span class="hint">· ${esc(x.cartao)}</span>`:''}</td>
-      <td class="hint">${ehAssinatura(x) ? '<span title="Volta todo mês até ser cancelada">assinatura</span>'
-        : (p || (pesRecorrencia(x)==='avulsa' ? '<span title="Compra única: não se repete no mês seguinte">avulsa</span>' : '—'))}</td>
+      <td class="hint">${(()=>{
+        if(ehAssinatura(x)){
+          const r = pesRenovacao(x);
+          return r
+            ? `<span title="Assinatura: ${p} do ciclo. Última em ${r.ultima}, renova em ${r.renova} e recomeça em 1/${x.parcela_total}.">assinatura ${p}</span>`
+              + `<div style="font-size:10.5px;opacity:.8;">renova ${r.renova}</div>`
+            : '<span title="Volta todo mês até ser cancelada">assinatura</span>';
+        }
+        if(pesRecorrencia(x)==='avulsa') return '<span title="Compra única: não se repete no mês seguinte">avulsa</span>';
+        return p || '—';
+      })()}</td>
       ${colDebito?`<td>${pesDebitoHTML(x)}</td>`:''}
       <td class="strong">${BRL(+x.valor)}</td>
       ${pesSituacaoHTML(x)}
