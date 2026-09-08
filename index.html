@@ -5050,7 +5050,7 @@ function renderCaixa(){
       }
       gtAno = gAnoAnt; gtMes = gMesAnt;
       chk.disabled = false;
-      renderCaixa(); renderGente();
+      renderCaixa(); renderGente(); renderDisponibilidade();
     };
   });
   /* So marca o recolhimento do encargo: nao mexe em comissao nem em pago,
@@ -5106,7 +5106,7 @@ function renderCaixa(){
       }
       gtAno = gAnoAnt; gtMes = gMesAnt;
       chk.disabled = false;
-      renderCaixa(); renderGente();
+      renderCaixa(); renderGente(); renderDisponibilidade();
     };
   });
   document.querySelectorAll('[data-fxpago]').forEach(chk=>{
@@ -5121,7 +5121,9 @@ function renderCaixa(){
         if(d.id) await tnUpdate('despesas_fixas', {id:d.id}, {pago:d.pago, pago_em:d.pago_em});
       }
       chk.disabled = false;
-      renderCaixa();
+      /* renderAll junto: a Disponibilidade desconta o que ja foi pago, e sem
+         redesenhar ela o cartao ficava com o numero de antes do check */
+      renderCaixa(); renderAll();
     };
   });
   document.querySelectorAll('[data-fxeditar]').forEach(b=>{
