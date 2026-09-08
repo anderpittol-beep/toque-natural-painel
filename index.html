@@ -4932,11 +4932,29 @@ function renderCaixa(){
      socias. A aba pode estar liberada para as colaboradoras — estas linhas
      nao. */
   const folhaRows = !socia ? '' : (
-    Object.keys(folhaPorLoja).sort().map(l=> temEncPago
-      ? `<tr><td class="strong">Gente e Gestão — salários</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaSalarioPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>
-         <tr><td class="strong">Gente e Gestão — encargos</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`
-      : `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`
-    ).join('')
+    Object.keys(folhaPorLoja).sort().map(l=>{
+      if(!temEncPago)
+        return `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`;
+      /* Uma linha por pessoa: cada uma recebe no seu dia, e o check tem de
+         acompanhar quem ja foi pago — nao a loja inteira de uma vez. O campo
+         pago ja e por pessoa no banco, entao a granularidade so estava
+         escondida pela soma. */
+      const daLoja = genteList.filter(g=>g.loja===l).slice()
+        .sort((a,b)=> (gTotal(b)-(+b.encargo||0)) - (gTotal(a)-(+a.encargo||0)));
+      return daLoja.map(g=>{
+        const valor = gTotal(g) - (+g.encargo||0);
+        const chave = String(g.pessoa||'');
+        const chk = podeEditar
+          ? `<td style="text-align:center;">
+               <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+                 <input type="checkbox" data-gppago="1" data-gploja="${esc(l)}" data-gppessoa="${esc(chave)}" ${g.pago?'checked':''}>
+                 ${g.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
+               </label></td><td></td>`
+          : '';
+        return `<tr><td class="strong">Salário — ${esc(g.pessoa)}</td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`;
+      }).join('')
+      + `<tr><td class="strong">Gente e Gestão — encargos</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
+    }).join('')
     + Object.keys(provPorLoja).sort().map(l=>
       `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
   );
@@ -4978,6 +4996,38 @@ function renderCaixa(){
      então materializa antes de gravar — senão a marca se perderia na recarga. */
   /* Marca a folha inteira daquela loja. Como a competência aqui é a das fixas,
      materializa a folha desse mês antes de gravar. */
+  /* Pagamento de uma pessoa so. Mesma regra de congelar comissao do check
+     antigo, mas aplicada a quem foi marcado, em vez de a loja toda. */
+  document.querySelectorAll('[data-gppago]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const loja = chk.dataset.gploja, pessoa = chk.dataset.gppessoa, marcado = chk.checked;
+      chk.disabled = true;
+      const gAnoAnt = gtAno, gMesAnt = gtMes;
+      gtAno = fxAno; gtMes = fxMes;
+      await gtMaterializar();
+      const quando = marcado ? new Date().toISOString() : null;
+      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja && String(g.pessoa||'')===pessoa);
+      for(const g of alvos){
+        g.pago = marcado; g.pago_em = quando;
+        g.atualizado_em = new Date().toISOString();
+        const campos = {pago:g.pago, pago_em:g.pago_em, atualizado_em:g.atualizado_em};
+        if(marcado && !g.comissao_congelada && !(+g.comissao > 0)){
+          const valor = gComissao(g);
+          if(valor > 0){
+            g.comissao = valor; g.comissao_congelada = true;
+            campos.comissao = valor; campos.comissao_congelada = true;
+          }
+        }else if(!marcado && g.comissao_congelada){
+          g.comissao = 0; g.comissao_congelada = false;
+          campos.comissao = 0; campos.comissao_congelada = false;
+        }
+        if(g.id) await tnUpdate('folha', {id:g.id}, campos);
+      }
+      gtAno = gAnoAnt; gtMes = gMesAnt;
+      chk.disabled = false;
+      renderCaixa(); renderGente();
+    };
+  });
   /* So marca o recolhimento do encargo: nao mexe em comissao nem em pago,
      que sao do pagamento da pessoa e acontecem noutra data. */
   document.querySelectorAll('[data-gepago]').forEach(chk=>{
