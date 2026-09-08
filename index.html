@@ -1237,7 +1237,7 @@ window.TN_CONFIG = {
             <span class="strong" id="pes-competencia" style="font-size:13px;min-width:110px;text-align:center;">—</span>
             <button class="btn ghost" id="pes-mes-prox" title="Próximo mês" style="padding:3px 9px;">›</button>
           </div>
-          <button class="btn ghost" id="pes-repetir" style="padding:5px 12px;" title="Traz as fixas e a renda do mês anterior">repetir mês anterior</button>
+          <button class="btn ghost" id="pes-repetir" style="padding:5px 12px;" title="Traz as fixas, o cartão e a renda do mês anterior, com as parcelas avançadas">repetir mês anterior</button>
         </div>
 
         <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 12px 0;"></div>
@@ -6171,10 +6171,17 @@ function ligarFormulariosPessoais(){
   if(rep) rep.onclick = async ()=>{
     const d = new Date(pesAno, pesMes-2, 1), a = d.getFullYear(), m = d.getMonth()+1;
     const fixas = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='fixa');
+    /* o cartao tambem se repete: assinatura e parcela na fatura voltam todo mes.
+       Ele nao e herdado na tela de proposito (fatura muda de valor, e numero
+       herdado viraria despesa fantasma no KPI), mas quando o usuario pede para
+       repetir, ele vem junto — do contrario outubro nascia sem cartao nenhum. */
+    const cartoes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='cartao');
     const rendas = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m);
-    if(!fixas.length && !rendas.length) return alert('O mês anterior não tem fixas nem renda para repetir.');
-    const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && pesTipo(x)==='fixa');
-    if(jaTem && !confirm('Este mês já tem despesas fixas. Trazer as do mês anterior mesmo assim?')) return;
+    if(!fixas.length && !cartoes.length && !rendas.length)
+      return alert('O mês anterior não tem lançamentos para repetir.');
+    const jaTem = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && pesTipo(x)!=='cartao');
+    const jaTemCartao = PES_LANC.some(x=>+x.ano===pesAno && +x.mes===pesMes && pesTipo(x)==='cartao');
+    if((jaTem || jaTemCartao) && !confirm('Este mês já tem lançamentos. Trazer os do mês anterior mesmo assim?')) return;
     if(fixas.length){
       /* antes este botao jogava fora parcela_num/parcela_total: quem tinha
          financiamento perdia o controle das parcelas ao repetir o mes */
@@ -6182,6 +6189,18 @@ function ligarFormulariosPessoais(){
       if(segue.length){
         const { error } = await sb().from('pes_lancamentos').insert(segue.map(({x,p})=>({
           ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor,
+          categoria:x.categoria, cartao:x.cartao||null,
+          ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+          parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+        if(error) return erro(error);
+      }
+      pesAvisaEncerradas(encerradas);
+    }
+    if(cartoes.length){
+      const {segue, encerradas} = pesSeparaEncerradas(cartoes);
+      if(segue.length){
+        const { error } = await sb().from('pes_lancamentos').insert(segue.map(({x,p})=>({
+          ano:pesAno, mes:pesMes, tipo:'cartao', descricao:x.descricao, valor:x.valor,
           categoria:x.categoria, cartao:x.cartao||null,
           ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
           parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
