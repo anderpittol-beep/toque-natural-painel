@@ -4103,11 +4103,28 @@ function dispAtualPorLoja(loja){
 }
 
 /* Compromisso recorrente de um mês: fixas + folha + provisões da loja */
+/* O que ainda FALTA pagar no mes. Duas coisas que estavam erradas aqui:
+
+   1. So os boletos respeitavam o check. Fixas e folha entravam pelo valor
+      cheio mesmo depois de marcadas como pagas, entao dar check nao mudava a
+      disponibilidade — o "a pagar" continuava cobrando o que ja tinha saido.
+
+   2. A folha usada era a do proprio mes. Mas o que se paga em setembro e a
+      folha de agosto (pagamento dia 05), como a tela de Despesas ja mostra.
+
+   A provisao de 13o e ferias continua entrando inteira: e retencao, nao tem
+   check de pagamento e nao deixa de existir por causa dele. */
 function compromissoMensal(ano, mes, loja){
-  const fixas = fixasDaCompetencia(ano, mes).reduce((a,d)=>
-    a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0)), 0);
-  const doMes = folhaDaCompetencia(ano, mes).filter(g=>g.loja===loja);
-  return fixas + doMes.reduce((a,g)=>a+gTotal(g),0) + doMes.reduce((a,g)=>a+gProvisao(g).total,0);
+  const fixas = fixasDaCompetencia(ano, mes).reduce((a,d)=>{
+    if(d.pago) return a;                       // ja saiu do caixa
+    return a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0));
+  }, 0);
+  const fc = fxMesAnterior(ano, mes);
+  const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=>g.loja===loja);
+  const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gTotal(g) - (+g.encargo||0)), 0);
+  const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0)), 0);
+  const provisao = doMes.reduce((a,g)=> a + gProvisao(g).total, 0);
+  return fixas + salarios + encargos + provisao;
 }
 
 /* Boletos ainda em aberto com vencimento dentro do horizonte */
