@@ -5618,9 +5618,9 @@ function pesDebitoHTML(x){
   if(!d) return '<span class="hint">—</span>';
   const txt = String(d).padStart(2,'0') + '/' + String(pesMes).padStart(2,'0');
   const mesCorrente = (pesAno === TODAY.getFullYear() && pesMes === TODAY.getMonth()+1);
-  const venceu = mesCorrente && d < TODAY.getDate() && !x.pago;
+  const venceu = mesCorrente && d < TODAY.getDate() && !x.conferido;
   return venceu
-    ? '<span style="color:var(--warning);" title="Passou do dia e ainda não está marcado como pago">' + txt + '</span>'
+    ? '<span style="color:var(--warning);" title="Passou do dia e ainda não foi conferido">' + txt + '</span>'
     : txt;
 }
 /* 'variavel' foi unificado em 'fixa'; registro antigo continua lendo como fixa */
@@ -5708,7 +5708,7 @@ function renderPessoais(){
   const rendaHerdada = rendasMes.length && rendasMes[0].herdada;
   const renda = pesSoma(rendasMes);
   const saldo = renda - despesa;
-  const pago = pesSoma(lanc.filter(x=>x.pago && pesTipo(x)!=='cartao'));
+  const conferido = pesSoma(lanc.filter(x=>x.conferido));
 
   el('pes-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Renda do mês</div><div class="value">${BRL(renda)}</div><div class="hint">${rendasMes.length} lançamento(s)${rendaHerdada?' · repetida do mês anterior':''}</div></div>
@@ -5813,17 +5813,17 @@ function renderPessoais(){
              style="padding:1px 6px;">🗑️</button>`)}</td></tr>`;
   };
 
-  /* Linha herdada nao existe no banco: marcar nela mandaria update para um id
+  /* Um check so: conferido. "Pago" saiu — nas fixas da casa o debito e
+     automatico, entao marcar pagamento era trabalho sem informacao nova; o que
+     falta mesmo e alguem ter olhado a linha.
+     Linha herdada nao existe no banco: marcar nela mandaria update para um id
      inexistente, o check voltaria sozinho e o usuario acharia que salvou. */
   const pesSituacaoHTML = x => {
-    const cartao = x.tipo === 'cartao';
-    if(cartao && !colConf) return '';
+    if(!colConf) return '';
     const trava = x.id ? '' : ' disabled title="Traga as despesas para este mês (✏️) antes de marcar."';
-    const cx = (attr, on, rot) =>
-      `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;${x.id?'':'opacity:.5;'}">` +
-      `<input type="checkbox" data-${attr}="${esc(x.id)}" ${on?'checked':''}${trava}>${rot}</label>`;
-    return '<td>' + (cartao ? '' : cx('pepago', x.pago, 'pago')) +
-                    (colConf ? cx('peconf', x.conferido, 'conferido') : '') + '</td>';
+    return '<td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;' +
+           (x.id?'':'opacity:.5;') + '">' +
+           `<input type="checkbox" data-peconf="${esc(x.id)}" ${x.conferido?'checked':''}${trava}>conferido</label></td>`;
   };
 
   /* os dois blocos lado a lado: cartao e despesas fixas */
@@ -5833,8 +5833,7 @@ function renderPessoais(){
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a
        marcar — mas o "conferido" existe nos dois, que a conferencia mensal e
        justamente bater a fatura linha a linha */
-    const comPago = t !== 'cartao';
-    const comCheck = comPago || colConf;
+    const comCheck = colConf;
     const colDeb = colDebito;
     const colunas = (comCheck ? 5 : 4) + (colDeb ? 1 : 0);
     const nConf = itens.filter(x=>x.conferido).length;
@@ -5855,16 +5854,36 @@ function renderPessoais(){
         ${itens.map(linha).join('') || `<tr><td colspan="${colunas}" class="hint">Nada lançado neste mês.</td></tr>`}
       </tbody></table></div>`;
   }).join('')}</div>
-    <p class="hint" style="margin:6px 0 0 0;">Despesas fixas já quitadas neste mês: ${BRL(pago)}. A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
+    <p class="hint" style="margin:6px 0 0 0;">${colConf ? 'Já conferido neste mês: ' + BRL(conferido) + ' de ' + BRL(despesa) + '. ' : ''}A fatura do cartão (${BRL(cartao)}) é paga integral.</p>`;
 
-  /* historico: ultimos 12 meses + renda por origem no ano */
+  /* Historico dos ultimos 12 meses.
+     A renda e as fixas se repetem: sao mensais e fixas, e o mes que ainda nao
+     teve lancamento proprio vale o ultimo que teve. A tela principal ja lia
+     assim, mas o historico lia so o lancamento cru — entao mes sem lancamento
+     aparecia com renda R$ 0,00 e uma sobra profundamente negativa que nunca
+     existiu. Aqui o historico passa a usar a mesma regra, e as duas telas
+     param de se contradizer. */
+  const ultimoAte = (arr, a, m, filtro) => {
+    for(let k=0; k<=12; k++){
+      const d = new Date(a, m-1-k, 1);
+      const aa = d.getFullYear(), mm = d.getMonth()+1;
+      const doMes = arr.filter(x=>+x.ano===aa && +x.mes===mm && (!filtro || filtro(x)));
+      if(doMes.length) return {itens: doMes, herdado: k>0};
+    }
+    return {itens: [], herdado: false};
+  };
   const meses = [];
   for(let k=11;k>=0;k--){
     const d = new Date(pesAno, pesMes-1-k, 1);
     const a = d.getFullYear(), m = d.getMonth()+1;
-    const des = pesSoma(PES_LANC.filter(x=>+x.ano===a && +x.mes===m));
-    const ren = pesSoma(PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m));
-    if(des || ren) meses.push({a, m, des, ren, saldo: ren-des});
+    /* cartao nao se repete: fatura e do mes, e herdar viraria despesa fantasma */
+    const cart = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='cartao');
+    const fx = ultimoAte(PES_LANC, a, m, x=>pesTipo(x)==='fixa');
+    const rd = ultimoAte(PES_RENDAS, a, m, null);
+    const des = pesSoma(cart) + pesSoma(fx.itens);
+    const ren = pesSoma(rd.itens);
+    if(des || ren) meses.push({a, m, des, ren, saldo: ren-des,
+                               prev: fx.herdado || rd.herdado});
   }
   const origens = {};
   PES_RENDAS.filter(r=>+r.ano===pesAno).forEach(r=>{ origens[r.origem] = (origens[r.origem]||0) + (+r.valor||0); });
@@ -5872,7 +5891,7 @@ function renderPessoais(){
   el('pes-historico').innerHTML = `<div class="grid grid-2">
     <div class="card"><h3 style="font-size:14px;margin:0 0 8px 0;">Mês a mês</h3>
       <table class="table"><thead><tr><th>Mês</th><th>Renda</th><th>Despesas</th><th>Sobra</th></tr></thead><tbody>
-      ${meses.map(x=>`<tr><td>${MES_ABREV[x.m]||x.m}/${String(x.a).slice(2)}</td><td>${BRL(x.ren)}</td><td>${BRL(x.des)}</td>
+      ${meses.map(x=>`<tr><td>${MES_ABREV[x.m]||x.m}/${String(x.a).slice(2)}${x.prev?' <span class="hint">prevista</span>':''}</td><td>${BRL(x.ren)}</td><td>${BRL(x.des)}</td>
         <td class="strong" style="color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>`).join('')
         || '<tr><td colspan="4" class="hint">Sem histórico ainda.</td></tr>'}
       </tbody></table></div>
@@ -6048,16 +6067,6 @@ function ligarAcoesPessoais(){
       const { error } = await sb().from('pes_lancamentos').update({ conferido: c.checked }).eq('id', id);
       if(error) return erro(error);
       const x = PES_LANC.find(l=>l.id===id); if(x){ x.conferido = c.checked; }
-      renderPessoais();
-    };
-  });
-  document.querySelectorAll('[data-pepago]').forEach(c=>{
-    c.onchange = async ()=>{
-      const id = c.dataset.pepago;
-      const { error } = await sb().from('pes_lancamentos')
-        .update({ pago: c.checked, pago_em: c.checked ? new Date().toISOString().slice(0,10) : null }).eq('id', id);
-      if(error) return erro(error);
-      const x = PES_LANC.find(l=>l.id===id); if(x){ x.pago = c.checked; }
       renderPessoais();
     };
   });
