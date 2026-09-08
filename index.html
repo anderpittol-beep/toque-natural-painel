@@ -1270,12 +1270,10 @@ window.TN_CONFIG = {
               </select>
               <input type="text" id="pes-desc" placeholder="Descrição" required>
               <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
-              <input type="text" id="pes-cartao" placeholder="Cartão (MASTER/VISA)">
               <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
               <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
               <input type="number" id="pes-dia" placeholder="Dia que debita" min="1" max="31" step="1" title="Dia do mês em que a despesa debita na conta">
-              <input type="text" id="pes-categoria" placeholder="Categoria (opcional, ajuda no IR)" style="grid-column:span 3;">
-              <button class="btn primary" type="submit" style="grid-column:span 3;">Lançar despesa</button>
+              <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar despesa</button>
             </form>
           </details>
         </div>
@@ -6338,10 +6336,9 @@ function ligarFormulariosPessoais(){
   if(f) f.onsubmit = async ev=>{
     ev.preventDefault();
     const dados = { ano:pesAno, mes:pesMes, tipo: val('pes-tipo'), descricao: val('pes-desc'),
-                    valor: +val('pes-valor')||0, cartao: val('pes-cartao')||null,
+                    valor: +val('pes-valor')||0,
                     parcela_num: val('pes-pnum') ? +val('pes-pnum') : null,
-                    parcela_total: val('pes-ptot') ? +val('pes-ptot') : null,
-                    categoria: val('pes-categoria')||null };
+                    parcela_total: val('pes-ptot') ? +val('pes-ptot') : null };
     if(temDiaDebito()) dados.dia_debito = val('pes-dia') ? +val('pes-dia') : null;
     const { error } = await sb().from('pes_lancamentos').insert(dados);
     if(error) return erro(error);
