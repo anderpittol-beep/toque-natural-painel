@@ -5520,7 +5520,13 @@ function applyPerfil(){
    nessa lista; o banco recusa leitura e escrita para todo o resto. */
 let PES_LANC = [], PES_RENDAS = [], PES_INV = [], PES_DOCS = [], PES_SAFRAS = [], PES_PEND = [];
 let ACESSO_CASA = false;
-let pesAno = TODAY.getFullYear(), pesMes = TODAY.getMonth()+1;
+/* Financas particulares abre no MES SEGUINTE, nao no corrente: aqui se
+   trabalha com a projecao do proximo mes — quando outubro esta sendo montado,
+   setembro ja esta fechado. Abrir no mes corrente fazia procurar a seta toda
+   vez. As setas ‹ › continuam navegando para tras normalmente. */
+const pesProximoMes = (()=>{ const d = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 1);
+                             return {ano: d.getFullYear(), mes: d.getMonth()+1}; })();
+let pesAno = pesProximoMes.ano, pesMes = pesProximoMes.mes;
 let pesEditando = null;
 let rendaEditando = null;
 let invEditando = null;
