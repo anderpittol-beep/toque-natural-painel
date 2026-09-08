@@ -544,10 +544,12 @@ window.TN_CONFIG = {
                   <input type="number" id="cp-valor" placeholder="Valor total da NF" step="0.01">
                   <input type="number" id="cp-parcelas" placeholder="Parcelas" min="1" value="1">
                   <input type="date" id="cp-venc1" title="Vencimento da 1ª parcela — em branco usa 30 dias após a compra">
+                  <p class="hint" id="cp-modo-dica" style="grid-column:1/-1;margin:0;"></p>
                   <select id="cp-modo" style="grid-column:1/-1;">
                     <option value="mensal">Boletos a cada 30 dias, a partir da 1ª parcela</option>
+                    <option value="cartao">Pago no cartão da loja — saída na data da fatura</option>
                     <option value="manual">Informar a data e o valor de cada boleto</option>
-                    <option value="nenhum">Não gerar boletos agora</option>
+                    <option value="nenhum">Não gerar boletos agora (nada sai do caixa)</option>
                   </select>
                   <div id="cp-parcelas-lista" style="grid-column:1/-1;display:none;"></div>
                   <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar compra</button>
@@ -7147,6 +7149,22 @@ function cpLojasDaNota(valorTotal, lojaPadrao){
 function cpRenderParcelas(){
   const caixa = document.getElementById('cp-parcelas-lista');
   const modo = (document.getElementById('cp-modo')||{}).value;
+  /* Cada modo muda o que a data significa; sem dizer isso, "vencimento da 1a
+     parcela" e "data da fatura" viram o mesmo campo com sentidos diferentes. */
+  const dica = document.getElementById('cp-modo-dica');
+  const venc = document.getElementById('cp-venc1');
+  if(dica){
+    const textos = {
+      mensal: 'A data ao lado é o vencimento da 1ª parcela. Em branco, usa 30 dias após a compra.',
+      cartao: 'A data ao lado é o vencimento da FATURA do cartão, não o da compra. A saída de caixa cai no mês em que a fatura debita. Parcelado no cartão: informe o número de parcelas e cada uma vira uma fatura seguinte.',
+      manual: 'Informe abaixo a data e o valor de cada boleto.',
+      nenhum: 'Atenção: a nota entra no lucro, mas NÃO gera saída de caixa. Use só quando a loja realmente não vai pagar — cartão pessoal sem reembolso, por exemplo.'
+    };
+    dica.textContent = textos[modo] || '';
+    dica.style.color = (modo === 'nenhum') ? 'var(--warning)' : '';
+  }
+  if(venc) venc.title = (modo === 'cartao')
+    ? 'Vencimento da fatura do cartão' : 'Vencimento da 1ª parcela — em branco usa 30 dias após a compra';
   if(!caixa) return;
   if(modo !== 'manual'){ caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
 
@@ -7244,12 +7262,20 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   if(modo !== 'nenhum' && parcelas >= 1){
     const daPagadora = criadas.find(r=>r.loja===lojaPadrao) || criadas[0];
     const notaCheia = {...daPagadora, loja: lojaPadrao, valor: Math.round(totalNota*100)/100};
+    /* No cartao a saida nao e boleto do fornecedor: e a fatura. O sufixo deixa
+       isso visivel na lista, para ninguem lancar o boleto do fornecedor
+       tambem e duplicar a mesma compra. */
+    if(modo === 'cartao') notaCheia.viaCartao = true;
     criadosTotal = await gerarParcelas(notaCheia, document.getElementById('cp-venc1').value, manuaisBase) || 0;
   }
 
-  if(criadosTotal) alert(criadosTotal + (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados') +
-    ' a partir desta nota, em ' + lojaPadrao +
-    (lojasOk.length>1 ? '.\n\nA despesa ficou dividida entre ' + lojasOk.join(', ') + '.' : '.'));
+  if(criadosTotal) alert(criadosTotal +
+    (modo === 'cartao'
+      ? (criadosTotal===1 ? ' saída gerada na data da fatura do cartão' : ' saídas geradas nas datas das faturas do cartão')
+      : (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados')) +
+    ' a partir desta nota, em ' + lojaPadrao + '.' +
+    (modo === 'cartao' ? '\n\nNão lance o boleto do fornecedor: esta compra já saiu pelo cartão.' : '') +
+    (lojasOk.length>1 ? '\n\nA despesa ficou dividida entre ' + lojasOk.join(', ') + '.' : ''));
 
   e.target.reset();
   document.getElementById('cp-parcelas').value = 1;
@@ -7284,7 +7310,8 @@ async function gerarParcelas(compra, venc1, manuais){
       data_pgto: iso, ano: venc.getFullYear(), mes: venc.getMonth()+1,
       competencia: MES_ABREV[venc.getMonth()+1] + '/' + String(venc.getFullYear()).slice(2),
       loja: compra.loja,
-      descricao: (compra.fornecedor||'Compra') + ' ' + (i+1) + '/' + n + (compra.nf ? ' · NF ' + compra.nf : ''),
+      descricao: (compra.fornecedor||'Compra') + ' ' + (i+1) + '/' + n + (compra.nf ? ' · NF ' + compra.nf : '') +
+                 (compra.viaCartao ? ' · cartão da loja' : ''),
       valor: centavos/100,
       status: venc <= hoje ? 'Pago' : 'Pendente',
       origem: 'painel',
