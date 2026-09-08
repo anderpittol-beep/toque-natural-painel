@@ -4718,20 +4718,11 @@ function renderCaixa(){
   const reservaDf  = posLojas.reduce((a,p)=>a+(+p.reserva||0),0);
   const dataDf     = posLojas.map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
 
-  /* Marcar como pago tira o item da lista do que ainda vai sair — e o que o
-     usuario espera ver. Mas se o pagamento aconteceu DEPOIS da foto do saldo,
-     aquele dinheiro ainda esta dentro do saldo mostrado: some-lo em nenhum
-     lugar deixaria o disponivel maior do que a realidade. Por isso o que foi
-     pago apos a posicao sai das linhas de compromisso e entra numa linha
-     propria, abatendo o saldo. O total continua honesto e o check aparece. */
-  const refletida = d => {
-    if(!d.pago) return false;                    // ainda vai sair
-    if(!dataDf) return true;
-    const q = d.pago_em ? new Date(d.pago_em) : null;
-    return q ? q <= dataDf : true;               // paga antes da foto do saldo
-  };
-  /* pago depois da foto: ja saiu do banco, mas o saldo mostrado ainda o inclui */
-  const pagoAposPosicao = d => !!d.pago && !refletida(d);
+  /* Pago sai da conta, sem olhar data. As colaboradoras lancam o saldo da
+     conta todo fim de dia, entao a foto se atualiza sozinha e alcanca qualquer
+     pagamento do dia. Ja houve aqui uma regra que so descontava o pagamento
+     anterior a foto do saldo: era correta no papel, mas com a posicao diaria
+     ela so fazia o check parecer quebrado. */
 
   /* Receita esperada: média dos meses fechados de cada loja — mesma base da
      projeção. Sem ela, todo mês futuro fecharia no vermelho por construção. */
@@ -4747,7 +4738,7 @@ function renderCaixa(){
   }, 0);
 
   /* Compromissos de um mês: boletos que vencem nele + fixas e folha ainda não
-     refletidas no saldo. Para meses futuros vale tudo, pago ou não. */
+     ja pagas. Para meses futuros vale tudo, pago ou nao. */
   function compromissosDoMes(ano, mes, ehMesBase){
     const noMes = b => { const d = parseBR(b.data); return d && d.getFullYear()===ano && d.getMonth()+1===mes; };
     /* Vencido e nao pago continua sendo dinheiro que vai sair: entra no mes base,
@@ -4771,15 +4762,7 @@ function renderCaixa(){
       .filter(g=> ehMesBase ? !g.pago : true)
       .reduce((a,g)=>a+gTotal(g),0);
 
-    /* pago depois da foto do saldo: sai das linhas acima e vira abatimento */
-    const pagoDepois = !ehMesBase ? 0 :
-      fixasDaCompetencia(ano, mes)
-        .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
-        .filter(pagoAposPosicao).reduce((a,d)=>a+(+d.valor||0),0)
-      + folhaDaCompetencia(fxMesAnterior(ano, mes).ano, fxMesAnterior(ano, mes).mes)
-        .filter(g=> inStore(g.loja)).filter(pagoAposPosicao).reduce((a,g)=>a+gTotal(g),0);
-    return { boletos: bol, atrasados, fixas: fx, folha: fl, pagoDepois,
-             total: bol + fx + fl + pagoDepois };
+    return { boletos: bol, atrasados, fixas: fx, folha: fl, total: bol + fx + fl };
   }
 
   const cardMes = (ano, mes, saldoInicial, ehMesBase) => {
@@ -4824,7 +4807,6 @@ function renderCaixa(){
           ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
           ${linha('Folha', m.c.folha, true)}
-          ${m.c.pagoDepois ? linha('Pago após a posição <span class="hint">já saiu do banco</span>', m.c.pagoDepois, true) : ''}
           <tr><td class="strong">Fecha o mês com</td><td class="strong" style="text-align:right;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</td></tr>
         </tbody>
       </table>
