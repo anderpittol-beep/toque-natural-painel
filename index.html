@@ -5546,6 +5546,7 @@ const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
    tela ignora o campo em vez de quebrar os lancamentos. */
 const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
 const temConferido = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'conferido'));
+const temRecorrencia = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'recorrencia'));
 /* ===== IMPORTAR FATURA DO CARTAO =====
    O app do banco lista cada compra em ate tres pedacos: a descricao numa
    linha, "Data: 04/09 Parcelado: 1/10" na seguinte e o valor na coluna da
@@ -5607,11 +5608,26 @@ function fatParse(texto){
    financiamento ficava parado no mesmo numero para sempre.
    Devolve null quando a ultima parcela ja foi paga — despesa encerrada nao
    se repete. */
+/* Tres coisas diferentes moram na mesma lista do cartao:
+   - PARCELADA: tem 3/10, anda todo mes e acaba sozinha na ultima;
+   - ASSINATURA: volta todo mes sem numero de parcela, ate ser cancelada;
+   - AVULSA: compra unica, nao deveria voltar mes nenhum.
+   Sem essa marca, assinatura e avulsa ficam identicas (as duas sem parcela) e
+   repetir o mes trazia a compra avulsa de volta junto.
+   Registro antigo tem recorrencia vazia e mantem o comportamento de antes —
+   repete —, para nada sumir da noite para o dia sem o usuario pedir. */
+const pesRecorrencia = x => String((x && x.recorrencia) || '').toLowerCase();
+const ehAssinatura = x => pesRecorrencia(x) === 'assinatura';
 function pesProximaParcela(x){
+  if(pesRecorrencia(x) === 'avulsa') return null;   // compra unica: nao volta
+  /* Assinatura vence a parcela: cobranca anual dividida em 12x renova quando
+     chega na ultima, entao parar em 12/12 apagaria uma despesa que continua. */
+  if(ehAssinatura(x)) return {parcela_num: null, parcela_total: null, recorrencia: 'assinatura'};
   const num = +x.parcela_num || 0, tot = +x.parcela_total || 0;
-  if(!num || !tot) return {parcela_num: x.parcela_num||null, parcela_total: x.parcela_total||null};
+  if(!num || !tot) return {parcela_num: null, parcela_total: null,
+                           recorrencia: x.recorrencia || null};
   if(num >= tot) return null;                       // acabou de pagar
-  return {parcela_num: num + 1, parcela_total: tot};
+  return {parcela_num: num + 1, parcela_total: tot, recorrencia: x.recorrencia || null};
 }
 /* separa o que segue do que encerrou, para poder avisar em vez de sumir */
 function pesSeparaEncerradas(lista){
@@ -5624,9 +5640,24 @@ function pesSeparaEncerradas(lista){
 }
 function pesAvisaEncerradas(encerradas){
   if(!encerradas.length) return;
-  alert('Não repeti ' + encerradas.length + ' despesa(s) porque a última parcela já foi paga:\n\n' +
-        encerradas.map(x=>'• ' + x.descricao + ' (' + x.parcela_num + '/' + x.parcela_total + ')').join('\n') +
-        '\n\nSe alguma continuar, lance manualmente com a parcela nova.');
+  /* Dois motivos diferentes para nao repetir, e so um deles e surpresa:
+     parcelamento que acabou merece aviso; compra avulsa nao voltar e o
+     esperado, entao aparece como nota de rodape, sem alarme. */
+  /* o motivo e a marca, nao a presenca de parcela: compra avulsa pode ter sido
+     parcelada no cartao e ainda assim nao deve voltar */
+  const avulsas = encerradas.filter(x=> pesRecorrencia(x) === 'avulsa');
+  const acabou  = encerradas.filter(x=> pesRecorrencia(x) !== 'avulsa');
+  let msg = '';
+  if(acabou.length){
+    msg += 'Não repeti ' + acabou.length + ' despesa(s) porque a última parcela já foi paga:\n\n' +
+           acabou.map(x=>'• ' + x.descricao + ' (' + x.parcela_num + '/' + x.parcela_total + ')').join('\n') +
+           '\n\nSe alguma continuar, lance manualmente com a parcela nova.';
+  }
+  if(avulsas.length){
+    msg += (msg ? '\n\n' : '') + avulsas.length + ' compra(s) avulsa(s) também não vieram, como esperado: ' +
+           avulsas.map(x=>x.descricao).join(', ') + '.';
+  }
+  if(msg) alert(msg);
 }
 
 /* mostra "10/09"; alerta em amarelo o que ja passou do dia e nao foi marcado pago */
@@ -5807,7 +5838,12 @@ function renderPessoais(){
     if(x.id && pesEditando === x.id){
       return `<tr data-peid="${esc(x.id)}">
         <td><input type="text" data-pe2="descricao" value="${esc(x.descricao)}" style="width:100%;"></td>
-        <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;"></td>
+        <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;">
+          ${temRecorrencia()?`<select data-pe2="recorrencia" style="width:96px;margin-top:3px;font-size:11.5px;" title="O que acontece com esta linha no mês seguinte">
+            <option value="" ${!pesRecorrencia(x)?'selected':''}>—</option>
+            <option value="assinatura" ${pesRecorrencia(x)==='assinatura'?'selected':''}>assinatura</option>
+            <option value="avulsa" ${pesRecorrencia(x)==='avulsa'?'selected':''}>avulsa</option>
+          </select>`:''}</td>
         ${colDebito?`<td><input type="number" data-pe2="dia" value="${x.dia_debito||''}" min="1" max="31" placeholder="dia" style="width:60px;" title="Dia do mês em que debita"></td>`:''}
         <td><input type="number" data-pe2="valor" value="${+x.valor}" step="0.01" style="width:100px;"></td>
         <td colspan="2"><button class="btn primary" data-pesalvar="${esc(x.id)}" style="padding:2px 9px;font-size:11.5px;">salvar</button>
@@ -5815,7 +5851,8 @@ function renderPessoais(){
     }
     return `<tr>
       <td>${esc(x.descricao)}${x.categoria?` <span class="hint">· ${esc(x.categoria)}</span>`:''}${x.cartao?` <span class="hint">· ${esc(x.cartao)}</span>`:''}</td>
-      <td class="hint">${p||'—'}</td>
+      <td class="hint">${ehAssinatura(x) ? '<span title="Volta todo mês até ser cancelada">assinatura</span>'
+        : (p || (pesRecorrencia(x)==='avulsa' ? '<span title="Compra única: não se repete no mês seguinte">avulsa</span>' : '—'))}</td>
       ${colDebito?`<td>${pesDebitoHTML(x)}</td>`:''}
       <td class="strong">${BRL(+x.valor)}</td>
       ${pesSituacaoHTML(x)}
@@ -5845,7 +5882,10 @@ function renderPessoais(){
 
   /* os dois blocos lado a lado: cartao e despesas fixas */
   el('pes-listas').innerHTML = `<div class="grid grid-2">${['cartao','fixa'].map(t=>{
-    const itens = porTipo(t).slice().sort((a,b)=> (+b.valor)-(+a.valor));
+    /* assinaturas juntas no fim: sao as linhas que voltam sozinhas todo mes,
+       entao lidas em bloco em vez de espalhadas no meio das compras */
+    const itens = porTipo(t).slice().sort((a,b)=>
+      (ehAssinatura(a)?1:0) - (ehAssinatura(b)?1:0) || (+b.valor)-(+a.valor));
     const tot = pesSoma(itens);
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a
        marcar — mas o "conferido" existe nos dois, que a conferencia mensal e
@@ -6101,7 +6141,8 @@ function ligarAcoesPessoais(){
             cartao:x.cartao||null, categoria:x.categoria||null,
             ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
           ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
-            parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+            parcela_num:p.parcela_num, parcela_total:p.parcela_total,
+          ...(temRecorrencia() ? {recorrencia: p.recorrencia} : {}) })));
           if(error){ erro(error); return false; }
         }
         pesAvisaEncerradas(encerradas);
@@ -6134,7 +6175,12 @@ function ligarAcoesPessoais(){
       ${itens.map((it,k)=>`<tr>
         <td><input type="checkbox" data-fatok="${k}" checked></td>
         <td><input type="text" data-fatd="${k}" value="${esc(it.descricao)}">${jaTem(it.descricao)?'<div class="fat-dup">já existe no mês</div>':''}</td>
-        <td><input type="number" data-fatn="${k}" value="${it.num||''}" min="1" placeholder="—" style="width:52px;">/<input type="number" data-fatt="${k}" value="${it.tot||''}" min="1" placeholder="—" style="width:52px;"></td>
+        <td><input type="number" data-fatn="${k}" value="${it.num||''}" min="1" placeholder="—" style="width:52px;">/<input type="number" data-fatt="${k}" value="${it.tot||''}" min="1" placeholder="—" style="width:52px;">
+          ${temRecorrencia()?`<select data-fatr="${k}" style="width:96px;margin-top:3px;font-size:11.5px;" title="O que acontece no mês seguinte">
+            <option value="avulsa" ${it.num?'':'selected'}>avulsa</option>
+            <option value="assinatura">assinatura</option>
+            <option value="" ${it.num?'selected':''}>parcelada</option>
+          </select>`:''}</td>
         <td class="strong">${BRL(it.valor)}</td>
         <td class="hint">${esc(it.cartao||'—')}</td></tr>`).join('')}
       </tbody></table>
@@ -6145,10 +6191,12 @@ function ligarAcoesPessoais(){
         if(!document.querySelector('[data-fatok="'+k+'"]').checked) return;
         const v = s => document.querySelector('[data-fat'+s+'="'+k+'"]').value.trim();
         const desc = v('d'); if(!desc) return;
+        const rec = document.querySelector('[data-fatr="'+k+'"]');
         linhas.push({ ano:pesAno, mes:pesMes, tipo:'cartao', descricao:desc, valor:it.valor,
                       cartao:it.cartao||null, categoria:null,
                       parcela_num: v('n') ? +v('n') : null,
-                      parcela_total: v('t') ? +v('t') : null });
+                      parcela_total: v('t') ? +v('t') : null,
+                      ...(rec ? {recorrencia: rec.value || null} : {}) });
       });
       if(!linhas.length) return alert('Nenhuma linha marcada.');
       if(!confirm('Lançar ' + linhas.length + ' compra(s) em ' + pesComp() + '?')) return;
@@ -6185,6 +6233,7 @@ function ligarAcoesPessoais(){
       const dados = { descricao: v('descricao'), valor: +v('valor')||0,
                       parcela_num: par[0] ? parseInt(par[0]) : null,
                       parcela_total: par[1] ? parseInt(par[1]) : null };
+      if(tr.querySelector('[data-pe2="recorrencia"]')) dados.recorrencia = v('recorrencia') || null;
       if(tr.querySelector('[data-pe2="dia"]')){
         const dd = parseInt(v('dia'));
         if(v('dia') && (!(dd>=1 && dd<=31))) return alert('O dia do débito precisa estar entre 1 e 31.');
@@ -6377,7 +6426,8 @@ function ligarFormulariosPessoais(){
           categoria:x.categoria, cartao:x.cartao||null,
           ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
           ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
-          parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+          parcela_num:p.parcela_num, parcela_total:p.parcela_total,
+          ...(temRecorrencia() ? {recorrencia: p.recorrencia} : {}) })));
         if(error) return erro(error);
       }
       pesAvisaEncerradas(encerradas);
@@ -6390,7 +6440,8 @@ function ligarFormulariosPessoais(){
           categoria:x.categoria, cartao:x.cartao||null,
           ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
           ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
-          parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
+          parcela_num:p.parcela_num, parcela_total:p.parcela_total,
+          ...(temRecorrencia() ? {recorrencia: p.recorrencia} : {}) })));
         if(error) return erro(error);
       }
       pesAvisaEncerradas(encerradas);
