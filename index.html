@@ -1670,12 +1670,15 @@ function inssProgressivo(base){
   const b = +base||0; let anterior = 0, total = 0;
   for(const f of INSS_FAIXAS){
     if(b <= anterior) break;
-    total += (Math.min(b, f.ate) - anterior) * f.aliq;
+    /* Trunca FAIXA A FAIXA, nao o total: e o que a folha da contabilidade faz.
+       A diferenca e de centavos, mas aparece — no holerite de agosto/26 da
+       Mayara (base 2.269,28) truncar so no fim dava 179,92 e o documento traz
+       179,91. Faixa a faixa: 121,57 + 58,34 = 179,91, exato. E continua
+       batendo com a Tainara (2.261,45 -> 179,21). */
+    total += Math.floor((Math.min(b, f.ate) - anterior) * f.aliq * 100) / 100;
     anterior = f.ate;
   }
-  /* Trunca em vez de arredondar: e o que a folha da contabilidade faz. Com
-     arredondamento a Tainara daria R$ 179,22 e o holerite dela traz 179,21. */
-  return Math.floor(total * 100) / 100;
+  return Math.round(total * 100) / 100;
 }
 /* O que sai do salario antes de chegar na pessoa, conforme o vinculo:
    CLT   -> INSS progressivo.
