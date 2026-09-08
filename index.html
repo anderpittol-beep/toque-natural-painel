@@ -1683,11 +1683,14 @@ function inssProgressivo(base){
 /* O que sai do salario antes de chegar na pessoa, conforme o vinculo:
    CLT   -> INSS progressivo.
    MEI   -> nada. Ela emite nota e paga o DAS por fora, entao recebe cheio.
-   Socia -> 11% sobre o pro-labore (bate com o holerite da Andreia:
-            R$ 178,31 sobre R$ 1.621,00). */
+   Socia -> nada. A retirada sai integral: o INSS da socia e recolhido pela
+            empresa, nao descontado dela. Ficava 11% aqui, o que fazia a
+            retirada de R$ 6.000,00 aparecer como R$ 5.340,00 a pagar — valor
+            que nunca foi pago assim. O encargo da socia continua na coluna
+            propria, que la ele e custo da empresa e nao desconto dela. */
 function gDesconto(g){
   const s = +g.salario||0;
-  if(g.papel === 'Sócia') return cent(s * 0.11);
+  if(g.papel === 'Sócia') return 0;
   if(gVinculo(g) === 'MEI') return 0;
   return inssProgressivo(s);
 }
