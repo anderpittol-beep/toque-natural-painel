@@ -4758,11 +4758,20 @@ function renderCaixa(){
        proprio mes, entao marcar pago em Despesas nao mexia aqui — eram dois
        registros diferentes. */
     const fc = fxMesAnterior(ano, mes);
-    const fl = folhaDaCompetencia(fc.ano, fc.mes).filter(g=> inStore(g.loja))
-      .filter(g=> ehMesBase ? !g.pago : true)
-      .reduce((a,g)=>a+gTotal(g),0);
+    const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=> inStore(g.loja));
+    /* Salario e encargo tem checks separados — saem em datas diferentes. Antes
+       este cartao descartava a pessoa inteira quando o salario era marcado como
+       pago, e levava junto o encargo, que ainda nao tinha sido recolhido. */
+    const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : gTotal(g) - (+g.encargo||0)), 0);
+    const enc = doMes.reduce((a,g)=> a + ((ehMesBase && g.encargo_pago) ? 0 : (+g.encargo||0)), 0);
+    const fl = sal + enc;
+    /* Retencao de 13o e ferias: dinheiro que precisa continuar reservado. O KPI
+       "A pagar no mes" ja contava; o cartao nao, e por isso os dois numeros
+       nao fechavam. */
+    const prov = doMes.reduce((a,g)=> a + gProvisao(g).total, 0);
 
-    return { boletos: bol, atrasados, fixas: fx, folha: fl, total: bol + fx + fl };
+    return { boletos: bol, atrasados, fixas: fx, folha: fl, prov,
+             total: bol + fx + fl + prov };
   }
 
   const cardMes = (ano, mes, saldoInicial, ehMesBase) => {
@@ -4807,6 +4816,7 @@ function renderCaixa(){
           ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
           ${linha('Folha', m.c.folha, true)}
+          ${m.c.prov ? linha('Retenção de 13º e férias', m.c.prov, true) : ''}
           <tr><td class="strong">Fecha o mês com</td><td class="strong" style="text-align:right;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</td></tr>
         </tbody>
       </table>
