@@ -98,6 +98,10 @@
   .sec-ind h4{color:var(--good);}
   /* contraindicacao e informacao de seguranca: ganha fundo proprio para nunca
      ser confundida com indicacao por quem le com pressa no balcao */
+  .fat-tabela td,.fat-tabela th{font-size:12.5px;}
+  .fat-tabela input[type=text]{width:100%;font-size:12.5px;}
+  .fat-tabela input[type=number]{width:62px;font-size:12.5px;}
+  .fat-dup{color:var(--warning);font-size:11.5px;}
   .planta-fotos{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px;}
     .planta-fotos figure{margin:0;width:190px;}
     .planta-fotos img{width:190px;height:130px;object-fit:cover;border-radius:8px;
@@ -1242,6 +1246,17 @@ window.TN_CONFIG = {
 
         <div class="grid grid-4" id="pes-kpis" style="margin:14px 0 12px 0;"></div>
         <div id="pes-proximos" style="margin-bottom:16px;"></div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:14px;margin:0 0 4px 0;">Importar fatura do cartão</h3>
+          <p class="hint" style="margin:0 0 8px 0;">Cole o texto da fatura do app do banco. O painel separa descrição, valor e parcela, e lança tudo no mês em tela.</p>
+          <details class="add-form">
+            <summary>Colar fatura</summary>
+            <textarea id="fat-texto" rows="8" placeholder="ANDERSON PITTOL (1298)&#10;YelumSeg Parc6&#10;Data: 04/09&#10;R$ 212,79&#10;DM*hostingercombV&#10;Data: 01/09 Parcelado: 1/10&#10;R$ 47,91" style="grid-column:1/-1;font-family:ui-monospace,Menlo,monospace;font-size:12px;"></textarea>
+            <button class="btn" type="button" id="fat-ler" style="grid-column:1/-1;">Ler fatura</button>
+          </details>
+          <div id="fat-previa"></div>
+        </div>
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Novo lançamento</h3>
@@ -5502,6 +5517,62 @@ const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
 /* Dia do debito e coluna opcional: enquanto o banco nao tiver dia_debito, a
    tela ignora o campo em vez de quebrar os lancamentos. */
 const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
+/* ===== IMPORTAR FATURA DO CARTAO =====
+   O app do banco lista cada compra em ate tres pedacos: a descricao numa
+   linha, "Data: 04/09 Parcelado: 1/10" na seguinte e o valor na coluna da
+   direita, que ao copiar cai em outra linha. Colar isso num campo so e o
+   jeito mais rapido de o usuario trazer a fatura inteira, entao o parser
+   precisa aguentar a ordem trocada em vez de exigir formato.
+
+   Regra: acumula um item por vez. Linha com valor fecha o item; linha com
+   Data/Parcelado enriquece o item aberto; o resto vira descricao nova. */
+const FAT_VALOR   = /R\$\s*([\d.]+,\d{2})/;
+const FAT_PARCELA = /parcelad[oa]\s*:?\s*(\d+)\s*\/\s*(\d+)/i;
+const FAT_DATA    = /data\s*:?\s*(\d{2})\/(\d{2})/i;
+/* cabecalho do portador: "ANDERSON PITTOL (1298)" — vira o campo cartao */
+const FAT_DONO    = /^([A-ZÁÂÃÉÊÍÓÔÕÚÇ][A-ZÁÂÃÉÊÍÓÔÕÚÇ\s.]{5,})\s*\((\d{3,4})\)/;
+/* linhas de navegacao do app que nao sao compra */
+const FAT_LIXO    = /^(de\s+\d{2}\/\d{2}\s+a\s+\d{2}\/\d{2}|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[.\/]?\s*\/?\s*\d{0,2}$/i;
+
+function fatNum(s){ return +String(s).replace(/\./g,'').replace(',','.') || 0; }
+
+function fatParse(texto){
+  const linhas = String(texto||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const itens = [];
+  let atual = null, dono = '';
+  const fecha = ()=>{ if(atual && atual.descricao && atual.valor) itens.push(atual); atual = null; };
+  for(const l of linhas){
+    if(FAT_LIXO.test(l)) continue;
+    const md = l.match(FAT_DONO);
+    if(md && !FAT_VALOR.test(l.replace(md[0],''))===false || md){
+      /* o cabecalho traz o total do portador; nao e compra */
+      fecha(); dono = md[1].trim().replace(/\s+/g,' '); continue;
+    }
+    const mv = l.match(FAT_VALOR);
+    const mp = l.match(FAT_PARCELA);
+    const mdt = l.match(FAT_DATA);
+    const resto = l.replace(FAT_VALOR,'').replace(FAT_PARCELA,'').replace(FAT_DATA,'')
+                   .replace(/parcelad[oa]\s*:?/i,'').replace(/data\s*:?/i,'').trim();
+    if(!atual && resto) atual = {descricao:'', valor:0, num:null, tot:null, dia:null, cartao:dono};
+    if(resto && atual && !atual.descricao) atual.descricao = resto;
+    else if(resto && atual && atual.valor){ fecha(); atual = {descricao:resto, valor:0, num:null, tot:null, dia:null, cartao:dono}; }
+    else if(resto && atual && !atual.valor && atual.descricao && !mv && !mp && !mdt){
+      fecha(); atual = {descricao:resto, valor:0, num:null, tot:null, dia:null, cartao:dono};
+    }
+    if(!atual) continue;
+    if(mp){ atual.num = +mp[1]; atual.tot = +mp[2]; }
+    if(mdt){ atual.dia = +mdt[1]; }
+    if(mv){ atual.valor = fatNum(mv[1]); fecha(); }
+  }
+  fecha();
+  /* "YelumSeg Parc6": o app cola a parcela no nome quando nao ha total */
+  itens.forEach(it=>{
+    const m = it.descricao.match(/\bparc\.?\s*(\d{1,2})\b/i);
+    if(m && !it.num){ it.num = +m[1]; it.descricao = it.descricao.replace(m[0],'').trim(); }
+  });
+  return itens;
+}
+
 /* Ao repetir o mes, a parcela precisa ANDAR: 65/114 vira 66/114. Antes ela
    era copiada igual (ou perdida, no "repetir mes anterior"), entao o
    financiamento ficava parado no mesmo numero para sempre.
@@ -5976,6 +6047,53 @@ function ligarAcoesPessoais(){
   document.querySelectorAll('[data-petrazer]').forEach(b=>{
     b.onclick = ()=> pesTrazerMes(b.dataset.petrazer);
   });
+
+  /* previa antes de gravar: fatura mal colada vira lancamento errado, e
+     lancamento errado no cartao some no meio de vinte linhas parecidas */
+  function fatRender(itens){
+    const box = document.getElementById('fat-previa');
+    if(!box) return;
+    if(!itens.length){
+      box.innerHTML = '<p class="hint">Não reconheci nenhuma compra no texto colado. Confira se veio a descrição e o valor.</p>';
+      return;
+    }
+    const jaTem = d => PES_LANC.some(x=> +x.ano===pesAno && +x.mes===pesMes &&
+                                         pesTipo(x)==='cartao' &&
+                                         String(x.descricao||'').toLowerCase() === d.toLowerCase());
+    const total = itens.reduce((a,i)=>a+i.valor,0);
+    box.innerHTML = `
+      <p class="hint" style="margin:10px 0 6px;">${itens.length} compra(s) reconhecida(s) · total ${BRL(total)} · vão para <strong>${esc(pesComp())}</strong> como Cartão. Desmarque o que não quiser.</p>
+      <table class="table fat-tabela"><thead><tr><th style="width:26px;"></th><th>Descrição</th><th>Parcela</th><th>Valor</th><th>Cartão</th></tr></thead><tbody>
+      ${itens.map((it,k)=>`<tr>
+        <td><input type="checkbox" data-fatok="${k}" checked></td>
+        <td><input type="text" data-fatd="${k}" value="${esc(it.descricao)}">${jaTem(it.descricao)?'<div class="fat-dup">já existe no mês</div>':''}</td>
+        <td><input type="number" data-fatn="${k}" value="${it.num||''}" min="1" placeholder="—" style="width:52px;">/<input type="number" data-fatt="${k}" value="${it.tot||''}" min="1" placeholder="—" style="width:52px;"></td>
+        <td class="strong">${BRL(it.valor)}</td>
+        <td class="hint">${esc(it.cartao||'—')}</td></tr>`).join('')}
+      </tbody></table>
+      <button class="btn primary" type="button" id="fat-gravar" style="margin-top:8px;">Lançar as marcadas</button>`;
+    document.getElementById('fat-gravar').onclick = async ()=>{
+      const linhas = [];
+      itens.forEach((it,k)=>{
+        if(!document.querySelector('[data-fatok="'+k+'"]').checked) return;
+        const v = s => document.querySelector('[data-fat'+s+'="'+k+'"]').value.trim();
+        const desc = v('d'); if(!desc) return;
+        linhas.push({ ano:pesAno, mes:pesMes, tipo:'cartao', descricao:desc, valor:it.valor,
+                      cartao:it.cartao||null, categoria:null,
+                      parcela_num: v('n') ? +v('n') : null,
+                      parcela_total: v('t') ? +v('t') : null });
+      });
+      if(!linhas.length) return alert('Nenhuma linha marcada.');
+      if(!confirm('Lançar ' + linhas.length + ' compra(s) em ' + pesComp() + '?')) return;
+      const { error } = await sb().from('pes_lancamentos').insert(linhas);
+      if(error) return erro(error);
+      document.getElementById('fat-texto').value = '';
+      document.getElementById('fat-previa').innerHTML = '';
+      await recarregar();
+    };
+  }
+  const fatBtn = document.getElementById('fat-ler');
+  if(fatBtn) fatBtn.onclick = ()=> fatRender(fatParse(document.getElementById('fat-texto').value));
   document.querySelectorAll('[data-peeditar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = b.dataset.peeditar; renderPessoais(); }; });
   /* Editar uma linha repetida do mes anterior: ela ainda nao existe no banco.
      Materializa o mes e reabre ja na mesma despesa, para o clique parecer um so. */
