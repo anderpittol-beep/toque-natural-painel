@@ -5632,11 +5632,16 @@ function pesRenovacao(x){
    repete —, para nada sumir da noite para o dia sem o usuario pedir. */
 const pesRecorrencia = x => String((x && x.recorrencia) || '').toLowerCase();
 const ehAssinatura = x => pesRecorrencia(x) === 'assinatura';
+/* Provisao e valor estimado, nao conta fechada: repete todo mes como a
+   assinatura, mas o valor e um chute que pede conferencia — por isso vai para
+   o topo da lista, onde se olha primeiro. */
+const ehProvisao = x => pesRecorrencia(x) === 'provisao';
 function pesProximaParcela(x){
   if(pesRecorrencia(x) === 'avulsa') return null;   // compra unica: nao volta
   /* Assinatura com ciclo: 2/6 anda ate 6/6 e RENOVA em 1/6, em vez de acabar.
      Assim a despesa nunca some — plano anual em 12x renova mesmo — e o numero
      da parcela continua vivo, que e o que diz quando o contrato vira. */
+  if(ehProvisao(x)) return {parcela_num: null, parcela_total: null, recorrencia: 'provisao'};
   if(ehAssinatura(x)){
     const n = +x.parcela_num||0, t = +x.parcela_total||0;
     if(!n || !t) return {parcela_num: null, parcela_total: null, recorrencia: 'assinatura'};
@@ -5861,6 +5866,7 @@ function renderPessoais(){
           ${temRecorrencia()?`<select data-pe2="recorrencia" style="width:96px;margin-top:3px;font-size:11.5px;" title="O que acontece com esta linha no mês seguinte">
             <option value="" ${!pesRecorrencia(x)?'selected':''}>—</option>
             <option value="assinatura" ${pesRecorrencia(x)==='assinatura'?'selected':''}>assinatura</option>
+            <option value="provisao" ${pesRecorrencia(x)==='provisao'?'selected':''}>provisão</option>
             <option value="avulsa" ${pesRecorrencia(x)==='avulsa'?'selected':''}>avulsa</option>
           </select>`:''}</td>
         ${(colDebito && x.tipo!=='cartao')?`<td><input type="number" data-pe2="dia" value="${x.dia_debito||''}" min="1" max="31" placeholder="dia" style="width:60px;" title="Dia do mês em que debita"></td>`:''}
@@ -5878,6 +5884,7 @@ function renderPessoais(){
               + `<div style="font-size:10.5px;opacity:.8;">renova ${r.renova}</div>`
             : '<span title="Volta todo mês até ser cancelada">assinatura</span>';
         }
+        if(ehProvisao(x)) return '<span style="color:var(--warning);" title="Valor estimado, não conta fechada: confira o valor real deste mês.">provisão</span>';
         if(pesRecorrencia(x)==='avulsa') return '<span title="Compra única: não se repete no mês seguinte">avulsa</span>';
         return p || '—';
       })()}</td>
@@ -5912,8 +5919,11 @@ function renderPessoais(){
   el('pes-listas').innerHTML = `<div class="grid grid-2">${['cartao','fixa'].map(t=>{
     /* assinaturas juntas no fim: sao as linhas que voltam sozinhas todo mes,
        entao lidas em bloco em vez de espalhadas no meio das compras */
+    /* provisao no topo (e o que se confere primeiro), assinatura no fim (volta
+       sozinha), e no meio as contas do mes por valor */
+    const posicao = x => ehProvisao(x) ? 0 : (ehAssinatura(x) ? 2 : 1);
     const itens = porTipo(t).slice().sort((a,b)=>
-      (ehAssinatura(a)?1:0) - (ehAssinatura(b)?1:0) || (+b.valor)-(+a.valor));
+      posicao(a) - posicao(b) || (+b.valor)-(+a.valor));
     const tot = pesSoma(itens);
     /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a
        marcar — mas o "conferido" existe nos dois, que a conferencia mensal e
@@ -6210,6 +6220,7 @@ function ligarAcoesPessoais(){
           ${temRecorrencia()?`<select data-fatr="${k}" style="width:96px;margin-top:3px;font-size:11.5px;" title="O que acontece no mês seguinte">
             <option value="avulsa" ${it.num?'':'selected'}>avulsa</option>
             <option value="assinatura">assinatura</option>
+            <option value="provisao">provisão</option>
             <option value="" ${it.num?'selected':''}>parcelada</option>
           </select>`:''}</td>
         <td class="strong">${BRL(it.valor)}</td>
