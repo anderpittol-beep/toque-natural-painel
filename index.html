@@ -4424,9 +4424,16 @@ function renderCompras(){
             <button class="btn ghost" data-cdcancelar="1" style="padding:3px 10px;">cancelar</button>
           </div></td></tr>`;
       }
+      /* Nota lancada no painel que nao gerou nenhum boleto nunca vira saida de
+         caixa: entra no lucro e some do caixa. Isso e legitimo quando a loja
+         mesmo nao paga, mas e erro silencioso no resto dos casos — entao a
+         linha avisa em vez de deixar o buraco escondido. */
+      const semSaida = c.id && String(c.origem||'') === 'painel' &&
+                       !BOLETOS.some(b => b.compra_id === c.id);
       return `<tr>
         <td>${dataBR(c.data)}</td>
-        <td class="strong">${esc(c.fornecedor||'—')}</td>
+        <td class="strong">${esc(c.fornecedor||'—')}${semSaida
+          ? ` <span class="hint" style="color:var(--warning);" title="Esta nota não gerou boleto nenhum, então não aparece como dinheiro saindo. Se a loja paga esta compra, edite e gere a saída — no cartão, use o modo &quot;Pago no cartão da loja&quot;.">⚠ sem saída de caixa</span>` : ''}</td>
         <td>${esc(c.nf||'—')}</td>
         <td>${esc(c.loja)}</td>
         <td>${(+c.parcelas||1)}x</td>
@@ -4437,7 +4444,15 @@ function renderCompras(){
           <button class="btn ghost" data-cpexcluir="${esc(c.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button>`:'<span class="hint">planilha</span>'}</td>`:''}
       </tr>`;}).join('') || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`);
     })()}
-    <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr></tbody>`;
+    <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr>
+    ${(()=>{
+      const orfas = lista.filter(c=> c.id && String(c.origem||'')==='painel' && !BOLETOS.some(b=>b.compra_id===c.id));
+      if(!orfas.length) return '';
+      const soma = orfas.reduce((a,c)=>a+(+c.valor||0),0);
+      return `<tr><td colspan="${podeEd?7:6}" class="hint" style="color:var(--warning);">
+        ⚠ ${orfas.length} nota(s) sem saída de caixa, somando ${BRL(soma)}: ${esc(orfas.map(c=>c.fornecedor||'—').join(', '))}.
+        Entram no lucro mas não aparecem saindo do caixa. Se a loja paga, gere a saída — no cartão da loja, use o modo “Pago no cartão da loja”.</td></tr>`;
+    })()}</tbody>`;
 
   tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; compraDividindo=null; renderCaixa(); }; });
   tb.querySelectorAll('[data-cpdividir]').forEach(b=>{ b.onclick=()=>{ compraDividindo=b.dataset.cpdividir; compraEditando=null; renderCaixa(); }; });
