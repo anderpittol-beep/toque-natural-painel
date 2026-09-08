@@ -1703,6 +1703,11 @@ const gAPagar = g => cent(gLiquido(g)+gComissao(g)+gExtras(g)+(g.vale||0));
    valor quase certamente esta desatualizado ou e outra coisa. Nao calculamos
    automatico de proposito: o valor oficial e o do holerite. */
 const FGTS_ALIQUOTA = 0.08;
+/* O encargo aqui e o FGTS, que vence no dia 7. Como a tela de um mes mostra a
+   folha do mes anterior, esse vencimento cai dentro do proprio mes exibido: a
+   folha de agosto aparece em setembro e o FGTS dela vence 07/09. Se a data
+   mudar, troca aqui num lugar so. */
+const ENCARGO_DIA_VENC = 7;
 const gVinculo = g => (g.vinculo === 'MEI') ? 'MEI' : 'CLT';
 const encargoFaixa = g => { const s = +g.salario||0; return {min: cent(s*0.075), max: cent(s*0.10)}; };
 /* O que o encargo significa depende do vinculo:
@@ -4112,8 +4117,9 @@ function dispAtualPorLoja(loja){
    2. A folha usada era a do proprio mes. Mas o que se paga em setembro e a
       folha de agosto (pagamento dia 05), como a tela de Despesas ja mostra.
 
-   A provisao de 13o e ferias continua entrando inteira: e retencao, nao tem
-   check de pagamento e nao deixa de existir por causa dele. */
+   A retencao de 13o e ferias fica FORA: e opcional, a socia aplica o valor
+   quando quer e ele continua disponivel no volume aplicado. Nao e dinheiro
+   que sai do caixa no mes. */
 function compromissoMensal(ano, mes, loja){
   const fixas = fixasDaCompetencia(ano, mes).reduce((a,d)=>{
     if(d.pago) return a;                       // ja saiu do caixa
@@ -4123,8 +4129,7 @@ function compromissoMensal(ano, mes, loja){
   const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=>g.loja===loja);
   const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gTotal(g) - (+g.encargo||0)), 0);
   const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0)), 0);
-  const provisao = doMes.reduce((a,g)=> a + gProvisao(g).total, 0);
-  return fixas + salarios + encargos + provisao;
+  return fixas + salarios + encargos;
 }
 
 /* Boletos ainda em aberto com vencimento dentro do horizonte */
@@ -4765,13 +4770,10 @@ function renderCaixa(){
     const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : gTotal(g) - (+g.encargo||0)), 0);
     const enc = doMes.reduce((a,g)=> a + ((ehMesBase && g.encargo_pago) ? 0 : (+g.encargo||0)), 0);
     const fl = sal + enc;
-    /* Retencao de 13o e ferias: dinheiro que precisa continuar reservado. O KPI
-       "A pagar no mes" ja contava; o cartao nao, e por isso os dois numeros
-       nao fechavam. */
-    const prov = doMes.reduce((a,g)=> a + gProvisao(g).total, 0);
-
-    return { boletos: bol, atrasados, fixas: fx, folha: fl, prov,
-             total: bol + fx + fl + prov };
+    /* A retencao de 13o e ferias NAO entra no que vai sair: a socia aplica o
+       valor quando quer, e ele fica disponivel no volume aplicado. Contar aqui
+       tirava da disponibilidade um dinheiro que nao saiu do caixa. */
+    return { boletos: bol, atrasados, fixas: fx, folha: fl, total: bol + fx + fl };
   }
 
   const cardMes = (ano, mes, saldoInicial, ehMesBase) => {
@@ -4816,7 +4818,6 @@ function renderCaixa(){
           ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
           ${linha('Folha', m.c.folha, true)}
-          ${m.c.prov ? linha('Retenção de 13º e férias', m.c.prov, true) : ''}
           <tr><td class="strong">Fecha o mês com</td><td class="strong" style="text-align:right;color:${m.fim>=0?'var(--good)':'var(--critical)'};">${BRL(m.fim)}</td></tr>
         </tbody>
       </table>
@@ -4990,7 +4991,17 @@ function renderCaixa(){
           : '';
         return `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`;
       }).join('')
-      + `<tr><td class="strong">Gente e Gestão — encargos <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
+      + (()=>{
+          const venc = String(ENCARGO_DIA_VENC).padStart(2,'0') + '/' + String(fxMes).padStart(2,'0');
+          /* passou do dia e ainda nao foi recolhido: avisa antes da multa */
+          const atrasado = !encargoPagoLoja[l]
+            && fxAno === TODAY.getFullYear() && fxMes === TODAY.getMonth()+1
+            && TODAY.getDate() > ENCARGO_DIA_VENC;
+          const cel = atrasado
+            ? `<span style="color:var(--warning);" title="Passou do vencimento e ainda não foi recolhido">${venc}</span>`
+            : venc;
+          return `<tr><td class="strong">Gente e Gestão — encargos <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>${cel}</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
+        })();
     }).join('')
     + Object.keys(provPorLoja).sort().map(l=>
       `<tr><td class="strong">Retenção de 13º e férias <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
