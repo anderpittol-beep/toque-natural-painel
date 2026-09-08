@@ -4718,11 +4718,18 @@ function renderCaixa(){
   const reservaDf  = posLojas.reduce((a,p)=>a+(+p.reserva||0),0);
   const dataDf     = posLojas.map(p=>parseBR(p.data)).filter(Boolean).sort((a,b)=>b-a)[0];
 
+  /* A posicao do saldo e uma data (08/09), que vira meia-noite; o pagamento
+     guarda a hora do clique (08/09 15:30). Comparando instante com instante,
+     pagar no MESMO dia da posicao nunca contava como pago — e como se lanca a
+     posicao e se marcam os pagamentos no mesmo dia, o check parecia nao
+     funcionar. Agora a comparacao e por DIA: pagou no dia da posicao ou antes,
+     ja esta refletido. */
+  const fimDoDia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
   const refletida = d => {
     if(!d.pago) return false;                    // ainda vai sair
     if(!dataDf) return true;
     const q = d.pago_em ? new Date(d.pago_em) : null;
-    return q ? q <= dataDf : true;               // paga antes da foto do saldo
+    return q ? q <= fimDoDia(dataDf) : true;     // pago ate o dia da foto do saldo
   };
 
   /* Receita esperada: média dos meses fechados de cada loja — mesma base da
