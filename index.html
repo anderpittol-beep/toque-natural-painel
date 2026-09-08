@@ -5515,6 +5515,7 @@ const PES_ROTULO = { cartao:'Cartão', fixa:'Despesas fixas' };
 /* Dia do debito e coluna opcional: enquanto o banco nao tiver dia_debito, a
    tela ignora o campo em vez de quebrar os lancamentos. */
 const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
+const temConferido = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'conferido'));
 /* ===== IMPORTAR FATURA DO CARTAO =====
    O app do banco lista cada compra em ate tres pedacos: a descricao numa
    linha, "Data: 04/09 Parcelado: 1/10" na seguinte e o valor na coluna da
@@ -5768,6 +5769,7 @@ function renderPessoais(){
 
   const podeMexer = ACESSO_CASA;
   const colDebito = temDiaDebito();
+  const colConf = temConferido();
   const linha = x => {
     const p = (x.parcela_num && x.parcela_total) ? `${x.parcela_num}/${x.parcela_total}` : '';
     /* x.id e null na linha herdada; sem o teste de veracidade,
@@ -5786,7 +5788,7 @@ function renderPessoais(){
       <td class="hint">${p||'—'}</td>
       ${colDebito?`<td>${pesDebitoHTML(x)}</td>`:''}
       <td class="strong">${BRL(+x.valor)}</td>
-      ${x.tipo==='cartao' ? '' : `<td><label style="display:flex;align-items:center;gap:5px;font-size:11.5px;"><input type="checkbox" data-pepago="${esc(x.id)}" ${x.pago?'checked':''}>pago</label></td>`}
+      ${pesSituacaoHTML(x)}
       <td style="white-space:nowrap;">${!podeMexer?'':(x.id
         ? `<button class="btn ghost" data-peeditar="${esc(x.id)}" title="Editar" style="padding:1px 6px;">✏️</button>
            <button class="btn ghost" data-peexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button>`
@@ -5798,18 +5800,36 @@ function renderPessoais(){
              style="padding:1px 6px;">🗑️</button>`)}</td></tr>`;
   };
 
+  /* Linha herdada nao existe no banco: marcar nela mandaria update para um id
+     inexistente, o check voltaria sozinho e o usuario acharia que salvou. */
+  const pesSituacaoHTML = x => {
+    const cartao = x.tipo === 'cartao';
+    if(cartao && !colConf) return '';
+    const trava = x.id ? '' : ' disabled title="Traga as despesas para este mês (✏️) antes de marcar."';
+    const cx = (attr, on, rot) =>
+      `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;${x.id?'':'opacity:.5;'}">` +
+      `<input type="checkbox" data-${attr}="${esc(x.id)}" ${on?'checked':''}${trava}>${rot}</label>`;
+    return '<td>' + (cartao ? '' : cx('pepago', x.pago, 'pago')) +
+                    (colConf ? cx('peconf', x.conferido, 'conferido') : '') + '</td>';
+  };
+
   /* os dois blocos lado a lado: cartao e despesas fixas */
   el('pes-listas').innerHTML = `<div class="grid grid-2">${['cartao','fixa'].map(t=>{
     const itens = porTipo(t).slice().sort((a,b)=> (+b.valor)-(+a.valor));
     const tot = pesSoma(itens);
-    /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a marcar */
-    const comCheck = t !== 'cartao';
+    /* a fatura do cartao e sempre paga integral, entao ali nao existe "pago" a
+       marcar — mas o "conferido" existe nos dois, que a conferencia mensal e
+       justamente bater a fatura linha a linha */
+    const comPago = t !== 'cartao';
+    const comCheck = comPago || colConf;
     const colDeb = colDebito;
     const colunas = (comCheck ? 5 : 4) + (colDeb ? 1 : 0);
+    const nConf = itens.filter(x=>x.conferido).length;
     const herdado = itens.length && itens[0].herdada;
     return `<div class="card">
       <div class="toolbar" style="justify-content:space-between;align-items:center;">
-        <h3 style="font-size:14px;margin:0;">${PES_ROTULO[t]}</h3>
+        <h3 style="font-size:14px;margin:0;">${PES_ROTULO[t]}${colConf && itens.length
+          ? `<span class="hint" style="font-weight:400;margin-left:8px;">${nConf} de ${itens.length} conferido${itens.length===1?'':'s'}</span>` : ''}</h3>
         <span class="strong">${BRL(tot)}</span>
       </div>
       ${herdado?`<div class="hint" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -6009,6 +6029,15 @@ function ligarAcoesPessoais(){
   const recarregar = async ()=>{ await tnCarregarPessoais(); };
   const erro = e => alert('Não deu certo: ' + (e && e.message ? e.message : e));
 
+  document.querySelectorAll('[data-peconf]').forEach(c=>{
+    c.onchange = async ()=>{
+      const id = c.dataset.peconf;
+      const { error } = await sb().from('pes_lancamentos').update({ conferido: c.checked }).eq('id', id);
+      if(error) return erro(error);
+      const x = PES_LANC.find(l=>l.id===id); if(x){ x.conferido = c.checked; }
+      renderPessoais();
+    };
+  });
   document.querySelectorAll('[data-pepago]').forEach(c=>{
     c.onchange = async ()=>{
       const id = c.dataset.pepago;
@@ -6032,6 +6061,7 @@ function ligarAcoesPessoais(){
             ano:pesAno, mes:pesMes, tipo:t, descricao:x.descricao, valor:x.valor,
             cartao:x.cartao||null, categoria:x.categoria||null,
             ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+          ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
             parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
           if(error){ erro(error); return false; }
         }
@@ -6307,6 +6337,7 @@ function ligarFormulariosPessoais(){
           ano:pesAno, mes:pesMes, tipo:'fixa', descricao:x.descricao, valor:x.valor,
           categoria:x.categoria, cartao:x.cartao||null,
           ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+          ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
           parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
         if(error) return erro(error);
       }
@@ -6319,6 +6350,7 @@ function ligarFormulariosPessoais(){
           ano:pesAno, mes:pesMes, tipo:'cartao', descricao:x.descricao, valor:x.valor,
           categoria:x.categoria, cartao:x.cartao||null,
           ...(temDiaDebito() ? {dia_debito:x.dia_debito||null} : {}),
+          ...(temConferido() ? {conferido:false} : {}),   /* mes novo, conferencia nova */
           parcela_num:p.parcela_num, parcela_total:p.parcela_total })));
         if(error) return erro(error);
       }
