@@ -4618,8 +4618,15 @@ function renderCaixa(){
   const totFixasBase = fixas.reduce((a,b)=>a+(b.valor||0),0);
   // folha (GENTE) entra nas despesas fixas
   const genteList = folhaDaCompetencia(fxAno, fxMes).filter(x=>inStore(x.loja));
-  const folhaPorLoja = {};
-  genteList.forEach(g=>{ folhaPorLoja[g.loja]=(folhaPorLoja[g.loja]||0)+gTotal(g); });
+  /* Salarios e encargos saem em datas diferentes do mes, entao viram duas
+     linhas com check proprio. A soma das duas e a mesma de antes: gTotal menos
+     o encargo e exatamente a parte de salario. */
+  const folhaPorLoja = {}, folhaSalarioPorLoja = {}, folhaEncargoPorLoja = {};
+  genteList.forEach(g=>{
+    folhaPorLoja[g.loja]=(folhaPorLoja[g.loja]||0)+gTotal(g);
+    folhaEncargoPorLoja[g.loja]=(folhaEncargoPorLoja[g.loja]||0)+(+g.encargo||0);
+    folhaSalarioPorLoja[g.loja]=(folhaSalarioPorLoja[g.loja]||0)+(gTotal(g)-(+g.encargo||0));
+  });
   const folhaTotal = genteList.reduce((a,g)=>a+gTotal(g),0);
   // retenção mensal de 13º e férias, rateada por loja
   const provPorLoja = {};
@@ -4908,21 +4915,31 @@ function renderCaixa(){
   /* A folha aparece aqui como uma linha por loja, e é aqui que se marca o
      pagamento — em Gente e Gestão o check por pessoa confundia, porque lá não
      há data nem vencimento. Marcar a linha marca todas as pessoas da loja. */
-  const folhaPagaLoja = {};
-  genteList.forEach(g=>{ if(folhaPagaLoja[g.loja]!==false) folhaPagaLoja[g.loja] = !!g.pago; });
-  const folhaRows = Object.keys(folhaPorLoja).sort().map(l=>{
-    const paga = !!folhaPagaLoja[l];
-    const check = podeEditar
-      ? `<td style="text-align:center;">
-           <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
-             <input type="checkbox" data-gfpago="1" data-gfloja="${esc(l)}" ${paga?'checked':''}>
-             ${paga?'<span class="hint" style="color:var(--good);">pago</span>':''}
-           </label></td><td></td>`
-      : '';
-    return `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${check}</tr>`;
-  }).join('')
+  const folhaPagaLoja = {}, encargoPagoLoja = {};
+  genteList.forEach(g=>{
+    if(folhaPagaLoja[g.loja]!==false) folhaPagaLoja[g.loja] = !!g.pago;
+    if(encargoPagoLoja[g.loja]!==false) encargoPagoLoja[g.loja] = !!g.encargo_pago;
+  });
+  const temEncPago = temEncargoPago();
+  const checkFolha = (l, marcado, attr) => podeEditar
+    ? `<td style="text-align:center;">
+         <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+           <input type="checkbox" data-${attr}="1" data-gfloja="${esc(l)}" ${marcado?'checked':''}>
+           ${marcado?'<span class="hint" style="color:var(--good);">pago</span>':''}
+         </label></td><td></td>`
+    : '';
+  /* Quanto se paga a folha e quanto se recolhe de encargo e informacao das
+     socias. A aba pode estar liberada para as colaboradoras — estas linhas
+     nao. */
+  const folhaRows = !socia ? '' : (
+    Object.keys(folhaPorLoja).sort().map(l=> temEncPago
+      ? `<tr><td class="strong">Gente e Gestão — salários</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaSalarioPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>
+         <tr><td class="strong">Gente e Gestão — encargos</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`
+      : `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`
+    ).join('')
     + Object.keys(provPorLoja).sort().map(l=>
-    `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('');
+      `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
+  );
   const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   document.getElementById('tbl-fixas').innerHTML = `
@@ -4961,6 +4978,26 @@ function renderCaixa(){
      então materializa antes de gravar — senão a marca se perderia na recarga. */
   /* Marca a folha inteira daquela loja. Como a competência aqui é a das fixas,
      materializa a folha desse mês antes de gravar. */
+  /* So marca o recolhimento do encargo: nao mexe em comissao nem em pago,
+     que sao do pagamento da pessoa e acontecem noutra data. */
+  document.querySelectorAll('[data-gepago]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const loja = chk.dataset.gfloja, marcado = chk.checked;
+      chk.disabled = true;
+      const gAnoAnt = gtAno, gMesAnt = gtMes;
+      gtAno = fxAno; gtMes = fxMes;
+      await gtMaterializar();
+      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
+      for(const g of alvos){
+        g.encargo_pago = marcado;
+        g.atualizado_em = new Date().toISOString();
+        if(g.id) await tnUpdate('folha', {id:g.id}, {encargo_pago:g.encargo_pago, atualizado_em:g.atualizado_em});
+      }
+      gtAno = gAnoAnt; gtMes = gMesAnt;
+      chk.disabled = false;
+      renderCaixa(); renderAll();
+    };
+  });
   document.querySelectorAll('[data-gfpago]').forEach(chk=>{
     chk.onchange = async ()=>{
       const loja = chk.dataset.gfloja, marcado = chk.checked;
@@ -5564,6 +5601,10 @@ const PES_CARTAO_DIA = 7;
    tela ignora o campo em vez de quebrar os lancamentos. */
 const temDiaDebito = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'dia_debito'));
 const temConferido = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'conferido'));
+/* Encargo tem data de pagamento propria, entao precisa do proprio "pago". Sem
+   a coluna no banco a tela volta a um check so, em vez de quebrar. */
+const temEncargoPago = () => (typeof GENTE!=='undefined') &&
+  GENTE.some(x => Object.prototype.hasOwnProperty.call(x, 'encargo_pago'));
 const temRecorrencia = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'recorrencia'));
 /* ===== IMPORTAR FATURA DO CARTAO =====
    O app do banco lista cada compra em ate tres pedacos: a descricao numa
