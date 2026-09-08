@@ -2011,7 +2011,10 @@ function sincronizarCompetencias(incluirGente){
   if(typeof fxAno!=='undefined'){ fxAno=u.ano; fxMes=u.mes; }
   if(typeof cpAno!=='undefined'){ cpAno=u.ano; cpMes=u.mes; }
   if(incluirGente!==false && typeof gtAno!=='undefined'){ gtAno=u.ano; gtMes=u.mes; }
-  if(typeof pesAno!=='undefined'){ pesAno=u.ano; pesMes=u.mes; }   // Financas particulares
+  /* Financas particulares NAO segue o filtro de meses do topo. Aquele filtro e
+     das lojas — tanto que fica escondido nesta tela — e arrastava a competencia
+     para o mes corrente, desfazendo a abertura no mes seguinte. A tela tem as
+     proprias setas ‹ ›, que sao a unica forma de mudar o mes dela. */
   if(typeof fxAno!=='undefined' && typeof renderDisponibilidade==='function'){ /* a disponibilidade segue o mesmo mes */ }
 }
 
