@@ -4617,7 +4617,13 @@ function renderCaixa(){
   const saidasMes = caixa.reduce((a,b)=>a+(b.saidas||0),0);
   const totFixasBase = fixas.reduce((a,b)=>a+(b.valor||0),0);
   // folha (GENTE) entra nas despesas fixas
-  const genteList = folhaDaCompetencia(fxAno, fxMes).filter(x=>inStore(x.loja));
+  /* A folha de um mes sai do caixa no mes SEGUINTE — o pagamento e no dia 05,
+     como Gente e Gestao ja mostrava. Entao a despesa que aparece em Set/26 e a
+     folha de Ago/26. Antes esta tela usava a folha do proprio mes, e o caixa
+     ficava um mes adiantado em relacao ao pagamento de verdade. */
+  const folhaComp = fxMesAnterior(fxAno, fxMes);
+  const folhaCompLabel = (MES_ABREV[folhaComp.mes]||folhaComp.mes) + '/' + String(folhaComp.ano).slice(2);
+  const genteList = folhaDaCompetencia(folhaComp.ano, folhaComp.mes).filter(x=>inStore(x.loja));
   /* Salarios e encargos saem em datas diferentes do mes, entao viram duas
      linhas com check proprio. A soma das duas e a mesma de antes: gTotal menos
      o encargo e exatamente a parte de salario. */
@@ -4934,7 +4940,7 @@ function renderCaixa(){
   const folhaRows = !socia ? '' : (
     Object.keys(folhaPorLoja).sort().map(l=>{
       if(!temEncPago)
-        return `<tr><td class="strong">Gente e Gestão (folha + encargos)</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`;
+        return `<tr><td class="strong">Gente e Gestão (folha + encargos) <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`;
       /* Uma linha por pessoa: cada uma recebe no seu dia, e o check tem de
          acompanhar quem ja foi pago — nao a loja inteira de uma vez. O campo
          pago ja e por pessoa no banco, entao a granularidade so estava
@@ -4951,12 +4957,12 @@ function renderCaixa(){
                  ${g.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
                </label></td><td></td>`
           : '';
-        return `<tr><td class="strong">Salário — ${esc(g.pessoa)}</td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`;
+        return `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`;
       }).join('')
-      + `<tr><td class="strong">Gente e Gestão — encargos</td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
+      + `<tr><td class="strong">Gente e Gestão — encargos <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
     }).join('')
     + Object.keys(provPorLoja).sort().map(l=>
-      `<tr><td class="strong">Retenção de 13º e férias</td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
+      `<tr><td class="strong">Retenção de 13º e férias <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
   );
   const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
@@ -5003,10 +5009,12 @@ function renderCaixa(){
       const loja = chk.dataset.gploja, pessoa = chk.dataset.gppessoa, marcado = chk.checked;
       chk.disabled = true;
       const gAnoAnt = gtAno, gMesAnt = gtMes;
-      gtAno = fxAno; gtMes = fxMes;
+      /* a folha em tela e a do mes anterior: e nela que o pago tem de gravar */
+      const fc = fxMesAnterior(fxAno, fxMes);
+      gtAno = fc.ano; gtMes = fc.mes;
       await gtMaterializar();
       const quando = marcado ? new Date().toISOString() : null;
-      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja && String(g.pessoa||'')===pessoa);
+      const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===loja && String(g.pessoa||'')===pessoa);
       for(const g of alvos){
         g.pago = marcado; g.pago_em = quando;
         g.atualizado_em = new Date().toISOString();
@@ -5035,9 +5043,11 @@ function renderCaixa(){
       const loja = chk.dataset.gfloja, marcado = chk.checked;
       chk.disabled = true;
       const gAnoAnt = gtAno, gMesAnt = gtMes;
-      gtAno = fxAno; gtMes = fxMes;
+      /* a folha em tela e a do mes anterior: e nela que o pago tem de gravar */
+      const fc = fxMesAnterior(fxAno, fxMes);
+      gtAno = fc.ano; gtMes = fc.mes;
       await gtMaterializar();
-      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
+      const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===loja);
       for(const g of alvos){
         g.encargo_pago = marcado;
         g.atualizado_em = new Date().toISOString();
@@ -5053,10 +5063,12 @@ function renderCaixa(){
       const loja = chk.dataset.gfloja, marcado = chk.checked;
       chk.disabled = true;
       const gAnoAnt = gtAno, gMesAnt = gtMes;
-      gtAno = fxAno; gtMes = fxMes;
+      /* a folha em tela e a do mes anterior: e nela que o pago tem de gravar */
+      const fc = fxMesAnterior(fxAno, fxMes);
+      gtAno = fc.ano; gtMes = fc.mes;
       await gtMaterializar();
       const quando = marcado ? new Date().toISOString() : null;
-      const alvos = GENTE.filter(g=> +g.ano===fxAno && +g.mes===fxMes && g.loja===loja);
+      const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===loja);
       for(const g of alvos){
         g.pago = marcado; g.pago_em = quando;
         g.atualizado_em = new Date().toISOString();
