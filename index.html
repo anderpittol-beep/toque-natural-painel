@@ -2860,10 +2860,17 @@ function renderDesempenho(){
                                   .filter(x=> x.c && x.c.ano === anoCivil);
   /* Trimestre: destaque nos TRES meses do trimestre corrente. */
   const doTri = doAno.filter(x=> triDe(x.c.mes) === triCivil);
+  /* Enquanto o trimestre nao fecha, quem esta em todos os meses ja apurados
+     aparece com foto e nome como PARCIAL — ver quem esta perto do premio e o
+     que faz o card valer no meio do caminho. Se ja houve mes de outra pessoa,
+     ninguem pode mais fechar os tres e o card volta para "a definir". */
+  const mesesDoTri = [ (triCivil-1)*3 + 1, (triCivil-1)*3 + 2, (triCivil-1)*3 + 3 ];
+  const nomesTri = [...new Set(doTri.map(x=>x.pessoa))];
+  const faltamTri = mesesDoTri.filter(m => !doTri.some(x=>x.c.mes === m));
   let premTri = null;
-  if(doTri.length >= 3){
-    const nomesTri = [...new Set(doTri.map(x=>x.pessoa))];
-    if(nomesTri.length === 1) premTri = {pessoa: nomesTri[0], tri: triCivil};
+  if(nomesTri.length === 1){
+    premTri = {pessoa: nomesTri[0], tri: triCivil, fechado: doTri.length >= 3,
+               feitos: doTri.length, faltam: faltamTri.map(m=>MES_ABREV[m])};
   }
   let premAno=null; const cont={}; doAno.forEach(x=>cont[x.pessoa]=(cont[x.pessoa]||0)+1);
   Object.entries(cont).forEach(([n,c])=>{ if(!premAno||c>premAno.c) premAno={pessoa:n,c}; });
@@ -2883,8 +2890,14 @@ function renderDesempenho(){
    +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','',
          'data-histmes="1" style="cursor:pointer;" title="Ver o histórico por mês"')
    +card('🍽️','Destaque do trimestre', premTri&&premTri.pessoa,
-         premTri ? ('Destaque nos 3 meses do ' + TRI_ROTULO[premTri.tri] + ' — almoço com as sócias')
-                 : ('Ninguém nos 3 meses do ' + TRI_ROTULO[triCivil]), 'accent-warning',
+         premTri
+           ? (premTri.fechado
+               ? ('Destaque nos 3 meses do ' + TRI_ROTULO[premTri.tri] + ' — almoço com as sócias')
+               : ('Parcial: ' + premTri.feitos + ' de 3 meses do ' + TRI_ROTULO[premTri.tri]
+                  + ' — falta ' + premTri.faltam.join(' e ')))
+           : (doTri.length
+               ? ('Ninguém fecha o ' + TRI_ROTULO[triCivil] + ': houve mês de outra colaboradora')
+               : ('Sem destaque ainda no ' + TRI_ROTULO[triCivil])), 'accent-warning',
          'data-histtri="1" style="cursor:pointer;" title="Ver o histórico por trimestre"')
    +card('💰','Melhor desempenho de ' + anoCivil, premAno&&premAno.pessoa,
          premAno ? (premAno.c + ' destaque(s) em ' + anoCivil + ' — bonificação salarial')
