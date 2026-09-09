@@ -3294,6 +3294,16 @@ function tarefasVisiveis(){
     else if(fLoja && t.loja !== fLoja) return false;
     if(fPessoa && t.colaborador !== fPessoa) return false;
     return true;
+  })
+  /* Data mais recente primeiro: a lista cresce sem parar, e o que interessa
+     esta sempre no fim quando a ordem e a de cadastro. Tarefa sem prazo vai
+     para o fim, senao ela ocuparia o topo por comparar como vazio. */
+  .sort((a,b)=>{
+    const da = parseBR(a.prazo), db = parseBR(b.prazo);
+    if(!da && !db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return db - da;
   });
 }
 function renderTarefas(){
@@ -3719,6 +3729,7 @@ const PEDIDO_ETAPAS = [
   {key:'rota', label:'Em rota'},
   {key:'entregue', label:'Entregue'},
 ];
+let pedidoEditando = null;   // id do pedido aberto para edicao no kanban
 function renderPedidos(){
   const s = currentStore();
   const list = PEDIDOS.filter(p=> selStores().includes(p.loja));
@@ -3738,8 +3749,29 @@ function renderPedidos(){
         const idx = PEDIDO_ETAPAS.findIndex(e=>e.key===p.status);
         const prev = idx>0 ? PEDIDO_ETAPAS[idx-1] : null;
         const next = idx<PEDIDO_ETAPAS.length-1 ? PEDIDO_ETAPAS[idx+1] : null;
+        if(pedidoEditando && String(p.id)===String(pedidoEditando)){
+          return `<div class="kcard">
+            <div class="who">#${p.id}</div>
+            <input type="text" data-pe="cliente" value="${esc(p.cliente||'')}" placeholder="Cliente" style="width:100%;margin-bottom:4px;">
+            <input type="text" data-pe="itens" value="${esc(p.itens||'')}" placeholder="Itens" style="width:100%;margin-bottom:4px;">
+            <input type="text" data-pe="telefone" value="${esc(p.telefone||'')}" placeholder="WhatsApp" style="width:100%;margin-bottom:4px;">
+            <input type="text" data-pe="endereco" value="${esc(p.endereco||'')}" placeholder="Endereço" style="width:100%;margin-bottom:4px;">
+            <input type="number" data-pe="valor" value="${+p.valor||0}" step="0.01" placeholder="Valor" style="width:100%;margin-bottom:6px;">
+            <select data-pe="loja" style="width:100%;margin-bottom:6px;">${STORES.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>
+            <div style="display:flex;gap:6px;">
+              <button class="btn primary" data-pedsalvar="${p.id}" style="padding:3px 9px;font-size:11.5px;">salvar</button>
+              <button class="btn ghost" data-pedcancelar="1" style="padding:3px 9px;font-size:11.5px;">cancelar</button>
+            </div>
+          </div>`;
+        }
         return `<div class="kcard">
-          <div class="who">#${p.id} · ${esc(p.cliente)} <span class="store-tag">${esc(p.loja)}</span></div>
+          <div class="who" style="display:flex;justify-content:space-between;gap:6px;align-items:flex-start;">
+            <span>#${p.id} · ${esc(p.cliente)} <span class="store-tag">${esc(p.loja)}</span></span>
+            <span style="white-space:nowrap;">
+              <button class="btn ghost" data-pededitar="${p.id}" title="Editar" style="padding:0 5px;">✏️</button>
+              <button class="btn ghost" data-pedexcluir="${p.id}" title="Excluir" style="padding:0 5px;">🗑️</button>
+            </span>
+          </div>
           <div>${esc(p.itens)}</div>
           <div class="meta">${p.valor?BRL(p.valor):'—'} · ${esc(p.telefone||'')}</div>
           ${p.endereco?`<div class="meta">📍 ${esc(p.endereco)}</div>`:''}
@@ -3764,6 +3796,37 @@ function renderPedidos(){
       renderPedidos();
       if(p.id) tnUpdate('pedidos', {id: p.id}, {status: etapa});   // antes só mudava na tela
       await waAvisarCliente(p, etapa);
+    };
+  });
+  document.querySelectorAll('[data-pededitar]').forEach(b=>{
+    b.onclick = ()=>{ pedidoEditando = b.dataset.pededitar; renderPedidos(); };
+  });
+  document.querySelectorAll('[data-pedcancelar]').forEach(b=>{
+    b.onclick = ()=>{ pedidoEditando = null; renderPedidos(); };
+  });
+  document.querySelectorAll('[data-pedsalvar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const p = PEDIDOS.find(x=>String(x.id)===String(b.dataset.pedsalvar));
+      if(!p) return;
+      const card = b.closest('.kcard');
+      const v = k => { const el = card.querySelector('[data-pe="'+k+'"]'); return el ? el.value.trim() : ''; };
+      if(!v('cliente') || !v('itens')) return alert('Cliente e itens não podem ficar vazios.');
+      Object.assign(p, { cliente:v('cliente'), itens:v('itens'), telefone:v('telefone'),
+                         endereco:v('endereco'), valor:num(v('valor'))||0, loja:v('loja') });
+      if(p.id) await tnUpdate('pedidos', {id:p.id},
+        {cliente:p.cliente, itens:p.itens, telefone:p.telefone, endereco:p.endereco, valor:p.valor, loja:p.loja});
+      pedidoEditando = null; renderPedidos();
+    };
+  });
+  document.querySelectorAll('[data-pedexcluir]').forEach(b=>{
+    b.onclick = async ()=>{
+      const p = PEDIDOS.find(x=>String(x.id)===String(b.dataset.pedexcluir));
+      if(!p) return;
+      if(!confirm('Excluir o pedido de "' + (p.cliente||'') + '"?\n\nO cliente não é avisado por esta ação.')) return;
+      const i = PEDIDOS.indexOf(p);
+      if(i>=0) PEDIDOS.splice(i,1);
+      if(p.id) await tnDelete('pedidos', {id:p.id});
+      pedidoEditando = null; renderPedidos();
     };
   });
   document.querySelectorAll('[data-ent]').forEach(sel=>{
