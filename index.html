@@ -1026,10 +1026,6 @@ window.TN_CONFIG = {
         <div id="ig-week-add" style="margin-top:10px;display:none;">
           <button class="btn ghost" id="ig-pauta-nova" style="padding:5px 12px;">+ nova pauta</button>
         </div>
-        <details id="ig-hist-box" style="margin-top:12px;display:none;">
-          <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);">Histórico de pautas anteriores</summary>
-          <div id="ig-hist" style="margin-top:8px;"></div>
-        </details>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Calendário de datas comemorativas</h3>
         <p class="section-desc">Ganchos de conteúdo e campanhas ao longo do ano. O mês atual aparece em destaque — use estas datas para planejar posts e promoções.</p>
@@ -1510,6 +1506,89 @@ const IG_PILARES = [
  {dia:"Sábado",pilar:"Depoimento de cliente",fmt:"Post"},
  {dia:"Domingo",pilar:"Frase / autocuidado",fmt:"Stories"},
 ];
+/* Banco de legendas por dia da semana. A pauta e a mesma para as tres lojas,
+   entao a sugestao tambem e — o que muda e a SEMANA: a cada semana o painel
+   propoe outra legenda, girando o banco. Nao inventa texto sozinho; oferece
+   uma opcao pronta que a socia aceita com um clique (e a versao anterior vai
+   para o historico). */
+const IG_BANCO = {
+ "Segunda":[
+  "3 benefícios do óleo de coco que você talvez não conheça",
+  "Chia: pequena semente, grande aliada da digestão",
+  "Própolis: para que serve e como escolher o seu",
+  "Cúrcuma com pimenta-preta: por que essa dupla funciona",
+  "Água com limão em jejum: o que é mito e o que é verdade",
+  "Castanha-do-pará: uma por dia já cobre o selênio do corpo",
+  "Aveia no café da manhã: saciedade que segura até o almoço",
+  "Gengibre: o aliado do inverno que também ajuda na digestão"],
+ "Terça":[
+  "Chegou novo lote de castanha do pará — direto da nossa curadoria",
+  "Vitrine da semana: farinha de amêndoas para receitas fit",
+  "Destaque da semana: açaí em pó puro, sem adição de açúcar",
+  "Novidade na gôndola: pasta de amendoim integral, só amendoim",
+  "Tâmaras a granel: o doce que substitui o açúcar refinado",
+  "Chegou psyllium — fibra que ajuda o intestino a funcionar",
+  "Whey vegano de ervilha: proteína para quem não consome leite",
+  "Mel silvestre da região, envasado por produtor daqui"],
+ "Quarta":[
+  "Bastidores: conferência de validade, todo produto sai fresquinho",
+  "Um dia na loja: reposição e organização de gôndola",
+  "Bastidores: nossa equipe se preparando para o fim de semana",
+  "Como escolhemos os fornecedores antes de um produto entrar na loja",
+  "Por dentro do granel: higiene e troca de potes todo dia",
+  "A equipe estudando: treinamento de produtos da semana",
+  "Chegada de mercadoria: conferência item por item",
+  "O que fazemos com o produto que não passa na nossa conferência"],
+ "Quinta":[
+  "Receita: smoothie de açaí com granola em 5 minutos",
+  "Receita: granola caseira com mel orgânico",
+  "Receita: mel com própolis para o inverno",
+  "Receita: panqueca de banana com aveia, 3 ingredientes",
+  "Receita: leite de castanha feito em casa",
+  "Receita: chá gelado de hibisco com hortelã",
+  "Receita: barrinha de tâmara com castanha, sem forno",
+  "Receita: mingau de aveia com cacau para as manhãs frias"],
+ "Sexta":[
+  "Sexta é dia de oferta: whey vegano com condições especiais",
+  "Sexta com desconto em óleo de coco extra virgem",
+  "Promoção de sexta: whey protein com preço especial",
+  "Oferta do fim de semana: granolas com preço de leve mais",
+  "Sexta de granel: castanhas selecionadas em condição especial",
+  "Fim de semana começa aqui: chás em oferta",
+  "Oferta relâmpago: pasta de amendoim até domingo",
+  "Sexta: monte seu kit de lanche saudável com desconto"],
+ "Sábado":[
+  "Cliente conta como o chá verde entrou na rotina",
+  "Depoimento: cliente relata melhora no sono com chá verde",
+  "Cliente fiel há 3 anos conta sua experiência",
+  "Ela trocou o refrigerante pelo chá gelado — e conta o resultado",
+  "Depoimento: como o granel ajudou a economizar no mês",
+  "Cliente conta como montou o café da manhã da família aqui",
+  "História de quem começou com um chá e virou frequentador",
+  "Depoimento: a suplementação que fez diferença no treino"],
+ "Domingo":[
+  "Domingo é dia de desacelerar — respire fundo",
+  "Frase para fechar a semana com leveza",
+  "Domingo: gratidão pela semana que passou",
+  "Domingo de recomeço: pequenas escolhas, grandes mudanças",
+  "Um domingo devagar também é cuidado com a saúde",
+  "O que você planta na semana, colhe no corpo",
+  "Domingo: hora de planejar as refeições da semana",
+  "Descanso não é preguiça, é parte do tratamento"],
+};
+/* Semana do ano, contada a partir da primeira segunda: gira o banco. */
+function igSemanaDoAno(d){
+  const base = new Date(d.getFullYear(), 0, 1);
+  const dias = Math.floor((d - base) / 86400000);
+  return Math.floor((dias + base.getDay()) / 7);
+}
+function igSugestaoDaSemana(pauta, i){
+  const lista = IG_BANCO[String((pauta && pauta.dia) || '').trim()];
+  if(!lista || !lista.length) return '';
+  const sem = igSemanaDoAno(TODAY);
+  return lista[(sem + i) % lista.length];
+}
+
 const IG_SUGESTOES = {
  "Itaipulândia":["3 benefícios do óleo de coco que você talvez não conheça","Chegou novo lote de castanha do pará — direto da nossa curadoria","Bastidores: conferência de validade, todo produto sai fresquinho","Receita: smoothie de açaí com granola em 5 minutos","Sexta é dia de oferta: whey vegano com condições especiais","Cliente conta como o chá verde entrou na rotina","Domingo é dia de desacelerar — respire fundo"],
  "Ouro Verde":["Chia: pequena semente, grande aliada da digestão","Vitrine da semana: farinha de amêndoas para receitas fit","Um dia na loja: reposição e organização de gôndola","Receita: granola caseira com mel orgânico","Sexta com desconto em óleo de coco extra virgem","Depoimento: cliente relata melhora no sono com chá verde","Frase para fechar a semana com leveza"],
@@ -3728,32 +3807,9 @@ async function tnCarregarHistPautas(){
   }catch(e){ console.warn('hist pautas', e); }
 }
 function renderHistPautas(){
-  const box = document.getElementById('ig-hist-box');
-  const alvo = document.getElementById('ig-hist');
-  if(!box || !alvo) return;
-  if(!IG_HIST.length){ box.style.display = 'none'; return; }
-  box.style.display = '';
-  const semanas = {};
-  IG_HIST.forEach(r=>{
-    const s = igSemanaDe(r.arquivado_em);
-    if(!s) return;
-    (semanas[s.chave] = semanas[s.chave] || {rotulo:s.rotulo, ord:s.ord, itens:[]}).itens.push(r);
-  });
-  const ordenadas = Object.values(semanas).sort((a,b)=>b.ord-a.ord);
-  box.querySelector('summary').textContent =
-    'Histórico de pautas anteriores (' + ordenadas.length + (ordenadas.length===1?' semana)':' semanas)');
-  alvo.innerHTML = ordenadas.map(s=>`
-    <details style="margin-bottom:6px;">
-      <summary style="cursor:pointer;font-size:12px;">Semana de ${esc(s.rotulo)} · ${s.itens.length} ${s.itens.length===1?'versão':'versões'}</summary>
-      <div style="margin:6px 0 0 12px;">
-        ${s.itens.sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(r=>`
-          <div style="padding:5px 0;border-bottom:1px solid var(--border,#e5e5e5);">
-            <div style="font-size:12px;"><strong>${esc(r.dia||'')}</strong> · ${esc(r.pilar||'')}${r.fmt?' ('+esc(r.fmt)+')':''}</div>
-            ${r.legenda?`<div style="font-size:11.5px;color:var(--text-secondary);">"${esc(r.legenda)}"</div>`:''}
-            <div class="hint" style="font-size:10.5px;">substituída em ${esc(igDataHora(r.arquivado_em))}</div>
-          </div>`).join('')}
-      </div>
-    </details>`).join('');
+  /* O historico agora mora em cada pauta (clique na linha "atualizada em"),
+     entao aqui basta redesenhar os cards com a contagem de versoes. */
+  renderInstagram();
 }
 
 async function tnCarregarPautas(){
@@ -3834,7 +3890,26 @@ function renderInstagram(){
       <div class="pillar">${esc(d.pilar)}</div>
       <div class="fmt">${esc(d.fmt||'')}</div>
       <div class="cap">"${esc(d.legenda||'')}"</div>
-      ${(temAtualizadoEm() && d.atualizado_em)?`<div class="hint" style="font-size:10.5px;margin-top:4px;">atualizada em ${esc(igDataHora(d.atualizado_em))}</div>`:''}
+      ${(()=>{
+        const versoes = d.id ? IG_HIST.filter(r=>r.pauta_id === d.id).length : 0;
+        const quando = (temAtualizadoEm() && d.atualizado_em) ? 'atualizada em ' + igDataHora(d.atualizado_em) : '';
+        if(!quando && !versoes) return '';
+        const rotulo = quando || 'ver histórico';
+        return versoes
+          ? `<button class="btn ghost" data-pahist="${esc(d.id)}" title="Ver as versões anteriores desta pauta"
+               style="padding:0;margin-top:4px;font-size:10.5px;text-decoration:underline;background:none;border:none;color:var(--text-secondary);cursor:pointer;">${esc(rotulo)} · ${versoes} ${versoes===1?'versão':'versões'}</button>`
+          : `<div class="hint" style="font-size:10.5px;margin-top:4px;">${esc(rotulo)}</div>`;
+      })()}
+      ${(()=>{
+        const sug = igSugestaoDaSemana(d, i);
+        if(!sug || sug === (d.legenda||'')) return '';
+        return `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border,#e5e5e5);">
+          <div class="hint" style="font-size:10.5px;">💡 sugestão desta semana</div>
+          <div style="font-size:11.5px;line-height:1.4;">"${esc(sug)}"</div>
+          ${(socia && d.id)?`<button class="btn ghost" data-pausar="${esc(d.id)}" data-pasug="${esc(sug)}"
+             style="margin-top:4px;padding:2px 8px;font-size:11px;">usar esta</button>`:''}
+        </div>`;
+      })()}
       <button class="btn ghost" data-igpauta="${i}" style="margin-top:6px;padding:3px 9px;font-size:11.5px;width:100%;">criar tarefa</button>
     </div>`;
   }).join('');
@@ -3847,6 +3922,61 @@ function renderInstagram(){
         titulo: d.dia + ' · ' + d.pilar + ' (' + d.fmt + ')',
         ideia: sugestoes[i]
       }, TODAY.getMonth(), true, AREA_PAUTA);
+    };
+  });
+  /* Historico da propria pauta, no clique da linha "atualizada em" */
+  document.querySelectorAll('[data-pahist]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.dataset.pahist;
+      const versoes = IG_HIST.filter(r=>r.pauta_id === id)
+        .sort((x,y)=> new Date(y.arquivado_em) - new Date(x.arquivado_em));
+      const atual = pautas.find(p=>p.id === id);
+      const corpo = versoes.map(r=>{
+        const s = igSemanaDe(r.arquivado_em);
+        return `<div style="padding:7px 0;border-bottom:1px solid var(--border,#e5e5e5);">
+          <div class="strong" style="font-size:12.5px;">${esc(r.dia||'')} · ${esc(r.pilar||'')}${r.fmt?' ('+esc(r.fmt)+')':''}</div>
+          ${r.legenda?`<div style="font-size:11.5px;line-height:1.45;">"${esc(r.legenda)}"</div>`:'<div class="hint" style="font-size:11.5px;">sem legenda</div>'}
+          <div class="hint" style="font-size:10.5px;margin-top:2px;">valeu até ${esc(igDataHora(r.arquivado_em))}${s?' · semana de '+esc(s.rotulo):''}</div>
+        </div>`;
+      }).join('');
+      const dlg = document.createElement('div');
+      dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;'
+        + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
+      dlg.innerHTML = `<div class="card" style="max-width:460px;width:100%;max-height:80vh;overflow:auto;">
+          <h3 style="margin:0 0 2px 0;font-size:15px;">Histórico — ${esc(atual?atual.dia:'pauta')}</h3>
+          <p class="hint" style="margin:0 0 10px 0;">Cada vez que a pauta é salva, a versão anterior fica registrada aqui.</p>
+          ${atual?`<div style="padding:7px 0;border-bottom:2px solid var(--accent,#1f7a4d);">
+            <div class="strong" style="font-size:12.5px;">${esc(atual.dia||'')} · ${esc(atual.pilar||'')}${atual.fmt?' ('+esc(atual.fmt)+')':''} <span class="hint" style="font-weight:400;">· no ar</span></div>
+            ${atual.legenda?`<div style="font-size:11.5px;line-height:1.45;">"${esc(atual.legenda)}"</div>`:''}
+          </div>`:''}
+          ${corpo || '<p class="hint" style="margin:8px 0 0 0;">Nenhuma versão anterior.</p>'}
+          <div style="margin-top:10px;text-align:right;">
+            <button class="btn ghost" data-pahfechar="1" style="padding:3px 12px;">fechar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(dlg);
+      const fechar = ()=> dlg.remove();
+      dlg.onclick = e => { if(e.target===dlg) fechar(); };
+      dlg.querySelector('[data-pahfechar]').onclick = fechar;
+    };
+  });
+  /* Aceitar a sugestao da semana: arquiva a versao atual e grava a nova */
+  document.querySelectorAll('[data-pausar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const id = b.dataset.pausar, sug = b.dataset.pasug;
+      const alvo = pautas.find(p=>p.id === id);
+      if(!alvo) return;
+      if(!confirm('Trocar a legenda desta pauta pela sugestão da semana?\n\n"' + sug + '"\n\nA legenda de agora fica no histórico.')) return;
+      b.disabled = true;
+      await igArquivar(alvo);
+      const dados = { legenda: sug };
+      if(temAtualizadoEm()) dados.atualizado_em = new Date().toISOString();
+      const { data, error } = await window.TN.sb.from('ig_pautas').update(dados).eq('id', id).select();
+      b.disabled = false;
+      if(error) return alert('Não deu para salvar: ' + error.message);
+      if(!data || !data.length) return alert('Só o perfil Sócio pode alterar a pauta da semana.');
+      await tnCarregarPautas();
+      await tnCarregarHistPautas();
     };
   });
   /* Editar, excluir e criar pautas — só a sócia mexe no calendário da loja */
