@@ -3283,6 +3283,9 @@ function renderPlanoAcao(){
   }
 }
 /* Tarefas exibidas no quadro: só micro tarefas, respeitando o filtro de ação */
+/* Peso da prioridade para ordenar: quanto menor, mais no topo. Valor
+   desconhecido ou vazio entra como Normal. */
+const TAREFA_PRIORIDADE = t => ({Urgente:0, Alta:1, Normal:2})[String((t&&t.prioridade)||'Normal')] ?? 2;
 function tarefasVisiveis(){
   const fLoja = (document.getElementById('tkFiltroLoja')||{}).value || '';
   const fPessoa = (document.getElementById('tkFiltroPessoa')||{}).value || '';
@@ -3295,15 +3298,17 @@ function tarefasVisiveis(){
     if(fPessoa && t.colaborador !== fPessoa) return false;
     return true;
   })
-  /* Data mais recente primeiro: a lista cresce sem parar, e o que interessa
-     esta sempre no fim quando a ordem e a de cadastro. Tarefa sem prazo vai
-     para o fim, senao ela ocuparia o topo por comparar como vazio. */
+  /* Ordem de execucao: o que vence antes vem antes (dia/mes/ano). Empatando a
+     data, decide a prioridade — Urgente, Alta, Normal —, que e o criterio de
+     quem escolhe o que fazer primeiro dentro do mesmo dia. Tarefa sem prazo
+     vai para o fim, senao ocuparia o topo por comparar como vazio; entre elas
+     a prioridade tambem manda. */
   .sort((a,b)=>{
     const da = parseBR(a.prazo), db = parseBR(b.prazo);
-    if(!da && !db) return 0;
-    if(!da) return 1;
-    if(!db) return -1;
-    return db - da;
+    if(da && db && +da !== +db) return da - db;
+    if(da && !db) return -1;
+    if(!da && db) return 1;
+    return TAREFA_PRIORIDADE(a) - TAREFA_PRIORIDADE(b);
   });
 }
 function renderTarefas(){
