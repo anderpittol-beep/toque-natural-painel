@@ -5974,6 +5974,9 @@ let pesAno = pesProximoMes.ano, pesMes = pesProximoMes.mes;
 let pesEditando = null;
 let rendaEditando = null;
 let invEditando = null;
+/* A lista de movimentacoes e longa e quase sempre so o total interessa. Fica
+   recolhida; o estado sobrevive ao re-render para nao fechar sozinha. */
+let invAberto = false;
 
 /* Carencia entra em dias (60, 90, 181, 360...) e vira data somando ao aporte */
 function liberaEm(dataISO, dias){
@@ -6570,9 +6573,13 @@ function renderPessoais(){
     }
     return '<span class="badge b-warning"><span class="dot"></span>com trava</span>';
   };
+  const invAbre = invAberto || !!invEditando;   // editando, a linha precisa estar a vista
   el('pes-investimentos').innerHTML = `<div class="card">
-    <div class="toolbar" style="justify-content:space-between;align-items:center;">
-      <h3 style="font-size:14px;margin:0;">Movimentações</h3><span class="strong">Aplicado: ${BRL(saldoInv)}</span></div>
+    <details id="pes-inv-det" ${invAbre?'open':''}>
+    <summary style="list-style:none;cursor:pointer;">
+    <div class="toolbar" style="justify-content:space-between;align-items:center;margin:0;">
+      <h3 style="font-size:14px;margin:0;">${invAbre?'▾':'▸'} Movimentações <span class="hint" style="font-weight:400;">(${PES_INV.length})</span></h3><span class="strong">Aplicado: ${BRL(saldoInv)}</span></div>
+    </summary>
     <table class="table" style="margin-top:8px;"><thead><tr>
       <th>Data</th><th>Movimento</th><th>Tipo</th><th>Instituição</th><th>Descrição</th><th>Valor</th>
       <th>% do CDI</th><th>Trava</th><th></th></tr></thead><tbody>
@@ -6603,7 +6610,9 @@ function renderPessoais(){
           <button class="btn ghost" data-pieditar="${esc(x.id)}" title="Editar" style="padding:1px 6px;">✏️</button>
           <button class="btn ghost" data-piexcluir="${esc(x.id)}" style="padding:1px 6px;">🗑️</button></td></tr>`;
       }).join('') || '<tr><td colspan="9" class="hint">Nenhum investimento lançado.</td></tr>'}
-      </tbody></table></div>`;
+      </tbody></table></details></div>`;
+  { const d = document.getElementById('pes-inv-det');
+    if(d) d.ontoggle = ()=>{ if(invAberto !== d.open){ invAberto = d.open; renderPessoais(); } }; }
 
   /* documentos: extrato entra na fila de conferencia sozinho */
   const naFila = PES_DOCS.filter(x=>x.conferencia==='pendente').length;
