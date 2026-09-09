@@ -8218,6 +8218,11 @@ function notaEhExplicacao(el){
   if(el.classList.contains('section-desc')) return true;
   return el.classList.contains('hint') && !/R\$/.test(t);
 }
+/* O icone acompanha o que o texto diz: aviso e restricao pedem atencao,
+   o resto e explicacao — e a lampada convida mais a clicar do que um "i". */
+const NOTA_ALERTA = /(atenç|cuidado|não substitui|nao substitui|restrit|somente|só quem|so quem|obrigat|nunca|evite|risco|alerta|não é|nao e uma garantia|não garante|sigilo|confidenc|privad|particular)/i;
+const notaIcone = t => NOTA_ALERTA.test(t) ? '⚠️' : '💡';
+
 function abrirNota(texto, origem){
   document.getElementById('nota-balao')?.remove();
   const dlg = document.createElement('div');
@@ -8226,7 +8231,7 @@ function abrirNota(texto, origem){
     + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
   dlg.innerHTML = `<div class="card" style="max-width:480px;width:100%;">
       <div style="display:flex;gap:8px;align-items:flex-start;">
-        <span style="font-size:18px;line-height:1.2;">ℹ️</span>
+        <span style="font-size:18px;line-height:1.2;">${notaIcone(texto)}</span>
         <div style="font-size:12.5px;line-height:1.55;">${esc(texto)}</div>
       </div>
       <div style="margin-top:10px;text-align:right;">
@@ -8249,9 +8254,9 @@ function aplicarNotas(){
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'btn ghost';
-    b.textContent = 'ℹ️';
+    b.textContent = notaIcone(texto);
     b.title = texto;
-    b.setAttribute('aria-label', 'Ver explicação');
+    b.setAttribute('aria-label', b.textContent === '⚠️' ? 'Ver aviso' : 'Ver explicação');
     b.style.cssText = 'padding:0 5px;font-size:13px;line-height:1.4;vertical-align:middle;';
     b.onclick = () => abrirNota(texto, b);
     /* Ao lado do titulo quando houver um logo acima; senao no lugar do texto. */
