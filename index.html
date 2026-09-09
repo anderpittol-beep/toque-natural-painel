@@ -1536,6 +1536,7 @@ const DATAS_COMEMORATIVAS = {
 };
 
 let ig_state = {}; // "loja-idx" -> boolean postado
+let apagarMesAberto = {};   // "Out/26" -> aberto pelo clique no cabecalho
 
 let PARCERIAS = [];
 
@@ -3598,12 +3599,17 @@ function renderDatasComemorativas(){
   const box = document.getElementById('ig-datas');
   if(!box) return;
   const atual = TODAY.getMonth();
-  /* O que interessa e o mes corrente e o que vem pela frente: e neles que da
-     para preparar arte e post. Os meses que ja passaram continuam disponiveis
-     — servem para planejar o ano que vem — mas recolhidos, senao empurram o
-     calendario util para baixo. */
-  const daFrente = []; for(let m=atual; m<12; m++) daFrente.push(m);
-  const jaPassaram = []; for(let m=0; m<atual; m++) jaPassaram.push(m);
+  /* Janela de tres meses que anda sozinha: o corrente e os dois seguintes. Em
+     setembro sao set/out/nov; virando outubro, setembro sai e dezembro entra.
+     E o horizonte em que da para preparar arte e post — o resto so ocupa tela.
+     A ordem circular leva a janela para o ano seguinte quando preciso: em
+     novembro ela e nov/dez/jan.
+     Os demais continuam disponiveis, recolhidos, na mesma ordem circular —
+     entao o proximo a entrar na janela e o primeiro da lista escondida. */
+  const IG_MESES_VISIVEIS = 3;
+  const circular = []; for(let k=0;k<12;k++) circular.push((atual+k)%12);
+  const daFrente = circular.slice(0, IG_MESES_VISIVEIS);
+  const jaPassaram = circular.slice(IG_MESES_VISIVEIS);
   const mesHTML = m => {
     const itens = DATAS_COMEMORATIVAS[m]||[];
     const destaque = (m===atual);
@@ -3619,7 +3625,7 @@ function renderDatasComemorativas(){
   };
   box.innerHTML = daFrente.map(mesHTML).join('')
     + (jaPassaram.length ? `<details class="add-form" style="margin-top:4px;">
-        <summary>Meses que já passaram (${jaPassaram.length})</summary>
+        <summary>Outros meses (${jaPassaram.length})</summary>
         <div style="margin-top:10px;">${jaPassaram.map(mesHTML).join('')}</div>
       </details>` : '');
 
@@ -5380,6 +5386,11 @@ function renderCaixa(){
     (grupos[chave] = grupos[chave] || {itens:[], ord: d ? d.getFullYear()*100+d.getMonth()+1 : 999999}).itens.push(b);
   });
   const ordenados = Object.keys(grupos).sort((a,b)=>grupos[a].ord-grupos[b].ord);
+  /* Mes corrente e o que ja venceu ficam abertos: e o que precisa de acao
+     agora. Os meses a frente vem recolhidos — sao compromisso conhecido, nao
+     tarefa do dia — e abrem no clique do cabecalho. */
+  const ordAtual = TODAY.getFullYear()*100 + (TODAY.getMonth()+1);
+  const ehFuturo = k => grupos[k].ord > ordAtual && grupos[k].ord !== 999999;
   const totAberto = abertos.reduce((a,b)=>a+(+b.valor||0),0);
   const hojeMs = TODAY.getTime();
   document.getElementById('tbl-apagar').innerHTML = `
@@ -5391,7 +5402,9 @@ function renderCaixa(){
       const chaveP = 'bl-apagar-'+k;
       const resumoP = dePlan.length
         ? linhaPlanilha(chaveP, 'A pagar da planilha', dePlan, 3, socia2) : '';
-      const linhas = resumoP + ((dePlan.length && !planilhaAberta[chaveP]) ? ordem.filter(b=>!ehDaPlanilha(b)) : ordem).map(b=>{
+      const futuro = ehFuturo(k);
+      const aberto = !futuro || !!apagarMesAberto[k];
+      const linhas = !aberto ? '' : resumoP + ((dePlan.length && !planilhaAberta[chaveP]) ? ordem.filter(b=>!ehDaPlanilha(b)) : ordem).map(b=>{
         if(emEdicao(b)) return linhaBoletoEdicao(b);
         const d = parseBR(b.data), venceu = d && d.getTime() < hojeMs;
         return `<tr>
@@ -5404,10 +5417,19 @@ function renderCaixa(){
             <button class="btn ghost" data-bleditar="${esc(b.id||b.descricao)}" title="Editar" style="padding:2px 6px;">✏️</button>
             <button class="btn ghost" data-blexcluir="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Excluir" style="padding:2px 6px;">🗑️</button>`}</td>`:''}
         </tr>`;}).join('');
-      return `<tr><td colspan="${socia2?5:4}" style="background:var(--surface-2,transparent);"><strong>${esc(k)}</strong> <span class="hint">· ${BRL(soma)}</span></td></tr>` + linhas;
+      const seta = !futuro ? '' : (aberto ? '▾ ' : '▸ ');
+      const conta = !futuro || aberto ? '' :
+        ` <span class="hint">· ${ordem.length} ${ordem.length===1?'boleto':'boletos'}</span>`;
+      return `<tr${futuro?` data-apmes="${esc(k)}" style="cursor:pointer;"`:''}>
+          <td colspan="${socia2?5:4}" style="background:var(--surface-2,transparent);">
+          ${seta}<strong>${esc(k)}</strong> <span class="hint">· ${BRL(soma)}</span>${conta}</td></tr>` + linhas;
     }).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nada em aberto.</td></tr>`}
     ${abertos.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total a pagar</td><td class="strong">${BRL(totAberto)}</td>${socia2?'<td></td>':''}</tr>`:''}</tbody>`;
 
+  document.querySelectorAll('[data-apmes]').forEach(tr=>{
+    tr.onclick = ()=>{ const k = tr.dataset.apmes;
+      apagarMesAberto[k] = !apagarMesAberto[k]; renderCaixa(); };
+  });
   // abrir/fechar o detalhe do que veio da planilha
   document.querySelectorAll('[data-plabrir]').forEach(el=>{
     el.onchange=()=>{ planilhaAberta[el.dataset.plabrir] = el.checked; renderCaixa(); };
