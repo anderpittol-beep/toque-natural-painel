@@ -1582,11 +1582,42 @@ function igSemanaDoAno(d){
   const dias = Math.floor((d - base) / 86400000);
   return Math.floor((dias + base.getDay()) / 7);
 }
+/* Datas comemorativas que caem nas duas proximas semanas, mais as do tipo
+   "Mes todo" do mes corrente. Sao a primeira fonte da sugestao: se Setembro
+   Amarelo esta valendo, a pauta da semana fala disso, e nao de castanha. */
+const IG_JANELA_DIAS = 14;
+function igDatasDaJanela(){
+  const hoje = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const fim = new Date(hoje); fim.setDate(fim.getDate() + IG_JANELA_DIAS);
+  const out = [];
+  for(let k = 0; k <= 1; k++){                 // mes corrente e o seguinte
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth() + k, 1);
+    (DATAS_COMEMORATIVAS[ref.getMonth()] || []).forEach(it=>{
+      const m = String(it.data||'').match(/^(\d{1,2})\/(\d{1,2})/);
+      if(m){
+        const d = new Date(ref.getFullYear(), +m[2]-1, +m[1]);
+        if(d >= hoje && d <= fim) out.push({...it, quando: it.data, ord: +d});
+      }else if(k === 0){
+        /* "Mes todo" vale enquanto o mes corre */
+        out.push({...it, quando: 'mês todo', ord: +hoje});
+      }
+    });
+  }
+  return out.sort((a,b)=>a.ord-b.ord);
+}
+/* Devolve {texto, origem}. Data comemorativa ganha dos textos do banco, uma
+   por dia da semana; os dias restantes seguem com o banco, que gira sozinho
+   pelo numero da semana. */
 function igSugestaoDaSemana(pauta, i){
+  const datas = igDatasDaJanela();
+  if(i < datas.length){
+    const d = datas[i];
+    return {texto: d.titulo + ' — ' + d.ideia, origem: d.titulo + ' · ' + d.quando};
+  }
   const lista = IG_BANCO[String((pauta && pauta.dia) || '').trim()];
-  if(!lista || !lista.length) return '';
+  if(!lista || !lista.length) return null;
   const sem = igSemanaDoAno(TODAY);
-  return lista[(sem + i) % lista.length];
+  return {texto: lista[(sem + i) % lista.length], origem: ''};
 }
 
 const IG_SUGESTOES = {
@@ -3902,11 +3933,11 @@ function renderInstagram(){
       })()}
       ${(()=>{
         const sug = igSugestaoDaSemana(d, i);
-        if(!sug || sug === (d.legenda||'')) return '';
+        if(!sug || !sug.texto || sug.texto === (d.legenda||'')) return '';
         return `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border,#e5e5e5);">
-          <div class="hint" style="font-size:10.5px;">💡 sugestão desta semana</div>
-          <div style="font-size:11.5px;line-height:1.4;">"${esc(sug)}"</div>
-          ${(socia && d.id)?`<button class="btn ghost" data-pausar="${esc(d.id)}" data-pasug="${esc(sug)}"
+          <div class="hint" style="font-size:10.5px;">${sug.origem?'📅':'💡'} sugestão desta semana${sug.origem?' · '+esc(sug.origem):''}</div>
+          <div style="font-size:11.5px;line-height:1.4;">"${esc(sug.texto)}"</div>
+          ${(socia && d.id)?`<button class="btn ghost" data-pausar="${esc(d.id)}" data-pasug="${esc(sug.texto)}"
              style="margin-top:4px;padding:2px 8px;font-size:11px;">usar esta</button>`:''}
         </div>`;
       })()}
