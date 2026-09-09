@@ -2878,18 +2878,116 @@ function renderDesempenho(){
       <div class="delta">${esc(detalhe)}</div>
     </div>`;
   document.getElementById('premios').innerHTML =
-    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good')
-   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','')
+    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good',
+         'data-histsem="1" style="cursor:pointer;" title="Ver o histórico por semana"')
+   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','',
+         'data-histmes="1" style="cursor:pointer;" title="Ver o histórico por mês"')
    +card('🍽️','Destaque do trimestre', premTri&&premTri.pessoa,
          premTri ? ('Destaque nos 3 meses do ' + TRI_ROTULO[premTri.tri] + ' — almoço com as sócias')
                  : ('Ninguém nos 3 meses do ' + TRI_ROTULO[triCivil]), 'accent-warning',
          'data-histtri="1" style="cursor:pointer;" title="Ver o histórico por trimestre"')
    +card('💰','Melhor desempenho de ' + anoCivil, premAno&&premAno.pessoa,
          premAno ? (premAno.c + ' destaque(s) em ' + anoCivil + ' — bonificação salarial')
-                 : ('Sem destaque registrado em ' + anoCivil), '');
+                 : ('Sem destaque registrado em ' + anoCivil), '',
+         'data-histano="1" style="cursor:pointer;" title="Ver o histórico por ano"');
 
-  /* O card do trimestre so mostra o trimestre corrente. O historico responde a
-     pergunta seguinte — "quem ja ganhou?" — sem ocupar espaco na tela. */
+  /* Cada card mostra so o periodo corrente. O historico responde a pergunta
+     seguinte — "quem ja ganhou?" — sem ocupar espaco na tela. */
+  function abrirHistorico(titulo, subtitulo, corpo){
+    const dlg = document.createElement('div');
+    dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;'
+      + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
+    dlg.innerHTML = `<div class="card" style="max-width:460px;width:100%;max-height:80vh;overflow:auto;">
+        <h3 style="margin:0 0 2px 0;font-size:15px;">${titulo}</h3>
+        <p class="hint" style="margin:0 0 10px 0;">${esc(subtitulo)}</p>
+        ${corpo}
+        <div style="margin-top:10px;text-align:right;">
+          <button class="btn ghost" data-htfechar="1" style="padding:3px 12px;">fechar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(dlg);
+    const fechar = ()=> dlg.remove();
+    dlg.onclick = e => { if(e.target===dlg) fechar(); };
+    dlg.querySelector('[data-htfechar]').onclick = fechar;
+    document.addEventListener('keydown', function esc3(e){
+      if(e.key==='Escape'){ fechar(); document.removeEventListener('keydown', esc3); }
+    });
+  }
+  const linhaHist = (titulo, detalhe, rodape, cor) => `
+    <div style="padding:7px 0;border-bottom:1px solid var(--border,#e5e5e5);">
+      <div class="strong" style="font-size:12.5px;">${titulo}</div>
+      ${detalhe?`<div class="hint" style="margin-top:2px;">${detalhe}</div>`:''}
+      ${rodape?`<div style="font-size:11.5px;margin-top:2px;${cor?'color:'+cor+';':''}">${rodape}</div>`:''}
+    </div>`;
+  const vazioHist = '<p class="hint" style="margin:0;">Nada registrado ainda.</p>';
+
+  /* ---- Semana: vencedora de cada semana com venda registrada ---- */
+  const btnSem = document.querySelector('[data-histsem]');
+  if(btnSem) btnSem.onclick = ()=>{
+    const corpo = semArr.map(w=>{
+      let melhor = null;
+      nomes.forEach(n=>{
+        const val = w.tot[n]||0, meta = metaSem(n);
+        const pct = meta>0 ? val/meta*100 : 0;
+        if(val>0 && (!melhor || pct>melhor.pct)) melhor = {n, pct, val};
+      });
+      const emCurso = wAtual && w.mon === wAtual.mon;
+      const outras = nomes.filter(n=>(w.tot[n]||0)>0 && (!melhor || n!==melhor.n))
+        .map(n=>{ const m=metaSem(n); return esc(n)+': '+(m>0?((w.tot[n]||0)/m*100).toFixed(0)+'%':BRL(w.tot[n]||0)); });
+      return linhaHist(
+        (melhor && !emCurso ? '☕ ' : '') + esc(w.label) + (emCurso?' <span class="hint" style="font-weight:400;">· em curso</span>':''),
+        outras.join(' · '),
+        melhor ? esc(melhor.n) + ' — ' + melhor.pct.toFixed(0) + '% da meta' + (emCurso ? ' (parcial)' : ' · café')
+               : 'sem venda registrada',
+        melhor && !emCurso ? 'var(--good)' : '');
+    }).join('') || vazioHist;
+    abrirHistorico('☕ Destaque da semana — histórico',
+      'Leva o café de até ' + BRL(PREMIO_CAFE) + ' quem fecha a semana com a maior % da própria meta.', corpo);
+  };
+
+  /* ---- Mes: destaque de cada mes ---- */
+  const btnMes = document.querySelector('[data-histmes]');
+  if(btnMes) btnMes.onclick = ()=>{
+    const meses = HISTORICO_DESTAQUE.map(x=>({...x, c: compDestaque(x)}))
+      .filter(x=>x.c).sort((a,b)=> (b.c.ano*100+b.c.mes) - (a.c.ano*100+a.c.mes));
+    const rotuloMesAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(anoCivil).slice(2);
+    const jaTemAtual = meses.some(x=> x.c.ano===anoCivil && x.c.mes===TODAY.getMonth()+1);
+    const emCurso = (!jaTemAtual && premMes)
+      ? linhaHist(esc(rotuloMesAtual) + ' <span class="hint" style="font-weight:400;">· em curso</span>', '',
+                  esc(premMes.pessoa) + ' — ' + premMes.pct.toFixed(0) + '% da meta (parcial)', '')
+      : '';
+    const corpo = (emCurso + meses.map(x=> linhaHist('🍽️ ' + esc(x.mes), '',
+        esc(x.pessoa) + ' — almoço até ' + BRL(PREMIO_ALMOCO), 'var(--good)')).join(''))
+      || vazioHist;
+    abrirHistorico('🍽️ Destaque do mês — histórico',
+      'Leva o almoço de até ' + BRL(PREMIO_ALMOCO) + ' quem fecha o mês com a maior % da própria meta.', corpo);
+  };
+
+  /* ---- Ano: quantos destaques cada uma teve, ano a ano ---- */
+  const btnAno = document.querySelector('[data-histano]');
+  if(btnAno) btnAno.onclick = ()=>{
+    const porAno = {};
+    HISTORICO_DESTAQUE.forEach(x=>{
+      const c = compDestaque(x);
+      if(!c) return;
+      (porAno[c.ano] = porAno[c.ano] || {})[x.pessoa] = (porAno[c.ano][x.pessoa]||0) + 1;
+    });
+    const corpo = Object.keys(porAno).sort((a,b)=>b-a).map(ano=>{
+      const cont2 = porAno[ano];
+      const ranking = Object.entries(cont2).sort((a,b)=>b[1]-a[1]);
+      const topo = ranking[0][1];
+      const lideres = ranking.filter(([,c2])=>c2===topo).map(([n])=>n);
+      const emCurso = (+ano === anoCivil);
+      return linhaHist(
+        (emCurso?'':'💰 ') + ano + (emCurso?' <span class="hint" style="font-weight:400;">· em curso</span>':''),
+        ranking.map(([n,c2])=> esc(n)+': '+c2+(c2===1?' destaque':' destaques')).join(' · '),
+        lideres.join(' e ') + ' — ' + (emCurso ? 'na frente até aqui' : 'bonificação salarial'),
+        emCurso ? '' : 'var(--good)');
+    }).join('') || vazioHist;
+    abrirHistorico('💰 Melhor desempenho do ano — histórico',
+      'A bonificação salarial vai para quem somar mais destaques mensais no ano civil.', corpo);
+  };
+
   const btnTri = document.querySelector('[data-histtri]');
   if(btnTri) btnTri.onclick = ()=>{
     const grupos = {};
@@ -2916,21 +3014,8 @@ function renderDesempenho(){
       </div>`;
     }).join('') : '<p class="hint" style="margin:0;">Nenhum destaque registrado ainda.</p>';
 
-    const dlg = document.createElement('div');
-    dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;'
-      + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
-    dlg.innerHTML = `<div class="card" style="max-width:460px;width:100%;max-height:80vh;overflow:auto;">
-        <h3 style="margin:0 0 2px 0;font-size:15px;">🍽️ Destaque do trimestre — histórico</h3>
-        <p class="hint" style="margin:0 0 10px 0;">Leva o almoço com as sócias quem for destaque nos três meses do mesmo trimestre civil.</p>
-        ${corpo}
-        <div style="margin-top:10px;text-align:right;">
-          <button class="btn ghost" data-htfechar="1" style="padding:3px 12px;">fechar</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dlg);
-    const fechar = ()=> dlg.remove();
-    dlg.onclick = e => { if(e.target===dlg) fechar(); };
-    dlg.querySelector('[data-htfechar]').onclick = fechar;
+    abrirHistorico('🍽️ Destaque do trimestre — histórico',
+      'Leva o almoço com as sócias quem for destaque nos três meses do mesmo trimestre civil.', corpo);
   };
 }
 
