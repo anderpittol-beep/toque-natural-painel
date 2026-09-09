@@ -957,6 +957,7 @@ window.TN_CONFIG = {
         <div class="section-block" style="margin-top:20px;">
           <div class="toolbar" style="justify-content:space-between;">
             <h3 style="font-size:14px;margin:0;">Quadro de tarefas</h3>
+            <p class="hint" id="tk-escopo" style="margin:0;display:none;flex:1 1 240px;"></p>
             <div class="filters" style="align-items:flex-start;">
               <!-- loja e pessoa empilhadas: dois seletores curtos ocupam a altura de um campo -->
               <div style="display:flex;flex-direction:column;gap:4px;">
@@ -3159,13 +3160,22 @@ function tarefaCard(t){
 }
 /* ===== PLANO DE AÇÃO — progresso por ação macro (roscas interativas) ===== */
 let planoFiltro = '';
+/* Micro tarefas que a pessoa logada pode ver — base das roscas e do quadro */
+function microVisiveis(){
+  const eu = tarefasSoDe();
+  return TAREFAS.filter(t=> t.tipo!=='acao' && (eu===null || (eu && tarefaEhMinha(t, eu))));
+}
 function acoesMacro(){
-  const acoes = TAREFAS.filter(t=>t.tipo==='acao').map(a=>a.area);
-  const extras = [...new Set(TAREFAS.filter(t=>t.tipo!=='acao').map(t=>t.area||'Outros'))].filter(a=>!acoes.includes(a));
+  const socia = (typeof perfil==='undefined' || perfil==='socia');
+  const micro = microVisiveis();
+  /* Para a colaboradora, acao sem tarefa dela nao faz sentido no painel: some. */
+  const acoes = TAREFAS.filter(t=>t.tipo==='acao').map(a=>a.area)
+                  .filter(a=> socia || micro.some(t=>(t.area||'Outros')===a));
+  const extras = [...new Set(micro.map(t=>t.area||'Outros'))].filter(a=>!acoes.includes(a));
   return acoes.concat(extras);
 }
 function progressoArea(area){
-  const micro = TAREFAS.filter(t=>t.tipo!=='acao' && (t.area||'Outros')===area);
+  const micro = microVisiveis().filter(t=>(t.area||'Outros')===area);
   const feitas = micro.filter(t=>t.status==='concluida').length;
   return {total:micro.length, feitas, pct: micro.length ? feitas/micro.length*100 : 0};
 }
@@ -3292,6 +3302,37 @@ function renderPlanoAcao(){
     if(selA.innerHTML!==opts){ selA.innerHTML = opts; if(areas.includes(atual)) selA.value = atual; }
   }
 }
+/* Colaboradora enxerga so as tarefas dela. O quadro e um instrumento de
+   trabalho individual: quem nao e socia nao precisa — nem deve — ver a carga
+   das colegas. Quem esta logado sai do cadastro da equipe pelo e-mail.
+   Retorna null quando nao ha restricao (perfil Socio). */
+/* Deixa a tela coerente com o escopo: some o filtro "Quem", a nova tarefa ja
+   nasce no nome de quem esta criando e um aviso explica o recorte. */
+function aplicarEscopoTarefas(){
+  const eu = tarefasSoDe();
+  const box = document.getElementById('tk-escopo');
+  const fp = document.getElementById('tkFiltroPessoa');
+  const sel = document.getElementById('tk-colaborador');
+  if(fp) fp.style.display = (eu===null) ? '' : 'none';
+  if(eu !== null && fp && fp.value){ fp.value = ''; }
+  if(sel){
+    /* Criar tarefa para outra pessoa faria a tarefa sumir da tela de quem criou */
+    sel.disabled = (eu !== null);
+    if(eu && [...sel.options].some(o=>o.value===eu)) sel.value = eu;
+  }
+  if(!box) return;
+  if(eu === null){ box.style.display = 'none'; box.textContent = ''; return; }
+  box.style.display = '';
+  box.textContent = eu
+    ? 'Você está vendo apenas as tarefas atribuídas a ' + eu + '.'
+    : 'Seu e-mail ainda não está ligado a um cadastro na equipe, então o quadro aparece vazio. Peça a uma sócia para vincular em Gente e Gestão.';
+}
+function tarefasSoDe(){
+  if(typeof perfil!=='undefined' && perfil==='socia') return null;
+  return nomeDoUsuario().trim();   // '' quando o e-mail nao esta no cadastro
+}
+const tarefaEhMinha = (t, eu) => String((t&&t.colaborador)||'').trim().toLowerCase() === eu.toLowerCase();
+
 /* Tarefas exibidas no quadro: só micro tarefas, respeitando o filtro de ação */
 /* Peso da prioridade para ordenar: quanto menor, mais no topo. Valor
    desconhecido ou vazio entra como Normal. */
@@ -3299,8 +3340,12 @@ const TAREFA_PRIORIDADE = t => ({Urgente:0, Alta:1, Normal:2})[String((t&&t.prio
 function tarefasVisiveis(){
   const fLoja = (document.getElementById('tkFiltroLoja')||{}).value || '';
   const fPessoa = (document.getElementById('tkFiltroPessoa')||{}).value || '';
+  const eu = tarefasSoDe();
   return TAREFAS.filter(t=>{
     if(t.tipo==='acao') return false;
+    /* Sem nome identificado nao da para dizer o que e dela: melhor nao mostrar
+       nada do que mostrar a tarefa das colegas. */
+    if(eu !== null && !(eu && tarefaEhMinha(t, eu))) return false;
     if(planoFiltro && (t.area||'Outros')!==planoFiltro) return false;
     /* "Sem loja" existe para achar as tarefas antigas, que ainda nao tinham o campo */
     if(fLoja === '__sem'){ if(t.loja) return false; }
@@ -3323,6 +3368,7 @@ function tarefasVisiveis(){
 }
 function renderTarefas(){
   renderPlanoAcao();
+  aplicarEscopoTarefas();
   const view = (document.getElementById('tarefaView')||{}).value || 'status';
   document.getElementById('kanban-status').style.display = view==='status' ? '' : 'none';
   document.getElementById('kanban-periodo').style.display = view==='status' ? 'none' : '';
