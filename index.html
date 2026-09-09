@@ -1024,7 +1024,7 @@ window.TN_CONFIG = {
           <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
             <input type="url" id="ig-padrao" placeholder="Cole o link do Drive, Canva, pasta de artes..." style="flex:1 1 320px;">
             <button class="btn ghost" id="ig-padrao-salvar" style="padding:5px 12px;">salvar</button>
-            <a id="ig-padrao-abrir" href="#" target="_blank" rel="noopener" class="btn ghost" style="padding:5px 12px;display:none;">abrir material</a>
+            <a id="ig-padrao-abrir" href="#" target="_blank" rel="noopener" class="btn ghost" style="padding:5px 12px;display:none;">ver materiais</a>
           </div>
           <p class="hint" id="ig-padrao-dica" style="margin:6px 0 0 0;display:none;">Este link é mantido pela Andreia. Você pode abrir o material, mas não alterar o endereço.</p>
         </div>
@@ -3548,15 +3548,22 @@ function renderInstagram(){
   const btn = document.getElementById('ig-padrao-salvar');
   const inp = document.getElementById('ig-padrao');
   const podeMat = podeEditarMaterialIG();
+  /* Quem nao edita nao precisa ver o endereco: um link cru ocupando a linha
+     inteira so atrapalha, e o que essa pessoa quer e abrir o material. Some o
+     campo e fica o botao. Para quem edita, o campo continua como era. */
   if(inp){
     inp.readOnly = !podeMat;
+    inp.style.display = podeMat ? '' : 'none';
     inp.title = podeMat ? '' : 'Somente ' + IG_DONO_MATERIAL + ' altera o material padrão.';
-    inp.style.opacity = podeMat ? '' : '.7';
-    if(!podeMat) inp.placeholder = 'Material padrão definido por ' + IG_DONO_MATERIAL;
   }
+  const rotulo = document.querySelector('label[for="ig-padrao"]');
+  if(rotulo) rotulo.style.display = podeMat ? '' : 'none';
   if(btn) btn.style.display = podeMat ? '' : 'none';
   const dica = document.getElementById('ig-padrao-dica');
-  if(dica) dica.style.display = podeMat ? 'none' : '';
+  if(dica){
+    dica.style.display = podeMat ? 'none' : '';
+    dica.textContent = 'Material padrão das postagens, mantido pela ' + IG_DONO_MATERIAL + '.';
+  }
   if(btn && inp && podeMat && !btn.dataset.pronto){
     btn.dataset.pronto = '1';
     inp.oninput = aplicarPadraoIG;
