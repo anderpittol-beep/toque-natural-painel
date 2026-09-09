@@ -4127,8 +4127,8 @@ function compromissoMensal(ano, mes, loja){
   }, 0);
   const fc = fxMesAnterior(ano, mes);
   const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=>g.loja===loja);
-  const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gTotal(g) - (+g.encargo||0)), 0);
-  const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0)), 0);
+  const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gAPagar(g)), 0);
+  const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0) + gDesconto(g)), 0);
   return fixas + salarios + encargos;
 }
 
@@ -4649,11 +4649,17 @@ function renderCaixa(){
   /* Salarios e encargos saem em datas diferentes do mes, entao viram duas
      linhas com check proprio. A soma das duas e a mesma de antes: gTotal menos
      o encargo e exatamente a parte de salario. */
+  /* Salario = o que a pessoa recebe (o mesmo "A pagar" do Gente e Gestao).
+     Encargo = FGTS + INSS retido, que saem juntos na guia do mes seguinte.
+     Antes a linha de salario mostrava o BRUTO e o INSS retido nao aparecia em
+     lugar nenhum: a de Despesas ficava maior que a da folha exatamente no
+     valor do INSS, e o dinheiro do imposto sumia da conta. A soma dos dois
+     continua a mesma de sempre. */
   const folhaPorLoja = {}, folhaSalarioPorLoja = {}, folhaEncargoPorLoja = {};
   genteList.forEach(g=>{
     folhaPorLoja[g.loja]=(folhaPorLoja[g.loja]||0)+gTotal(g);
-    folhaEncargoPorLoja[g.loja]=(folhaEncargoPorLoja[g.loja]||0)+(+g.encargo||0);
-    folhaSalarioPorLoja[g.loja]=(folhaSalarioPorLoja[g.loja]||0)+(gTotal(g)-(+g.encargo||0));
+    folhaEncargoPorLoja[g.loja]=(folhaEncargoPorLoja[g.loja]||0)+(+g.encargo||0)+gDesconto(g);
+    folhaSalarioPorLoja[g.loja]=(folhaSalarioPorLoja[g.loja]||0)+gAPagar(g);
   });
   const folhaTotal = genteList.reduce((a,g)=>a+gTotal(g),0);
   // retenção mensal de 13º e férias, rateada por loja
@@ -4767,8 +4773,8 @@ function renderCaixa(){
     /* Salario e encargo tem checks separados — saem em datas diferentes. Antes
        este cartao descartava a pessoa inteira quando o salario era marcado como
        pago, e levava junto o encargo, que ainda nao tinha sido recolhido. */
-    const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : gTotal(g) - (+g.encargo||0)), 0);
-    const enc = doMes.reduce((a,g)=> a + ((ehMesBase && g.encargo_pago) ? 0 : (+g.encargo||0)), 0);
+    const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : gAPagar(g)), 0);
+    const enc = doMes.reduce((a,g)=> a + ((ehMesBase && g.encargo_pago) ? 0 : (+g.encargo||0) + gDesconto(g)), 0);
     const fl = sal + enc;
     /* A retencao de 13o e ferias NAO entra no que vai sair: a socia aplica o
        valor quando quer, e ele fica disponivel no volume aplicado. Contar aqui
@@ -4980,7 +4986,7 @@ function renderCaixa(){
       const daLoja = genteList.filter(g=>g.loja===l).slice()
         .sort((a,b)=> (gTotal(b)-(+b.encargo||0)) - (gTotal(a)-(+a.encargo||0)));
       return daLoja.map(g=>{
-        const valor = gTotal(g) - (+g.encargo||0);
+        const valor = gAPagar(g);
         const chave = String(g.pessoa||'');
         const chk = podeEditar
           ? `<td style="text-align:center;">
