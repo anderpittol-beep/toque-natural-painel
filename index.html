@@ -1011,14 +1011,7 @@ window.TN_CONFIG = {
       <!-- INSTAGRAM -->
       <section class="view" id="view-instagram">
         <h2 class="section-title">Sugestões de postagem — Instagram</h2>
-        <p class="section-desc">Pauta semanal <strong>igual para as três lojas</strong> — a marca fala a mesma coisa no mesmo dia. A loja escolhida ao lado não muda o conteúdo: serve para marcar "postado" e acompanhar quem já cumpriu a pauta.</p>
-        <div class="toolbar filters">
-          <select id="igStoreFilter">
-            <option value="Itaipulândia">Itaipulândia</option>
-            <option value="Ouro Verde">Ouro Verde</option>
-            <option value="Toledo">Toledo</option>
-          </select>
-        </div>
+        <p class="section-desc">Pauta semanal <strong>igual para as três lojas</strong> — a marca fala a mesma coisa no mesmo dia. Para acompanhar a execução, use <strong>criar tarefa</strong>: quem posta dá baixa no menu Tarefas.</p>
         <div class="card" style="margin-bottom:12px;">
           <label class="hint" for="ig-padrao">Material padrão das postagens — o link vai junto em toda tarefa criada aqui</label>
           <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
@@ -1535,7 +1528,6 @@ const DATAS_COMEMORATIVAS = {
  11:[{data:"Mês todo",titulo:"Ceias saudáveis",ideia:"Sugestões de castanhas, frutas secas e sobremesas fit para o Natal."},{data:"25/12",titulo:"Natal",ideia:"Cestas de fim de ano e presentes saudáveis."},{data:"31/12",titulo:"Ano Novo",ideia:"Preparação para metas de saúde do próximo ano."}],
 };
 
-let ig_state = {}; // "loja-idx" -> boolean postado
 let apagarMesAberto = {};   // "Out/26" -> aberto pelo clique no cabecalho
 
 let PARCERIAS = [];
@@ -3406,8 +3398,7 @@ let pautasPedidas = false;
 /* A pauta e UMA SO para as tres lojas: a marca fala a mesma coisa no mesmo dia
    — a arte do Setembro Amarelo sai igual em todo lugar. Antes cada loja tinha
    a sua, e as redes ficavam desencontradas.
-   A loja escolhida no filtro serve para marcar QUEM ja postou, nao para mudar
-   o conteudo. */
+   O acompanhamento de quem ja postou vive no menu Tarefas, nao aqui. */
 const IG_PAUTA_TODAS = 'Todas';
 function pautasPadrao(){
   const global = IG_PAUTAS.filter(p=>p.loja===IG_PAUTA_TODAS).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
@@ -3460,14 +3451,11 @@ function aplicarPadraoIG(){
 }
 
 function renderInstagram(){
-  const loja = document.getElementById('igStoreFilter').value;
   if(!pautasPedidas) tnCarregarPautas();   // primeira abertura da tela busca as pautas salvas
   const pautas = pautasPadrao();
   const sugestoes = pautas.map(p=>p.legenda||'');
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
   document.getElementById('ig-week').innerHTML = pautas.map((d,i)=>{
-    const key = loja+'-'+i;
-    const postado = !!ig_state[key];
     if(socia && pautaEditando && d.id===pautaEditando){
       return `<div class="ig-day" style="outline:2px solid var(--accent,#1f7a4d);">
         <input type="text" data-pe="dia" value="${esc(d.dia)}" placeholder="Dia" style="width:100%;box-sizing:border-box;margin-bottom:4px;">
@@ -3489,15 +3477,9 @@ function renderInstagram(){
       <div class="pillar">${esc(d.pilar)}</div>
       <div class="fmt">${esc(d.fmt||'')}</div>
       <div class="cap">"${esc(d.legenda||'')}"</div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary);">
-        <input type="checkbox" data-ig="${key}" ${postado?'checked':''}> Postado
-      </label>
       <button class="btn ghost" data-igpauta="${i}" style="margin-top:6px;padding:3px 9px;font-size:11.5px;width:100%;">criar tarefa</button>
     </div>`;
   }).join('');
-  document.querySelectorAll('[data-ig]').forEach(chk=>{
-    chk.onchange = ()=>{ ig_state[chk.dataset.ig] = chk.checked; };
-  });
   /* Mesma distribuição das datas comemorativas, agora para a pauta da semana */
   document.querySelectorAll('[data-igpauta]').forEach(b=>{
     b.onclick = ()=>{
@@ -7244,7 +7226,6 @@ document.querySelectorAll('.store-chk').forEach(chk=> chk.onchange = ()=>{ salva
 { const mt=document.getElementById('marginTarget'); if(mt) mt.onchange = (e)=>{ marginTarget = num(e.target.value) ?? 35; renderAll(); }; }
 document.getElementById('margemStatusFilter').onchange = renderMargem;
 document.getElementById('estoqueStatusFilter').onchange = renderEstoque;
-document.getElementById('igStoreFilter').onchange = renderInstagram;
 document.getElementById('tarefaView').onchange = renderTarefas;
 document.getElementById('growReceita').onchange = renderProjecao;
 document.getElementById('growDespesa').onchange = renderProjecao;
