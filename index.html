@@ -8202,7 +8202,80 @@ document.getElementById('form-tarefa').addEventListener('submit', e=>{
 });
 
 /* ============ INIT ============ */
+/* ===== NOTAS EXPLICATIVAS EM POPUP =====
+   As descricoes de secao e as notas de rodape ocupavam varias linhas em cima
+   dos numeros. O texto continua no lugar (para quem le tela e para o Ctrl+F),
+   so que escondido atras de um "ℹ️" — um clique abre o balao.
+   Nota com valor em reais NAO vira icone: ali o texto e informacao, nao
+   explicacao. */
+const NOTA_MARCA = 'notaPopup';
+function notaEhExplicacao(el){
+  if(el.dataset[NOTA_MARCA]) return false;
+  if(el.closest('table')) return false;               // dentro de tabela e dado
+  if(el.closest('#nota-balao')) return false;
+  const t = (el.textContent||'').trim();
+  if(t.length < 40) return false;                      // rotulo curto fica como esta
+  if(el.classList.contains('section-desc')) return true;
+  return el.classList.contains('hint') && !/R\$/.test(t);
+}
+function abrirNota(texto, origem){
+  document.getElementById('nota-balao')?.remove();
+  const dlg = document.createElement('div');
+  dlg.id = 'nota-balao';
+  dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;'
+    + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  dlg.innerHTML = `<div class="card" style="max-width:480px;width:100%;">
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <span style="font-size:18px;line-height:1.2;">ℹ️</span>
+        <div style="font-size:12.5px;line-height:1.55;">${esc(texto)}</div>
+      </div>
+      <div style="margin-top:10px;text-align:right;">
+        <button class="btn ghost" data-notafechar="1" style="padding:3px 12px;">fechar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dlg);
+  const fechar = ()=>{ dlg.remove(); if(origem) origem.focus(); };
+  dlg.onclick = e => { if(e.target===dlg) fechar(); };
+  dlg.querySelector('[data-notafechar]').onclick = fechar;
+  document.addEventListener('keydown', function esc2(e){
+    if(e.key==='Escape'){ fechar(); document.removeEventListener('keydown', esc2); }
+  });
+}
+function aplicarNotas(){
+  document.querySelectorAll('p.section-desc, p.hint').forEach(el=>{
+    if(!notaEhExplicacao(el)) return;
+    el.dataset[NOTA_MARCA] = '1';
+    const texto = (el.textContent||'').trim();
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn ghost';
+    b.textContent = 'ℹ️';
+    b.title = texto;
+    b.setAttribute('aria-label', 'Ver explicação');
+    b.style.cssText = 'padding:0 5px;font-size:13px;line-height:1.4;vertical-align:middle;';
+    b.onclick = () => abrirNota(texto, b);
+    /* Ao lado do titulo quando houver um logo acima; senao no lugar do texto. */
+    const anterior = el.previousElementSibling;
+    const titulo = anterior && /^H[1-6]$/.test(anterior.tagName) ? anterior : null;
+    if(titulo){ titulo.appendChild(document.createTextNode(' ')); titulo.appendChild(b); el.remove(); }
+    else { el.style.display = 'none'; el.insertAdjacentElement('afterend', b); }
+  });
+}
+/* Blocos redesenhados por innerHTML trazem notas novas: o observador aplica
+   nelas tambem, sem cada render precisar lembrar de chamar. */
+let notasAgendado = null;
+function observarNotas(){
+  aplicarNotas();
+  new MutationObserver(()=>{
+    clearTimeout(notasAgendado);
+    notasAgendado = setTimeout(aplicarNotas, 80);
+  }).observe(document.body, {childList:true, subtree:true});
+}
+
+let notasLigadas = false;
 function renderAll(){
+  if(!notasLigadas){ notasLigadas = true; observarNotas(); }
+  setTimeout(aplicarNotas, 0);
   aplicarDespesasDoPainel();
   renderMesFiltro();
   atualizarPeriodo();
