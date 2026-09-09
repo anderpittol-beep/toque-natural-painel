@@ -6268,33 +6268,57 @@ function renderPessoais(){
     <div class="card stat-tile ${saldo<0?'accent-critical':'accent-good'}"><div class="label">Disponibilidade do mês</div><div class="value">${BRL(saldo)}</div><div class="hint">renda ${BRL(renda)} − despesas ${BRL(despesa)}</div></div>`;
 
   /* Os tres proximos meses, encadeados: o que sobra de um entra no seguinte.
-     Um mes sem fixas ou sem renda lancada herda as do mes anterior — sao os
-     valores que se repetem todo mes; o cartao conta so o que ja esta
-     lancado naquele mes (parcelas futuras, por exemplo). */
+     Mes sem lancamento proprio e PROJETADO a partir do ultimo mes lancado,
+     rodando as mesmas regras de recorrencia da tela: parcelada anda e acaba na
+     ultima, assinatura renova o ciclo, provisao repete e avulsa nao volta.
+     Antes o cartao contava so o que ja estava lancado no mes — entao Novembro
+     e Dezembro apareciam com R$ 0,00 de cartao e uma sobra que nao existe,
+     mesmo com financiamento e assinaturas correndo. */
   const somaMesTipo = (a, m, t) => PES_LANC
     .filter(x => +x.ano===a && +x.mes===m && pesTipo(x)===t)
     .reduce((s2,x)=> s2 + (+x.valor||0), 0);
+  const temNoMesTipo = (a, m, t) => PES_LANC.some(x => +x.ano===a && +x.mes===m && pesTipo(x)===t);
+  const ordMes = (a, m) => a*12 + (m-1);
+
+  /* Roda a lista do ultimo mes lancado ate (a,m), mes a mes, e devolve a soma
+     do que ainda estaria vivo la. */
+  function projetaTipo(a, m, t){
+    if(temNoMesTipo(a, m, t)) return {total: somaMesTipo(a, m, t), projetada: false};
+    let base = null;
+    for(let k=1; k<=24; k++){
+      const d = new Date(a, m-1-k, 1);
+      const aa = d.getFullYear(), mm = d.getMonth()+1;
+      if(temNoMesTipo(aa, mm, t)){ base = {ano:aa, mes:mm}; break; }
+    }
+    if(!base) return {total: 0, projetada: false};
+    let itens = PES_LANC.filter(x=> +x.ano===base.ano && +x.mes===base.mes && pesTipo(x)===t)
+                        .map(x=>({...x}));
+    const passos = ordMes(a, m) - ordMes(base.ano, base.mes);
+    for(let i=0; i<passos; i++){
+      const seguem = [];
+      itens.forEach(x=>{ const prox = pesProximaParcela(x); if(prox) seguem.push({...x, ...prox}); });
+      itens = seguem;
+      if(!itens.length) break;
+    }
+    return {total: itens.reduce((s2,x)=> s2 + (+x.valor||0), 0), projetada: true};
+  }
 
   function previsaoDoMes(a, m){
-    const cart = somaMesTipo(a,m,'cartao');
-    /* Herda do ultimo mes que realmente tem lancamento, nao so do anterior:
-       assim Novembro nao zera so porque Outubro ainda nao foi lancado. */
+    const pc = projetaTipo(a, m, 'cartao');
+    const pf = projetaTipo(a, m, 'fixa');
+    const cart = pc.total, cartHerdada = pc.projetada;
+    const fixa2 = pf.total, fixaHerdada = pf.projetada;
+    /* Renda nao tem parcela: repete o ultimo mes lancado. Mesmo alcance da
+       projecao (24 meses), senao um mes distante mostrava renda zero com as
+       parcelas ainda correndo — e um buraco que nao existe. */
     const buscarAtras = (temNoMes, somaNoMes) => {
-      for(let k=1; k<=12; k++){
+      for(let k=1; k<=24; k++){
         const d2 = new Date(a, m-1-k, 1);
         const aa = d2.getFullYear(), mm = d2.getMonth()+1;
         if(temNoMes(aa,mm)) return somaNoMes(aa,mm);
       }
       return 0;
     };
-    let fixa2 = somaMesTipo(a,m,'fixa');
-    let fixaHerdada = false;
-    if(!PES_LANC.some(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='fixa')){
-      fixa2 = buscarAtras(
-        (aa,mm)=>PES_LANC.some(x=>+x.ano===aa && +x.mes===mm && pesTipo(x)==='fixa'),
-        (aa,mm)=>somaMesTipo(aa,mm,'fixa'));
-      fixaHerdada = fixa2 > 0;
-    }
     let ren = PES_RENDAS.filter(x=>+x.ano===a && +x.mes===m).reduce((s2,x)=>s2+(+x.valor||0),0);
     let rendaHerdada = false;
     if(!PES_RENDAS.some(x=>+x.ano===a && +x.mes===m)){
@@ -6305,7 +6329,7 @@ function renderPessoais(){
     }
     const desp = cart + fixa2;
     return {ano:a, mes:m, cart, fixa:fixa2, desp, renda:ren,
-            saldo: ren - desp, fixaHerdada, rendaHerdada};
+            saldo: ren - desp, cartHerdada, fixaHerdada, rendaHerdada};
   }
 
   let acumulado = 0;
@@ -6323,13 +6347,13 @@ function renderPessoais(){
       </div>
       <table class="table" style="margin-top:6px;"><tbody>
         <tr><td>Renda</td><td style="text-align:right;">${BRL(x.renda)}${x.rendaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
-        <tr><td>Cartão</td><td style="text-align:right;">${BRL(x.cart)}</td></tr>
+        <tr><td>Cartão</td><td style="text-align:right;">${BRL(x.cart)}${x.cartHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
         <tr><td>Fixas</td><td style="text-align:right;">${BRL(x.fixa)}${x.fixaHerdada?' <span class="hint">(prevista)</span>':''}</td></tr>
         <tr><td class="strong">Sobra do mês</td><td class="strong" style="text-align:right;color:${x.saldo<0?'var(--critical)':'var(--good)'};">${BRL(x.saldo)}</td></tr>
         <tr><td class="hint">Acumulado até aqui</td><td class="hint" style="text-align:right;">${BRL(x.acumulado)}</td></tr>
       </tbody></table>
     </div>`).join('')}</div>
-    <p class="hint" style="margin:6px 0 0 0;">O acumulado encadeia os meses: a sobra (ou o buraco) de um entra no seguinte. "Prevista" quer dizer que o mês ainda não tem lançamento próprio e repetiu o anterior.</p>`;
+    <p class="hint" style="margin:6px 0 0 0;">O acumulado encadeia os meses: a sobra (ou o buraco) de um entra no seguinte. "Prevista" quer dizer que o mês ainda não tem lançamento próprio: o painel projeta a partir do último mês lançado, fazendo as parcelas andarem — o que termina sai da conta, assinatura renova e provisão continua.</p>`;
 
   const podeMexer = ACESSO_CASA;
   const colDebito = temDiaDebito();
