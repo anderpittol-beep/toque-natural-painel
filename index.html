@@ -472,7 +472,7 @@ window.TN_CONFIG = {
             </form>
           </details>
 
-          <div class="grid grid-3" id="disp-kpis" style="margin-bottom:14px;"></div>
+          <div class="grid grid-4" id="disp-kpis" style="margin-bottom:14px;"></div>
 
           <details id="det-cenarios" style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
@@ -756,10 +756,14 @@ window.TN_CONFIG = {
           <div class="grid grid-3" id="mural"></div>
         </div>
 
+        <!-- A meta muda uma vez por ano, mas o bloco ficava aberto o tempo todo
+             empurrando o resto da tela para baixo. Recolhido, abre num clique. -->
         <div class="card" style="margin-bottom:16px;">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Meta mensal por loja</h3>
-          <p class="hint" style="margin:0 0 10px 0;">Base de todo o resto: a meta do dia, a meta da semana e os percentuais saem daqui. Só o perfil Sócio edita.</p>
-          <div id="metas-box" class="filters"></div>
+          <details class="add-form" style="margin:0;">
+            <summary>Meta mensal por loja</summary>
+            <p class="hint" style="margin:8px 0 10px 0;">Base de todo o resto: a meta do dia, a meta da semana e os percentuais saem daqui. Só o perfil Sócio edita.</p>
+            <div id="metas-box" class="filters"></div>
+          </details>
         </div>
 
         <div class="card">
@@ -4225,8 +4229,8 @@ function renderDisponibilidade(){
     <div class="card stat-tile"><div class="label">Em espécie</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro em caixa</div></div>
     <div class="card stat-tile"><div class="label">Fechamento do dia</div><div class="value">${BRL(caixaLojas)}</div><div class="hint">${esc(fechamentoDoDiaData(lojas) ? 'nas gavetas · ' + fechamentoDoDiaData(lojas) : 'sem fechamento lançado')}</div></div>
     <div class="card stat-tile"><div class="label">Reserva</div><div class="value">${BRL(reserva)}</div><div class="hint">guardado, fora do dia a dia</div></div>
-    <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div></div>
-    <div class="card stat-tile ${sobra<0?'accent-critical':''}"><div class="label">Sobra do mês</div><div class="value" style="color:${sobra>=0?'var(--good)':'var(--critical)'};">${BRL(sobra)}</div></div>
+    <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div><div class="hint">o que ainda sai neste mês</div></div>
+    <div class="card stat-tile ${sobra<0?'accent-critical':''}" style="grid-column:span 2;"><div class="label">Sobra do mês</div><div class="value" style="color:${sobra>=0?'var(--good)':'var(--critical)'};">${BRL(sobra)}</div><div class="hint">disponível hoje menos o que ainda sai</div></div>
     <div class="card stat-tile" style="grid-column:1/-1;"><div class="label">Disponível hoje</div><div class="value">${BRL(disponivel)}</div><div class="hint">conta + maquininha + espécie + fechamento do dia · com a reserva: ${BRL(disponivel + reserva)}</div></div>
   `;
 
