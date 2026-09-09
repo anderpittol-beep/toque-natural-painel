@@ -2562,24 +2562,51 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
           pctEsperado: duCorridos / duMes * 100};
 }
 function pctColor(p){ return p>=100?'var(--good)':(p>=70?'var(--warning)':'var(--critical)'); }
-/* Carinha do mural: le a mesma escala da cor, so que com mais degraus — a
-   diferenca entre 19% e 65% importa para quem esta correndo atras da meta.
-   Os cortes de 70% e 100% batem com pctColor, para o rosto nunca contradizer
-   a cor do numero. */
-const PCT_CARINHAS = [
-  {ate: Infinity, emoji:'🤩', diz:'meta batida'},
-  {ate: 100,      emoji:'😃', diz:'quase la'},
-  {ate: 70,       emoji:'🙂', diz:'no caminho'},
-  {ate: 50,       emoji:'😐', diz:'atras da meta'},
-  {ate: 25,       emoji:'😕', diz:'bem atras da meta'}
-];
-function pctCarinha(p){
-  const v = +p || 0;
-  if(v >= 100) return PCT_CARINHAS[0];
-  if(v >= 70)  return PCT_CARINHAS[1];
-  if(v >= 50)  return PCT_CARINHAS[2];
-  if(v >= 25)  return PCT_CARINHAS[3];
-  return PCT_CARINHAS[4];
+/* Carinha da meta: mede o RITMO, nao o acumulado. Na terca-feira ninguem tem
+   como ter 100% da semana; cobrar isso faz a colaboradora comecar todo periodo
+   com a cara triste. Entao o realizado e comparado com o que ja era esperado
+   ate hoje, em dias uteis — domingo e feriado ficam de fora, porque a loja nao
+   abre.
+   A conta e "% projetado ao fim do periodo" = pct / fracao ja corrida. Com o
+   periodo fechado (fracao 1) ela vira o proprio pct, e os cortes de 100 e 70
+   sao os mesmos do pctColor — o rosto nunca contradiz a cor do numero. */
+function fracaoDiasUteis(ini, fim){
+  const hoje = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const d = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+  const f = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+  let tot = 0, corridos = 0;
+  while(d <= f){
+    if(ehDiaUtil(d)){ tot++; if(d <= hoje) corridos++; }
+    d.setDate(d.getDate() + 1);
+  }
+  if(!tot) return 1;
+  /* Zero = periodo que ainda nem comecou. Nao ha ritmo a cobrar de quem nao
+     teve um dia de loja aberta: nesse caso a carinha nem aparece. */
+  return corridos / tot;
+}
+const fracaoSemana = mon => { const i = new Date(mon), f = new Date(mon);
+  f.setDate(f.getDate() + 6); return fracaoDiasUteis(i, f); };
+const fracaoMesRef = (ano, mes) => fracaoDiasUteis(new Date(ano, mes, 1), new Date(ano, mes+1, 0));
+
+function pctCarinha(pct, fracao){
+  if(fracao === 0) return null;                       // periodo ainda por vir
+  const f = (fracao == null) ? 1 : Math.min(fracao, 1);
+  const proj = (+pct || 0) / f;          // onde chega mantendo este ritmo
+  const parcial = f < 0.999;
+  if(proj >= 100) return {emoji:'🤩', diz: parcial ? 'no ritmo de bater a meta' : 'meta batida', proj, f};
+  if(proj >= 85)  return {emoji:'😃', diz: parcial ? 'quase no ritmo' : 'quase lá', proj, f};
+  if(proj >= 70)  return {emoji:'🙂', diz: parcial ? 'um pouco atrás do ritmo' : 'no caminho', proj, f};
+  if(proj >= 50)  return {emoji:'😐', diz:'atrás da meta', proj, f};
+  return {emoji:'😕', diz:'bem atrás da meta', proj, f};
+}
+/* O emoji pronto, com a explicacao no titulo */
+function carinhaHTML(pct, fracao, tam){
+  const c = pctCarinha(pct, fracao);
+  if(!c) return '';
+  const dica = c.diz + (c.f < 0.999
+    ? ' — ' + (+pct||0).toFixed(0) + '% com ' + Math.round(c.f*100) + '% dos dias úteis corridos'
+    : '');
+  return `<span title="${esc(dica)}" style="font-size:${tam||14}px;vertical-align:middle;">${c.emoji}</span>`;
 }
 /* Feriados: dia de loja fechada nao e dia util. Sem isso a meta do dia se
    diluia em dias que nunca venderiam, e o "ritmo do mes" cobrava venda de um
@@ -2681,6 +2708,7 @@ function renderDesempenho(){
     if(!d || !(v.valor>0)) return;
     if(!ultimaVenda[v.colab] || d > ultimaVenda[v.colab].d) ultimaVenda[v.colab] = {d, valor:v.valor};
   });
+  const fracSemAtual = wAtual ? fracaoSemana(wAtual.mon) : 1;
   const rotuloSemana = wAtual ? wAtual.label : '—';
   const mrl = document.getElementById('mural-periodo');
   if(mrl) mrl.textContent = wAtual ? rotuloSemana : 'sem vendas registradas';
@@ -2698,7 +2726,7 @@ function renderDesempenho(){
       <div class="strong" style="font-size:15px;">${esc(n)}</div>
       <div class="hint" style="margin-bottom:8px;">${esc(lojaOf(n))}</div>
       <div style="font-size:26px;font-weight:700;color:${pctColor(pct)};line-height:1;">
-        <span title="${esc(pctCarinha(pct).diz)}" style="font-size:22px;vertical-align:middle;">${pctCarinha(pct).emoji}</span>
+        ${carinhaHTML(pct, fracSemAtual, 22)}
         ${pct.toFixed(0)}%</div>
       <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
       ${aviso}
@@ -2719,7 +2747,7 @@ function renderDesempenho(){
     const cells = nomes.map(n=>{
       const val=w.tot[n]||0; const meta=metaSem(n); const pct=meta>0?val/meta*100:0;
       if(val>0 && (!best || pct>best.pct)) best={n, pct};
-      return `<td style="color:${pctColor(pct)};font-weight:600;">${pct.toFixed(0)}% <span class="hint" style="font-weight:400;">${val?BRL(val):''}</span></td>`;
+      return `<td style="color:${pctColor(pct)};font-weight:600;">${carinhaHTML(pct, fracaoSemana(w.mon))} ${pct.toFixed(0)}% <span class="hint" style="font-weight:400;">${val?BRL(val):''}</span></td>`;
     }).join('');
     return `<tr><td class="strong">${esc(w.label)}</td>${cells}<td>${best?esc(best.n)+' ('+best.pct.toFixed(0)+'%)':'<span class="hint">—</span>'}</td></tr>`;
   };
@@ -2791,13 +2819,13 @@ function renderDesempenho(){
           <td>${esc(x.colab)}</td>
           <td class="strong">${BRL(x.rec)}</td>
           <td>${x.meta?BRL(x.meta):'<span class="hint">—</span>'}</td>
-          <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
+          <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?carinhaHTML(pct, fracaoMesRef(cAno, cMes))+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
           <td>${ehMesAtual ? (falta>0?BRL(falta):'<span class="badge b-good"><span class="dot"></span>meta batida</span>') : '<span class="hint">—</span>'}</td>
           <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
             ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
           <td>${celComissao}</td>
         </tr>`;}).join('') || `<tr><td colspan="9" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
-      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${pctTot.toFixed(0)}%</td><td colspan="2"></td><td class="strong" style="color:var(--good);">${BRL(comissaoRecorte)}</td></tr>`:''}</tbody>
+      ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${carinhaHTML(pctTot, fracaoMesRef(TODAY.getFullYear(), TODAY.getMonth()))} ${pctTot.toFixed(0)}%</td><td colspan="2"></td><td class="strong" style="color:var(--good);">${BRL(comissaoRecorte)}</td></tr>`:''}</tbody>
       <tfoot><tr><td colspan="9" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.<br>
         Comissão por <strong>% da meta da loja</strong>, cumulativa, de Ago/26 em diante: ${COMISSAO_FAIXAS_PCT.map((f,i)=>`${COMISSAO_EMOJI[i+1]} ${f.pct}% → +${BRL(f.valor)}`).join(' · ')} — quem bate 140% da meta recebe ${BRL(COMISSAO_FAIXAS_PCT.reduce((a,f)=>a+f.valor,0))}. Até Jul/26 a regra era por valor faturado. Quem faz meia jornada recebe metade.</td></tr></tfoot>`;
   }
@@ -4977,7 +5005,7 @@ function renderCaixa(){
   document.getElementById('caixadia-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Vendas de ${esc(refLabel)}</div><div class="value">${BRL(vendasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Meta de ${esc(refLabel)}</div><div class="value">${BRL(metaMesLojas)}</div></div>
-    <div class="card stat-tile" style="color:${pctColor(pctMes)};"><div class="label">% da meta de ${esc(refLabel)}</div><div class="value">${pctMes.toFixed(0)}%</div></div>
+    <div class="card stat-tile" style="color:${pctColor(pctMes)};"><div class="label">% da meta de ${esc(refLabel)}</div><div class="value">${carinhaHTML(pctMes, fracaoMesRef(refMes.getFullYear(), refMes.getMonth()), 20)} ${pctMes.toFixed(0)}%</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
     ${ritmoTile(ritmo, refLabel)}
   `;
@@ -5174,7 +5202,7 @@ function renderCaixa(){
         <td class="strong">${BRL(vendas)}</td>
         <td>${meta>0?BRL(meta):'<span class="hint">—</span>'}</td>
         <td style="color:${dif>=0?'var(--good)':'var(--critical)'};font-weight:600;">${meta>0?(dif>=0?'+'+BRL(dif):'−'+BRL(-dif)):'<span class="hint">—</span>'}</td>
-        <td style="color:${pctColor(pct)};font-weight:600;">${meta>0?pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
+        <td style="color:${pctColor(pct)};font-weight:600;">${meta>0?carinhaHTML(pct, 1)+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
         <td>${BRL(c.inicial)}</td>
         <td>${BRL(c.entradas)}</td>
         <td>${BRL(c.saidas)}</td>
