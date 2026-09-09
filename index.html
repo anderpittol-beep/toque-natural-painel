@@ -3254,7 +3254,14 @@ function renderPlanoAcao(){
       ${acoes}
       ${donutSVG(p.pct, cor)}
       <div class="strong" style="font-size:12.5px;margin-top:6px;line-height:1.25;">${esc(area)}</div>
-      <div class="hint" style="margin-top:2px;">${p.total ? p.feitas+' de '+p.total+' concluída'+(p.total>1?'s':'') : 'sem tarefas'}</div>
+      <div class="hint" style="margin-top:2px;">${(()=>{
+        if(!p.total) return 'sem tarefas';
+        /* "0 de 8 concluídas" lia como se alguma tivesse sido concluida. Quando
+           nenhuma foi, o texto diz o que de fato existe: tarefas a fazer. */
+        if(!p.feitas) return p.total + (p.total>1 ? ' tarefas a fazer' : ' tarefa a fazer');
+        if(p.feitas === p.total) return 'todas as ' + p.total + ' concluídas';
+        return p.feitas + ' de ' + p.total + ' concluída' + (p.total>1?'s':'');
+      })()}</div>
     </div>`;
   }).join('');
   box.querySelectorAll('[data-plano]').forEach(el=>{
