@@ -1011,7 +1011,7 @@ window.TN_CONFIG = {
       <!-- INSTAGRAM -->
       <section class="view" id="view-instagram">
         <h2 class="section-title">Sugestões de postagem — Instagram</h2>
-        <p class="section-desc">Pauta semanal por loja, com pilar de conteúdo e sugestão de legenda pronta. A equipe de cada loja publica manualmente; marque "postado" para acompanhar quem está cumprindo a pauta.</p>
+        <p class="section-desc">Pauta semanal <strong>igual para as três lojas</strong> — a marca fala a mesma coisa no mesmo dia. A loja escolhida ao lado não muda o conteúdo: serve para marcar "postado" e acompanhar quem já cumpriu a pauta.</p>
         <div class="toolbar filters">
           <select id="igStoreFilter">
             <option value="Itaipulândia">Itaipulândia</option>
@@ -3402,11 +3402,23 @@ function renderTarefas(){
 let IG_PAUTAS = [];
 let pautaEditando = null;
 let pautasPedidas = false;
-function pautasDaLoja(loja){
-  const doBanco = IG_PAUTAS.filter(p=>p.loja===loja).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
-  if(doBanco.length) return doBanco;
-  return IG_PILARES.map((d,i)=>({ id:null, loja, ordem:i, dia:d.dia, pilar:d.pilar, fmt:d.fmt,
-                                  legenda:(IG_SUGESTOES[loja]||[])[i]||'' }));
+/* A pauta e UMA SO para as tres lojas: a marca fala a mesma coisa no mesmo dia
+   — a arte do Setembro Amarelo sai igual em todo lugar. Antes cada loja tinha
+   a sua, e as redes ficavam desencontradas.
+   A loja escolhida no filtro serve para marcar QUEM ja postou, nao para mudar
+   o conteudo. */
+const IG_PAUTA_TODAS = 'Todas';
+function pautasPadrao(){
+  const global = IG_PAUTAS.filter(p=>p.loja===IG_PAUTA_TODAS).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+  if(global.length) return global;
+  /* Transicao: enquanto ninguem tiver promovido uma pauta para padrao, mostra a
+     loja que tem a lista mais completa, para nada sumir da tela. */
+  const porLoja = {};
+  IG_PAUTAS.forEach(p=>{ (porLoja[p.loja] = porLoja[p.loja] || []).push(p); });
+  const maior = Object.values(porLoja).sort((a,b)=>b.length-a.length)[0];
+  if(maior && maior.length) return maior.slice().sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+  return IG_PILARES.map((d,i)=>({ id:null, loja:IG_PAUTA_TODAS, ordem:i, dia:d.dia,
+                                  pilar:d.pilar, fmt:d.fmt, legenda:'' }));
 }
 async function tnCarregarPautas(){
   try{
@@ -3449,7 +3461,7 @@ function aplicarPadraoIG(){
 function renderInstagram(){
   const loja = document.getElementById('igStoreFilter').value;
   if(!pautasPedidas) tnCarregarPautas();   // primeira abertura da tela busca as pautas salvas
-  const pautas = pautasDaLoja(loja);
+  const pautas = pautasPadrao();
   const sugestoes = pautas.map(p=>p.legenda||'');
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
   document.getElementById('ig-week').innerHTML = pautas.map((d,i)=>{
@@ -3537,7 +3549,7 @@ function renderInstagram(){
     if(bn) bn.onclick = async ()=>{
       const ordem = pautas.reduce((a,p)=>Math.max(a, (p.ordem||0)+1), 0);
       const { data, error } = await window.TN.sb.from('ig_pautas')
-        .insert({ loja, ordem, dia:'Novo dia', pilar:'Novo pilar', fmt:'', legenda:'' }).select().maybeSingle();
+        .insert({ loja: IG_PAUTA_TODAS, ordem, dia:'Novo dia', pilar:'Novo pilar', fmt:'', legenda:'' }).select().maybeSingle();
       if(error) return alert('Não deu para criar: ' + error.message);
       await tnCarregarPautas();
       pautaEditando = data && data.id || null;
@@ -3586,8 +3598,13 @@ function renderDatasComemorativas(){
   const box = document.getElementById('ig-datas');
   if(!box) return;
   const atual = TODAY.getMonth();
-  const ordem = []; for(let k=0;k<12;k++){ ordem.push((atual+k)%12); }
-  box.innerHTML = ordem.map(m=>{
+  /* O que interessa e o mes corrente e o que vem pela frente: e neles que da
+     para preparar arte e post. Os meses que ja passaram continuam disponiveis
+     — servem para planejar o ano que vem — mas recolhidos, senao empurram o
+     calendario util para baixo. */
+  const daFrente = []; for(let m=atual; m<12; m++) daFrente.push(m);
+  const jaPassaram = []; for(let m=0; m<atual; m++) jaPassaram.push(m);
+  const mesHTML = m => {
     const itens = DATAS_COMEMORATIVAS[m]||[];
     const destaque = (m===atual);
     return `<div class="card" style="margin-bottom:12px;${destaque?'border:2px solid var(--accent,#1f7a4d);':''}">
@@ -3599,7 +3616,12 @@ function renderDatasComemorativas(){
         <div class="hint">${esc(it.ideia)}</div>
       </div>`).join('') || '<div class="hint">Sem datas cadastradas.</div>'}
     </div>`;
-  }).join('');
+  };
+  box.innerHTML = daFrente.map(mesHTML).join('')
+    + (jaPassaram.length ? `<details class="add-form" style="margin-top:4px;">
+        <summary>Meses que já passaram (${jaPassaram.length})</summary>
+        <div style="margin-top:10px;">${jaPassaram.map(mesHTML).join('')}</div>
+      </details>` : '');
 
   /* Cada data vira tarefa: escolhe quem faz, e sai uma tarefa por pessoa —
      assim cada colaboradora vê a dela na própria lista. */
