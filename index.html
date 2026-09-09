@@ -2868,8 +2868,8 @@ function renderDesempenho(){
   let premAno=null; const cont={}; doAno.forEach(x=>cont[x.pessoa]=(cont[x.pessoa]||0)+1);
   Object.entries(cont).forEach(([n,c])=>{ if(!premAno||c>premAno.c) premAno={pessoa:n,c}; });
 
-  const card=(emoji,titulo,pessoa,detalhe,accent)=>`
-    <div class="card stat-tile ${accent||''}">
+  const card=(emoji,titulo,pessoa,detalhe,accent,extra)=>`
+    <div class="card stat-tile ${accent||''}" ${extra||''}>
       <div class="label">${emoji} ${titulo}</div>
       <div style="display:flex;align-items:center;gap:9px;margin:4px 0;">
         ${pessoa?avatarHTML(pessoa,34):''}
@@ -2882,10 +2882,56 @@ function renderDesempenho(){
    +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','')
    +card('🍽️','Destaque do trimestre', premTri&&premTri.pessoa,
          premTri ? ('Destaque nos 3 meses do ' + TRI_ROTULO[premTri.tri] + ' — almoço com as sócias')
-                 : ('Ninguém nos 3 meses do ' + TRI_ROTULO[triCivil]), 'accent-warning')
+                 : ('Ninguém nos 3 meses do ' + TRI_ROTULO[triCivil]), 'accent-warning',
+         'data-histtri="1" style="cursor:pointer;" title="Ver o histórico por trimestre"')
    +card('💰','Melhor desempenho de ' + anoCivil, premAno&&premAno.pessoa,
          premAno ? (premAno.c + ' destaque(s) em ' + anoCivil + ' — bonificação salarial')
                  : ('Sem destaque registrado em ' + anoCivil), '');
+
+  /* O card do trimestre so mostra o trimestre corrente. O historico responde a
+     pergunta seguinte — "quem ja ganhou?" — sem ocupar espaco na tela. */
+  const btnTri = document.querySelector('[data-histtri]');
+  if(btnTri) btnTri.onclick = ()=>{
+    const grupos = {};
+    HISTORICO_DESTAQUE.forEach(x=>{
+      const c = compDestaque(x);
+      if(!c) return;
+      const k = c.ano + '-' + triDe(c.mes);
+      (grupos[k] = grupos[k] || {ano:c.ano, tri:triDe(c.mes), meses:[]})
+        .meses.push({mes:c.mes, pessoa:x.pessoa});
+    });
+    const lista = Object.values(grupos)
+      .sort((a,b)=> (b.ano*10 + b.tri) - (a.ano*10 + a.tri));
+    const corpo = lista.length ? lista.map(g=>{
+      g.meses.sort((a,b)=>a.mes-b.mes);
+      const nomesG = [...new Set(g.meses.map(m=>m.pessoa))];
+      const ganhou = g.meses.length === 3 && nomesG.length === 1;
+      const atual = (g.ano === anoCivil && g.tri === triCivil);
+      return `<div style="padding:7px 0;border-bottom:1px solid var(--border,#e5e5e5);">
+        <div class="strong" style="font-size:12.5px;">${ganhou?'🏆 ':''}${esc(TRI_ROTULO[g.tri])} de ${g.ano}${atual?' <span class="hint" style="font-weight:400;">· em curso</span>':''}</div>
+        <div class="hint" style="margin-top:2px;">${g.meses.map(m=>esc(MES_ABREV[m.mes]) + ': ' + esc(m.pessoa)).join(' · ')}</div>
+        <div style="font-size:11.5px;margin-top:2px;">${ganhou
+          ? '<span style="color:var(--good);">' + esc(nomesG[0]) + ' levou o almoço com as sócias</span>'
+          : (atual ? 'ainda em apuração' : 'ninguém foi destaque nos três meses')}</div>
+      </div>`;
+    }).join('') : '<p class="hint" style="margin:0;">Nenhum destaque registrado ainda.</p>';
+
+    const dlg = document.createElement('div');
+    dlg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;'
+      + 'align-items:center;justify-content:center;z-index:9999;padding:16px;';
+    dlg.innerHTML = `<div class="card" style="max-width:460px;width:100%;max-height:80vh;overflow:auto;">
+        <h3 style="margin:0 0 2px 0;font-size:15px;">🍽️ Destaque do trimestre — histórico</h3>
+        <p class="hint" style="margin:0 0 10px 0;">Leva o almoço com as sócias quem for destaque nos três meses do mesmo trimestre civil.</p>
+        ${corpo}
+        <div style="margin-top:10px;text-align:right;">
+          <button class="btn ghost" data-htfechar="1" style="padding:3px 12px;">fechar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(dlg);
+    const fechar = ()=> dlg.remove();
+    dlg.onclick = e => { if(e.target===dlg) fechar(); };
+    dlg.querySelector('[data-htfechar]').onclick = fechar;
+  };
 }
 
 /* ============ RENDER: MARGEM ============ */
@@ -8291,6 +8337,11 @@ function notaEhExplicacao(el){
   if(el.dataset[NOTA_MARCA]) return false;
   if(el.closest('table')) return false;               // dentro de tabela e dado
   if(el.closest('#nota-balao')) return false;
+  /* Dentro de um dialogo o texto ja e curto e ja esta em foco: virar icone ali
+     esconderia justamente a explicacao que a pessoa abriu para ler. */
+  for(let n = el.parentElement; n; n = n.parentElement){
+    if(getComputedStyle(n).position === 'fixed') return false;
+  }
   const t = (el.textContent||'').trim();
   if(t.length < 40) return false;                      // rotulo curto fica como esta
   if(el.classList.contains('section-desc')) return true;
