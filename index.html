@@ -3895,7 +3895,21 @@ function renderInstagram(){
     areaNova.style.display = socia ? '' : 'none';
     const bn = document.getElementById('ig-pauta-nova');
     if(bn) bn.onclick = async ()=>{
-      const ordem = pautas.reduce((a,p)=>Math.max(a, (p.ordem||0)+1), 0);
+      /* A tela mostra a pauta 'Todas' assim que existir UMA. Se a semana ainda
+         estivesse na transicao (so pautas por loja), criar a primeira 'Todas'
+         fazia os seis dias sumirem da tela — estavam salvos, mas escondidos.
+         Entao a promocao acontece antes: a lista que estava a vista vira o
+         padrao, e so depois entra a pauta nova. */
+      if(!IG_PAUTAS.some(x=>x.loja === IG_PAUTA_TODAS) && pautas.some(x=>x.id)){
+        const copia = pautas.filter(x=>x.id).map((x,i)=>({
+          loja: IG_PAUTA_TODAS, ordem: i, dia: x.dia||'', pilar: x.pilar||'',
+          fmt: x.fmt||'', legenda: x.legenda||'' }));
+        const {error: e1} = await window.TN.sb.from('ig_pautas').insert(copia);
+        if(e1) return alert('Não deu para promover a pauta atual para padrão: ' + e1.message);
+        await tnCarregarPautas();
+      }
+      const base = pautasPadrao();
+      const ordem = base.reduce((a,p)=>Math.max(a, (p.ordem||0)+1), 0);
       const { data, error } = await window.TN.sb.from('ig_pautas')
         .insert({ loja: IG_PAUTA_TODAS, ordem, dia:'Novo dia', pilar:'Novo pilar', fmt:'', legenda:'' }).select().maybeSingle();
       if(error) return alert('Não deu para criar: ' + error.message);
