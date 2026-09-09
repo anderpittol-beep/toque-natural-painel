@@ -705,7 +705,7 @@ window.TN_CONFIG = {
       <!-- DESEMPENHO DE VENDAS -->
       <section class="view" id="view-desempenho">
         <h2 class="section-title">Vendas &amp; caixa diário</h2>
-        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café para quem superou a meta da semana, almoço para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem superou a meta da semana, almoço (até R$ 50,00) para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="equipe-fotos" id="equipe-fotos" style="margin:0 0 16px;"></div>
         <div class="grid grid-5" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
@@ -2831,6 +2831,9 @@ function renderDesempenho(){
   }
 
   // ===== Premiações (por % da meta) =====
+  /* Teto de cada premio: fica escrito no card para nao virar conversa depois,
+     na hora de apresentar a nota. */
+  const PREMIO_CAFE = 25, PREMIO_ALMOCO = 50;
   let premSemana=null;
   if(wAtual){ nomes.forEach(n=>{ const meta=metaSem(n); const pct=meta>0?(wAtual.tot[n]||0)/meta*100:0; if((wAtual.tot[n]||0)>0 && (!premSemana||pct>premSemana.pct)) premSemana={pessoa:n,pct,label:wAtual.label}; }); }
   // Mês (almoço): maior % da meta mensal
@@ -2853,8 +2856,8 @@ function renderDesempenho(){
       <div class="delta">${esc(detalhe)}</div>
     </div>`;
   document.getElementById('premios').innerHTML =
-    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café'):'Sem vendas na semana','accent-good')
-   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço'):'Sem vendas no mês','')
+    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good')
+   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','')
    +card('🍽️','3 meses seguidos', premTri&&premTri.pessoa, premTri?'Destaque 3 meses seguidos — almoço com as sócias':'Ninguém em 3 meses seguidos','accent-warning')
    +card('💰','Melhor desempenho anual', premAno&&premAno.pessoa, premAno?(premAno.c+' destaque(s) no ano — bonificação salarial'):'Em apuração','');
 }
