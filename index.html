@@ -2562,6 +2562,25 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
           pctEsperado: duCorridos / duMes * 100};
 }
 function pctColor(p){ return p>=100?'var(--good)':(p>=70?'var(--warning)':'var(--critical)'); }
+/* Carinha do mural: le a mesma escala da cor, so que com mais degraus — a
+   diferenca entre 19% e 65% importa para quem esta correndo atras da meta.
+   Os cortes de 70% e 100% batem com pctColor, para o rosto nunca contradizer
+   a cor do numero. */
+const PCT_CARINHAS = [
+  {ate: Infinity, emoji:'🤩', diz:'meta batida'},
+  {ate: 100,      emoji:'😃', diz:'quase la'},
+  {ate: 70,       emoji:'🙂', diz:'no caminho'},
+  {ate: 50,       emoji:'😐', diz:'atras da meta'},
+  {ate: 25,       emoji:'😕', diz:'bem atras da meta'}
+];
+function pctCarinha(p){
+  const v = +p || 0;
+  if(v >= 100) return PCT_CARINHAS[0];
+  if(v >= 70)  return PCT_CARINHAS[1];
+  if(v >= 50)  return PCT_CARINHAS[2];
+  if(v >= 25)  return PCT_CARINHAS[3];
+  return PCT_CARINHAS[4];
+}
 /* Feriados: dia de loja fechada nao e dia util. Sem isso a meta do dia se
    diluia em dias que nunca venderiam, e o "ritmo do mes" cobrava venda de um
    feriado. Sao os feriados nacionais mais a emancipacao do Parana; feriado
@@ -2678,7 +2697,9 @@ function renderDesempenho(){
       <div style="display:flex;justify-content:center;margin-bottom:8px;">${avatarHTML(n,64)}</div>
       <div class="strong" style="font-size:15px;">${esc(n)}</div>
       <div class="hint" style="margin-bottom:8px;">${esc(lojaOf(n))}</div>
-      <div style="font-size:26px;font-weight:700;color:${pctColor(pct)};line-height:1;">${pct.toFixed(0)}%</div>
+      <div style="font-size:26px;font-weight:700;color:${pctColor(pct)};line-height:1;">
+        <span title="${esc(pctCarinha(pct).diz)}" style="font-size:22px;vertical-align:middle;">${pctCarinha(pct).emoji}</span>
+        ${pct.toFixed(0)}%</div>
       <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
       ${aviso}
       <div class="hbar-track" style="height:8px;"><div class="hbar-fill" style="width:${Math.min(pct,100)}%;background:${pctColor(pct)};"></div></div>
