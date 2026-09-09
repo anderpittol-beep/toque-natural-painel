@@ -3572,7 +3572,7 @@ function renderInstagram(){
         data: d.dia,
         titulo: d.dia + ' · ' + d.pilar + ' (' + d.fmt + ')',
         ideia: sugestoes[i]
-      }, TODAY.getMonth(), true);
+      }, TODAY.getMonth(), true, AREA_PAUTA);
     };
   });
   /* Editar, excluir e criar pautas — só a sócia mexe no calendário da loja */
@@ -3714,8 +3714,13 @@ function renderDatasComemorativas(){
   });
 }
 
+/* As tarefas nascidas da pauta semanal ficam num grupo proprio no menu Tarefas,
+   com o mesmo nome do menu — separadas das datas comemorativas. */
+const AREA_PAUTA = 'Instagram — pautas';
+const AREA_DATAS = 'Datas comemorativas';
+
 /* Diálogo simples para transformar a data comemorativa em tarefas da equipe */
-function abrirTarefaDaData(it, mes, semPrazo){
+function abrirTarefaDaData(it, mes, semPrazo, area){
   const nomes = EQUIPE.map(e=>e.nome);
   if(!nomes.length){ alert('Cadastre a equipe em Gente e Gestão antes de destinar tarefas.'); return; }
 
@@ -3773,7 +3778,7 @@ function abrirTarefaDaData(it, mes, semPrazo){
     const prazo = dlg.querySelector('#dt-prazo').value.trim();
     const prioridade = dlg.querySelector('#dt-prioridade').value;
     quem.forEach(n=>{
-      const t = { tipo:'tarefa', area:'Datas comemorativas', colaborador:n, titulo,
+      const t = { tipo:'tarefa', area: area || AREA_DATAS, colaborador:n, titulo,
                   prazo, prioridade, status:'pendente', detalhe: detalheFinal };
       TAREFAS.push(t);
       tnInsert('tarefas', t);
