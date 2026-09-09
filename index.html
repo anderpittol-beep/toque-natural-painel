@@ -1025,6 +1025,10 @@ window.TN_CONFIG = {
         <div id="ig-week-add" style="margin-top:10px;display:none;">
           <button class="btn ghost" id="ig-pauta-nova" style="padding:5px 12px;">+ nova pauta</button>
         </div>
+        <details id="ig-hist-box" style="margin-top:12px;display:none;">
+          <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);">Histórico de pautas anteriores</summary>
+          <div id="ig-hist" style="margin-top:8px;"></div>
+        </details>
 
         <h3 style="font-size:15px;margin:22px 0 4px 0;">Calendário de datas comemorativas</h3>
         <p class="section-desc">Ganchos de conteúdo e campanhas ao longo do ano. O mês atual aparece em destaque — use estas datas para planejar posts e promoções.</p>
@@ -3412,6 +3416,72 @@ function pautasPadrao(){
   return IG_PILARES.map((d,i)=>({ id:null, loja:IG_PAUTA_TODAS, ordem:i, dia:d.dia,
                                   pilar:d.pilar, fmt:d.fmt, legenda:'' }));
 }
+/* Coluna e tabela novas: enquanto o SQL nao tiver rodado, a data e o historico
+   simplesmente nao aparecem — o painel nao quebra. */
+const temAtualizadoEm = () => IG_PAUTAS.some(p=>Object.prototype.hasOwnProperty.call(p,'atualizado_em'));
+let IG_HIST = [];
+let histPedido = false;
+
+function igDataHora(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(+d)) return '';
+  const p2 = n => String(n).padStart(2,'0');
+  return p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear()+' '+p2(d.getHours())+':'+p2(d.getMinutes());
+}
+/* Agrupa por semana (segunda a domingo) da data em que a versao saiu do ar:
+   e a semana em que aquele conteudo ainda estava valendo. */
+function igSemanaDe(iso){
+  const d = new Date(iso);
+  if(isNaN(+d)) return null;
+  const seg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  seg.setDate(seg.getDate() - ((seg.getDay()+6)%7));
+  const dom = new Date(seg); dom.setDate(dom.getDate()+6);
+  const p2 = n => String(n).padStart(2,'0');
+  return { chave: seg.getFullYear()+'-'+p2(seg.getMonth()+1)+'-'+p2(seg.getDate()),
+           rotulo: p2(seg.getDate())+'/'+p2(seg.getMonth()+1)+' a '+p2(dom.getDate())+'/'+p2(dom.getMonth()+1),
+           ord: seg.getFullYear()*10000 + (seg.getMonth()+1)*100 + seg.getDate() };
+}
+async function tnCarregarHistPautas(){
+  try{
+    if(!window.TN || !window.TN.sb) return;
+    histPedido = true;
+    const {data, error} = await window.TN.sb.from('ig_pautas_hist')
+      .select('*').order('arquivado_em', {ascending:false}).limit(300);
+    if(error) return;                       // tabela ainda nao existe: segue sem historico
+    IG_HIST = Array.isArray(data) ? data : [];
+    renderHistPautas();
+  }catch(e){ console.warn('hist pautas', e); }
+}
+function renderHistPautas(){
+  const box = document.getElementById('ig-hist-box');
+  const alvo = document.getElementById('ig-hist');
+  if(!box || !alvo) return;
+  if(!IG_HIST.length){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  const semanas = {};
+  IG_HIST.forEach(r=>{
+    const s = igSemanaDe(r.arquivado_em);
+    if(!s) return;
+    (semanas[s.chave] = semanas[s.chave] || {rotulo:s.rotulo, ord:s.ord, itens:[]}).itens.push(r);
+  });
+  const ordenadas = Object.values(semanas).sort((a,b)=>b.ord-a.ord);
+  box.querySelector('summary').textContent =
+    'Histórico de pautas anteriores (' + ordenadas.length + (ordenadas.length===1?' semana)':' semanas)');
+  alvo.innerHTML = ordenadas.map(s=>`
+    <details style="margin-bottom:6px;">
+      <summary style="cursor:pointer;font-size:12px;">Semana de ${esc(s.rotulo)} · ${s.itens.length} ${s.itens.length===1?'versão':'versões'}</summary>
+      <div style="margin:6px 0 0 12px;">
+        ${s.itens.sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(r=>`
+          <div style="padding:5px 0;border-bottom:1px solid var(--border,#e5e5e5);">
+            <div style="font-size:12px;"><strong>${esc(r.dia||'')}</strong> · ${esc(r.pilar||'')}${r.fmt?' ('+esc(r.fmt)+')':''}</div>
+            ${r.legenda?`<div style="font-size:11.5px;color:var(--text-secondary);">"${esc(r.legenda)}"</div>`:''}
+            <div class="hint" style="font-size:10.5px;">substituída em ${esc(igDataHora(r.arquivado_em))}</div>
+          </div>`).join('')}
+      </div>
+    </details>`).join('');
+}
+
 async function tnCarregarPautas(){
   try{
     if(!window.TN || !window.TN.sb) return;
@@ -3450,8 +3520,21 @@ function aplicarPadraoIG(){
   }
 }
 
+/* Silencioso de proposito: se o historico falhar, a edicao da pauta nao pode
+   parar por causa disso. */
+async function igArquivar(d){
+  try{
+    if(!d || !d.id || !window.TN || !window.TN.sb) return;
+    await window.TN.sb.from('ig_pautas_hist').insert({
+      pauta_id: d.id, ordem: d.ordem||0, dia: d.dia||'', pilar: d.pilar||'',
+      fmt: d.fmt||'', legenda: d.legenda||''
+    });
+  }catch(e){ console.warn('arquivar pauta', e); }
+}
+
 function renderInstagram(){
   if(!pautasPedidas) tnCarregarPautas();   // primeira abertura da tela busca as pautas salvas
+  if(!histPedido) tnCarregarHistPautas();
   const pautas = pautasPadrao();
   const sugestoes = pautas.map(p=>p.legenda||'');
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
@@ -3477,6 +3560,7 @@ function renderInstagram(){
       <div class="pillar">${esc(d.pilar)}</div>
       <div class="fmt">${esc(d.fmt||'')}</div>
       <div class="cap">"${esc(d.legenda||'')}"</div>
+      ${(temAtualizadoEm() && d.atualizado_em)?`<div class="hint" style="font-size:10.5px;margin-top:4px;">atualizada em ${esc(igDataHora(d.atualizado_em))}</div>`:''}
       <button class="btn ghost" data-igpauta="${i}" style="margin-top:6px;padding:3px 9px;font-size:11.5px;width:100%;">criar tarefa</button>
     </div>`;
   }).join('');
@@ -3505,6 +3589,10 @@ function renderInstagram(){
       const dados = { dia: campo('dia'), pilar: campo('pilar'), fmt: campo('fmt'), legenda: campo('legenda') };
       if(!dados.dia || !dados.pilar) return alert('Dia e pilar são obrigatórios.');
       b.disabled = true;
+      /* Guarda a versao que esta saindo do ar antes de sobrescrever: e ela que
+         vira o registro do que foi postado na semana anterior. */
+      await igArquivar(d);
+      if(temAtualizadoEm()) dados.atualizado_em = new Date().toISOString();
       const { data, error } = await window.TN.sb.from('ig_pautas')
         .update(dados).eq('id', b.dataset.pasalvar).select();
       b.disabled = false;
@@ -3512,6 +3600,7 @@ function renderInstagram(){
       if(!data || !data.length) return alert('Só o perfil Sócio pode alterar a pauta da semana.');
       pautaEditando = null;
       await tnCarregarPautas();
+      await tnCarregarHistPautas();
     };
   });
   document.querySelectorAll('[data-paexcluir]').forEach(b=>{
@@ -3519,10 +3608,12 @@ function renderInstagram(){
       const id = b.dataset.paexcluir;
       if(!id) return;
       if(!confirm('Excluir esta pauta da semana?')) return;
+      await igArquivar(pautas.find(p=>p.id===id));
       const { data, error } = await window.TN.sb.from('ig_pautas').delete().eq('id', id).select();
       if(error) return alert('Não deu para excluir: ' + error.message);
       if(!data || !data.length) return alert('Só o perfil Sócio pode excluir uma pauta.');
       await tnCarregarPautas();
+      await tnCarregarHistPautas();
     };
   });
   const areaNova = document.getElementById('ig-week-add');
