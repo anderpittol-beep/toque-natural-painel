@@ -6338,9 +6338,9 @@ function renderPessoais(){
     if(x.id && pesEditando === x.id){
       return `<tr data-peid="${esc(x.id)}">
         <td><input type="text" data-pe2="descricao" value="${esc(x.descricao)}" style="width:100%;"></td>
-        <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;">
+        <td><input type="text" data-pe2="parcela" value="${p}" placeholder="2/6" style="width:70px;" title="Número da parcela e total, ex.: 2/6">
           ${temRecorrencia()?`<select data-pe2="recorrencia" style="width:96px;margin-top:3px;font-size:11.5px;" title="O que acontece com esta linha no mês seguinte">
-            <option value="" ${!pesRecorrencia(x)?'selected':''}>—</option>
+            <option value="" ${!pesRecorrencia(x)?'selected':''}>parcelada</option>
             <option value="assinatura" ${pesRecorrencia(x)==='assinatura'?'selected':''}>assinatura</option>
             <option value="provisao" ${pesRecorrencia(x)==='provisao'?'selected':''}>provisão</option>
             <option value="avulsa" ${pesRecorrencia(x)==='avulsa'?'selected':''}>avulsa</option>
@@ -6744,6 +6744,23 @@ function ligarAcoesPessoais(){
     };
   });
   document.querySelectorAll('[data-pecancelar]').forEach(b=>{ b.onclick = ()=>{ pesEditando = null; renderPessoais(); }; });
+  /* Parcela so faz sentido em parcelada (2/6) e em assinatura, onde ela marca o
+     ciclo de renovacao. Provisao e avulsa nao tem parcela: o campo sai da
+     frente em vez de ficar ali pedindo um numero que nao existe. */
+  document.querySelectorAll('tr[data-peid] [data-pe2="recorrencia"]').forEach(sel=>{
+    const inp = sel.closest('td').querySelector('[data-pe2="parcela"]');
+    if(!inp) return;
+    let guardado = inp.value;   // passear pelo menu nao pode apagar o que ja estava
+    const aplicar = ()=>{
+      const usa = sel.value === '' || sel.value === 'assinatura';
+      if(!usa && inp.value) guardado = inp.value;
+      inp.style.display = usa ? '' : 'none';
+      inp.placeholder = sel.value === 'assinatura' ? 'ciclo, ex.: 3/12' : '2/6';
+      inp.value = usa ? guardado : '';
+    };
+    aplicar();
+    sel.onchange = aplicar;
+  });
   document.querySelectorAll('[data-pesalvar]').forEach(b=>{
     b.onclick = async ()=>{
       const tr = b.closest('tr');
