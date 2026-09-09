@@ -4167,6 +4167,28 @@ function cenario(meses, rotulo){
 /* Meses que faltam para fechar o ano civil, contando o mês corrente */
 function mesesAteFimDoAno(){ return 12 - TODAY.getMonth(); }
 
+/* Dinheiro que esta na gaveta da loja agora: o fechamento do ultimo dia
+   lancado em cada loja (saldo inicial + entradas - saidas). E recurso
+   disponivel de verdade, entao entra no total. Uma loja sem lancamento
+   simplesmente nao soma. */
+function fechamentoDoDiaLoja(loja){
+  const doLoja = CAIXA_DIARIO.filter(c => c.loja === loja)
+    .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0));
+  const c = doLoja[0];
+  return c ? (c.inicial||0) + (c.entradas||0) - (c.saidas||0) : 0;
+}
+function fechamentoDoDiaTotal(lojas){
+  return (lojas||[]).reduce((a,l)=> a + fechamentoDoDiaLoja(l), 0);
+}
+function fechamentoDoDiaData(lojas){
+  const datas = (lojas||[]).map(l=>{
+    const c = CAIXA_DIARIO.filter(x=>x.loja===l)
+      .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0))[0];
+    return c ? c.data : null;
+  }).filter(Boolean);
+  const unicas = [...new Set(datas)];
+  return !unicas.length ? '' : (unicas.length === 1 ? unicas[0] : 'último dia de cada loja');
+}
 function renderDisponibilidade(){
   const card = document.getElementById('card-disponibilidade');
   if(!card) return;
@@ -4190,20 +4212,22 @@ function renderDisponibilidade(){
   const fimMes = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0);
   const aPagarMes = lojas.reduce((a,l)=> a + compromissoMensal(TODAY.getFullYear(), TODAY.getMonth()+1, l), 0)
                   + boletosAteData(fimMes, lojas);
-  const sobra = conta + maquininha + especie - aPagarMes;
+  const caixaLojas = fechamentoDoDiaTotal(lojas);
+  const sobra = conta + maquininha + especie + caixaLojas - aPagarMes;
 
   const rotuloPos = !datasPos.length ? 'sem posição registrada'
     : (datasPos.length === 1 ? 'posição de ' + datasPos[0]
        : 'última posição de cada loja — dias diferentes');
-  const disponivel = conta + maquininha + especie;
+  const disponivel = conta + maquininha + especie + caixaLojas;
   document.getElementById('disp-kpis').innerHTML = `
     <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div><div class="hint" title="${esc(detalhePos)}">${esc(rotuloPos)}</div></div>
     <div class="card stat-tile"><div class="label">A receber maquininha</div><div class="value">${BRL(maquininha)}</div><div class="hint">ainda vai cair na conta</div></div>
     <div class="card stat-tile"><div class="label">Em espécie</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro em caixa</div></div>
+    <div class="card stat-tile"><div class="label">Fechamento do dia</div><div class="value">${BRL(caixaLojas)}</div><div class="hint">${esc(fechamentoDoDiaData(lojas) ? 'nas gavetas · ' + fechamentoDoDiaData(lojas) : 'sem fechamento lançado')}</div></div>
     <div class="card stat-tile"><div class="label">Reserva</div><div class="value">${BRL(reserva)}</div><div class="hint">guardado, fora do dia a dia</div></div>
     <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div></div>
     <div class="card stat-tile ${sobra<0?'accent-critical':''}"><div class="label">Sobra do mês</div><div class="value" style="color:${sobra>=0?'var(--good)':'var(--critical)'};">${BRL(sobra)}</div></div>
-    <div class="card stat-tile" style="grid-column:1/-1;"><div class="label">Disponível hoje</div><div class="value">${BRL(disponivel)}</div><div class="hint">conta + maquininha + espécie · com a reserva: ${BRL(disponivel + reserva)}</div></div>
+    <div class="card stat-tile" style="grid-column:1/-1;"><div class="label">Disponível hoje</div><div class="value">${BRL(disponivel)}</div><div class="hint">conta + maquininha + espécie + fechamento do dia · com a reserva: ${BRL(disponivel + reserva)}</div></div>
   `;
 
   const cenarios = [ cenario(3,'3 meses'), cenario(6,'6 meses'), cenario(12,'12 meses'),
@@ -4791,7 +4815,8 @@ function renderCaixa(){
   };
 
   // mês base: o exibido nas fixas; depois, os dois seguintes
-  const m1 = cardMes(fxAno, fxMes, contaDf + especieDf + maqDf, true);   // maquininha e recurso disponivel
+  const caixaDf = fechamentoDoDiaTotal(selStores());
+  const m1 = cardMes(fxAno, fxMes, contaDf + especieDf + maqDf + caixaDf, true);   // maquininha e caixa das lojas sao recurso disponivel
   const p2 = fxMes===12 ? {ano:fxAno+1, mes:1} : {ano:fxAno, mes:fxMes+1};
   const m2 = cardMes(p2.ano, p2.mes, m1.fim, false);
   const p3 = p2.mes===12 ? {ano:p2.ano+1, mes:1} : {ano:p2.ano, mes:p2.mes+1};
@@ -4820,6 +4845,7 @@ function renderCaixa(){
           ${principal
             ? linha('Saldo em conta', contaDf) + linha('Em espécie', especieDf)
               + linha('A receber maquininha', maqDf)
+              + (caixaDf ? linha('Fechamento do dia <span class="hint">nas gavetas</span>', caixaDf) : '')
             : linha('Saldo que entra do mês anterior', m.saldoInicial) + linha('Receita esperada', m.entra)}
           ${linha('Boletos do mês' + (m.c.atrasados ? ' <span class="hint">inclui ' + BRL(m.c.atrasados) + ' vencido</span>' : ''), m.c.boletos, true)}
           ${linha('Despesas fixas', m.c.fixas, true)}
