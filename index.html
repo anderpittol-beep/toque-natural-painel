@@ -2819,7 +2819,7 @@ function renderDesempenho(){
           <td>${esc(x.colab)}</td>
           <td class="strong">${BRL(x.rec)}</td>
           <td>${x.meta?BRL(x.meta):'<span class="hint">—</span>'}</td>
-          <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?carinhaHTML(pct, fracaoMesRef(cAno, cMes))+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
+          <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?carinhaHTML(pct, fracaoMesRef(cAno, cMes-1))+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
           <td>${ehMesAtual ? (falta>0?BRL(falta):'<span class="badge b-good"><span class="dot"></span>meta batida</span>') : '<span class="hint">—</span>'}</td>
           <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
             ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
@@ -2841,9 +2841,31 @@ function renderDesempenho(){
   const totMes={};
   vendas.forEach(v=>{ const dt=parseBR(v.data); if(dt&&dt.getMonth()===mRef&&dt.getFullYear()===yRef) totMes[v.colab]=(totMes[v.colab]||0)+v.valor; });
   let premMes=null; nomes.forEach(n=>{ const meta=metaMensal(n); const pct=meta>0?(totMes[n]||0)/meta*100:0; if((totMes[n]||0)>0 && (!premMes||pct>premMes.pct)) premMes={pessoa:n,pct}; });
-  let premTri=null;
-  if(HISTORICO_DESTAQUE.length>=3){ const ult=HISTORICO_DESTAQUE.slice(-3); if(ult.every(x=>x.pessoa===ult[0].pessoa)) premTri={pessoa:ult[0].pessoa}; }
-  let premAno=null; const cont={}; HISTORICO_DESTAQUE.forEach(x=>cont[x.pessoa]=(cont[x.pessoa]||0)+1);
+  /* Trimestre e ano CIVIS: "3 meses seguidos" corria em janela movel, entao
+     Nov-Dez-Jan valia como trimestre e o ano nunca zerava — o premio anual
+     somava destaque de 2025 com o de 2026. Agora Jan-Mar, Abr-Jun, Jul-Set,
+     Out-Dez, e a contagem anual comeca do zero em janeiro. */
+  const compDestaque = x => {
+    const par = String(x.mes||'').split('/');
+    const m = MES_ABREV.indexOf(par[0]);            // 1..12
+    const a = par[1] ? 2000 + (+par[1]) : 0;
+    return (m > 0 && a > 2000) ? {ano:a, mes:m} : null;
+  };
+  const triDe = m => Math.floor((m-1)/3) + 1;       // 1..4
+  const TRI_ROTULO = ['', '1º trimestre (Jan–Mar)', '2º trimestre (Abr–Jun)',
+                          '3º trimestre (Jul–Set)', '4º trimestre (Out–Dez)'];
+  const anoCivil = TODAY.getFullYear();
+  const triCivil = triDe(TODAY.getMonth() + 1);
+  const doAno = HISTORICO_DESTAQUE.map(x=>({...x, c: compDestaque(x)}))
+                                  .filter(x=> x.c && x.c.ano === anoCivil);
+  /* Trimestre: destaque nos TRES meses do trimestre corrente. */
+  const doTri = doAno.filter(x=> triDe(x.c.mes) === triCivil);
+  let premTri = null;
+  if(doTri.length >= 3){
+    const nomesTri = [...new Set(doTri.map(x=>x.pessoa))];
+    if(nomesTri.length === 1) premTri = {pessoa: nomesTri[0], tri: triCivil};
+  }
+  let premAno=null; const cont={}; doAno.forEach(x=>cont[x.pessoa]=(cont[x.pessoa]||0)+1);
   Object.entries(cont).forEach(([n,c])=>{ if(!premAno||c>premAno.c) premAno={pessoa:n,c}; });
 
   const card=(emoji,titulo,pessoa,detalhe,accent)=>`
@@ -2858,8 +2880,12 @@ function renderDesempenho(){
   document.getElementById('premios').innerHTML =
     card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good')
    +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','')
-   +card('🍽️','3 meses seguidos', premTri&&premTri.pessoa, premTri?'Destaque 3 meses seguidos — almoço com as sócias':'Ninguém em 3 meses seguidos','accent-warning')
-   +card('💰','Melhor desempenho anual', premAno&&premAno.pessoa, premAno?(premAno.c+' destaque(s) no ano — bonificação salarial'):'Em apuração','');
+   +card('🍽️','Destaque do trimestre', premTri&&premTri.pessoa,
+         premTri ? ('Destaque nos 3 meses do ' + TRI_ROTULO[premTri.tri] + ' — almoço com as sócias')
+                 : ('Ninguém nos 3 meses do ' + TRI_ROTULO[triCivil]), 'accent-warning')
+   +card('💰','Melhor desempenho de ' + anoCivil, premAno&&premAno.pessoa,
+         premAno ? (premAno.c + ' destaque(s) em ' + anoCivil + ' — bonificação salarial')
+                 : ('Sem destaque registrado em ' + anoCivil), '');
 }
 
 /* ============ RENDER: MARGEM ============ */
