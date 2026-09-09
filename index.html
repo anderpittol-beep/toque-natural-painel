@@ -6132,6 +6132,72 @@ function pesProximaParcela(x){
   if(num >= tot) return null;                       // acabou de pagar
   return {parcela_num: num + 1, parcela_total: tot, recorrencia: x.recorrencia || null};
 }
+/* Alterar o mes em tela precisa alcancar os meses seguintes JA materializados
+   — os que ainda sao projecao acompanham sozinhos, porque sao calculados a
+   partir daqui. A parcela nao e copiada igual: ela e rodada mes a mes, entao
+   5/36 vira 6/36 em novembro e 7/36 em dezembro. */
+const pesOrdMes = (a, m) => (+a)*12 + ((+m)-1);
+function pesRolarParcela(base, passos){
+  let est = {...base};
+  for(let i=0;i<passos;i++){
+    const prox = pesProximaParcela(est);
+    if(!prox) return null;          // acabou antes de chegar naquele mes
+    est = {...est, ...prox};
+  }
+  return est;
+}
+/* Linhas dos meses seguintes que representam a MESMA despesa: mesmo tipo e
+   mesma descricao (a de antes da edicao, senao renomear perde o vinculo). */
+function pesLinhasAFrente(orig, descAntiga){
+  const ord = pesOrdMes(orig.ano, orig.mes);
+  const alvo = String(descAntiga||'').trim().toLowerCase();
+  return PES_LANC.filter(y => y.id && y.id !== orig.id
+    && pesTipo(y) === pesTipo(orig)
+    && pesOrdMes(y.ano, y.mes) > ord
+    && String(y.descricao||'').trim().toLowerCase() === alvo);
+}
+async function pesPropagarFrente(orig, descAntiga, dados){
+  const frente = pesLinhasAFrente(orig, descAntiga);
+  if(!frente.length) return null;
+  const ord = pesOrdMes(orig.ano, orig.mes);
+  let mudadas = 0, removidas = 0;
+  for(const y of frente){
+    const passos = pesOrdMes(y.ano, y.mes) - ord;
+    const est = pesRolarParcela({...orig, ...dados}, passos);
+    if(!est){
+      /* Naquele mes a despesa ja teria acabado: a linha nao deveria existir. */
+      const {error} = await sb().from('pes_lancamentos').delete().eq('id', y.id);
+      if(!error) removidas++;
+      continue;
+    }
+    const novo = { descricao: dados.descricao, valor: dados.valor,
+                   parcela_num: est.parcela_num ?? null,
+                   parcela_total: est.parcela_total ?? null };
+    if(Object.prototype.hasOwnProperty.call(dados,'recorrencia')) novo.recorrencia = dados.recorrencia;
+    if(Object.prototype.hasOwnProperty.call(dados,'dia_debito')) novo.dia_debito = dados.dia_debito;
+    const {error} = await sb().from('pes_lancamentos').update(novo).eq('id', y.id);
+    if(!error) mudadas++;
+  }
+  return {mudadas, removidas};
+}
+/* Excluir no mes em tela tira a mesma despesa dos meses seguintes ja lancados */
+async function pesExcluirFrente(orig){
+  const frente = pesLinhasAFrente(orig, orig.descricao);
+  let removidas = 0;
+  for(const y of frente){
+    const {error} = await sb().from('pes_lancamentos').delete().eq('id', y.id);
+    if(!error) removidas++;
+  }
+  return removidas;
+}
+function pesAvisoPropagacao(r){
+  if(!r) return;
+  const partes = [];
+  if(r.mudadas)   partes.push(r.mudadas + ' linha(s) atualizada(s)');
+  if(r.removidas) partes.push(r.removidas + ' removida(s) por já ter acabado');
+  if(partes.length) alert('Meses seguintes: ' + partes.join(' e ') + '.');
+}
+
 /* separa o que segue do que encerrou, para poder avisar em vez de sumir */
 function pesSeparaEncerradas(lista){
   const segue = [], encerradas = [];
@@ -6809,10 +6875,16 @@ function ligarAcoesPessoais(){
         dados.dia_debito = v('dia') ? dd : null;
       }
       if(!dados.descricao) return alert('A descrição não pode ficar vazia.');
+      const orig = PES_LANC.find(x=>x.id === b.dataset.pesalvar);
+      const descAntiga = orig ? orig.descricao : dados.descricao;
       const { data, error } = await sb().from('pes_lancamentos').update(dados).eq('id', b.dataset.pesalvar).select();
       if(error) return erro(error);
       if(!data || !data.length) return alert('Este lançamento não é seu para editar.');
+      /* O que ainda e projecao acompanha sozinho; os meses seguintes ja
+         lancados precisam ser alcancados aqui. */
+      const prop = orig ? await pesPropagarFrente(orig, descAntiga, dados) : null;
       pesEditando = null; await recarregar();
+      pesAvisoPropagacao(prop);
     };
   });
   /* Excluir uma linha ainda repetida do mes anterior: como ela nao existe no
@@ -6835,7 +6907,10 @@ function ligarAcoesPessoais(){
   });
   document.querySelectorAll('[data-peexcluir]').forEach(b=>{
     b.onclick = async ()=>{
-      if(!confirm('Excluir este lançamento?')) return;
+      const alvo = PES_LANC.find(x=>x.id === b.dataset.peexcluir);
+      const frente = alvo ? pesLinhasAFrente(alvo, alvo.descricao).length : 0;
+      if(!confirm('Excluir este lançamento?' + (frente ? '\n\nSai também de ' + frente + ' mês(es) seguinte(s) já lançado(s).' : ''))) return;
+      if(alvo && frente) await pesExcluirFrente(alvo);
       const { error } = await sb().from('pes_lancamentos').delete().eq('id', b.dataset.peexcluir);
       if(error) return erro(error);
       await recarregar();
