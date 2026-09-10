@@ -5212,6 +5212,10 @@ let COMPRAS = [];
 let cpAno = TODAY.getFullYear(), cpMes = TODAY.getMonth()+1;
 let compraEditando = null;
 let boletoEditando = null;
+/* A lista de pagos cresce o mes inteiro e empurra o resto da tela para baixo.
+   Fica a vista so o ultimo dia lancado — que e o que se confere no dia — e os
+   anteriores abrem num clique. */
+let pagosAnterioresAberto = false;
 
 /* O que veio da planilha do Drive (até Ago/26) fica recolhido numa linha de total;
    a caixa de seleção abre o detalhe. De Set/26 em diante tudo é lançado no painel. */
@@ -6144,7 +6148,26 @@ function renderCaixa(){
         ? linhaPlanilha('bl-pagos', 'Pagamentos da planilha ('+fxCompetencia()+')', dePlanilha, 3, socia2) : '';
       const visiveis   = (dePlanilha.length && !planilhaAberta['bl-pagos'])
         ? pagosMes.filter(b=>!ehDaPlanilha(b)) : pagosMes;
-      return cabecalho + visiveis.map(linhaBoleto).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())} — boletos lançados como <strong>Pendente</strong> aparecem em "A pagar", logo abaixo.</td></tr>`;
+      if(!visiveis.length && !cabecalho)
+        return `<tr><td colspan="${socia2?5:4}" class="hint">Nenhum pagamento em ${esc(fxCompetencia())} — boletos lançados como <strong>Pendente</strong> aparecem em "A pagar", logo abaixo.</td></tr>`;
+      /* Dia mais recente com pagamento: e o que fica aberto. */
+      const ord = b => { const d = parseBR(b.data); return d ? +d : 0; };
+      const topo = visiveis.reduce((a2,b2)=> ord(b2) > ord(a2) ? b2 : a2, visiveis[0]);
+      const dataTopo = topo ? topo.data : null;
+      const doDia    = visiveis.filter(b=> b.data === dataTopo);
+      const antes    = visiveis.filter(b=> b.data !== dataTopo);
+      /* Editando uma linha antiga, o bloco precisa estar aberto para nao
+         esconder o formulario que a pessoa acabou de abrir. */
+      const abreAntes = pagosAnterioresAberto || antes.some(emEdicao);
+      const somaAntes = antes.reduce((a2,b2)=> a2 + (+b2.valor||0), 0);
+      const linhaMais = antes.length
+        ? `<tr class="clickable" data-blantes="1" style="cursor:pointer;">
+             <td colspan="${socia2?5:4}" class="hint" style="padding:7px 8px;">
+               ${abreAntes?'▾':'▸'} ${antes.length} pagamento${antes.length>1?'s':''} anterior${antes.length>1?'es':''} no mês · ${BRL(somaAntes)}
+             </td></tr>`
+        : '';
+      return cabecalho + doDia.map(linhaBoleto).join('')
+           + linhaMais + (abreAntes ? antes.map(linhaBoleto).join('') : '');
     })()}
     <tr><td colspan="3" class="strong" style="text-align:right;">Total pago no mês</td><td class="strong">${BRL(totPagos)}</td>${socia2?'<td></td>':''}</tr></tbody>`;
 
@@ -6243,6 +6266,9 @@ function renderCaixa(){
       if(alvo.id) tnUpdate('boletos',{id:alvo.id},{status:'Pago'});
       renderCaixa();
     };
+  });
+  document.querySelectorAll('[data-blantes]').forEach(tr=>{
+    tr.onclick = ()=>{ pagosAnterioresAberto = !pagosAnterioresAberto; renderCaixa(); };
   });
   document.querySelectorAll('[data-blexcluir]').forEach(b=>{
     b.onclick = ()=>{
