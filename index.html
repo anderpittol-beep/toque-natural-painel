@@ -178,6 +178,9 @@
   .equipe-card .lj{font-size:11.5px;color:var(--text-muted);}
   .btn.primary{background:var(--store-accent);border-color:var(--store-accent);}
   .hbar-fill{background:var(--store-accent);}
+  /* seta do bloco recolhivel: aponta para baixo quando aberto */
+  details[open] > summary .tn-seta{transform:rotate(90deg);}
+  .tn-seta{display:inline-block;transition:transform .15s;color:var(--text-muted);}
   .topbar-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:12px;}
   .topbar-controls .hint{font-size:11px;}
   .topbar-controls input[type=checkbox]{width:13px;height:13px;}
@@ -773,14 +776,18 @@ window.TN_CONFIG = {
         </div>
 
         <div class="card">
-          <h3 style="font-size:14px;margin:0 0 4px 0;">Compilado semanal</h3>
-          <p class="hint" style="margin:0 0 10px 0;">Cada colaboradora medida pela % da própria meta semanal.</p>
+          <details id="det-compilado">
+          <summary style="cursor:pointer;list-style:none;">
+            <h3 style="font-size:14px;margin:0 0 4px 0;display:inline;"><span class="tn-seta">▸</span> Compilado semanal</h3>
+          </summary>
+          <p class="hint" style="margin:6px 0 10px 0;">Cada colaboradora medida pela % da própria meta semanal.</p>
           <div style="overflow-x:auto;"><table id="tbl-semanal"></table></div>
           <details id="det-semanal" style="margin-top:10px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;list-style:none;">
               <span id="det-semanal-label">semanas anteriores</span>
             </summary>
             <div style="overflow-x:auto;margin-top:8px;"><table id="tbl-semanal-hist"></table></div>
+          </details>
           </details>
         </div>
       </section>
