@@ -754,7 +754,7 @@ window.TN_CONFIG = {
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Mural da equipe — <span id="mural-periodo">semana atual</span></h3>
-          <p class="hint" style="margin:0 0 12px 0;">Comparação justa entre lojas: cada colaboradora medida pela % da própria meta. Clique em "trocar foto" para personalizar.
+          <p class="hint" style="margin:0 0 12px 0;">Comparação justa entre lojas: cada colaboradora medida pela % da própria meta. As fotos são enviadas em Gente e Gestão.
             • CORES — Verde: 96% ou mais, bateu a meta. Laranja: 70% a 95%, quase lá. Vermelho: abaixo de 70%, atrás da meta.
             • CARINHAS — dentro de cada cor há dois degraus: 🤩 96% ou mais; 😃 85% a 95%; 🙂 70% a 84%; 😐 50% a 69%; 😕 abaixo de 50%.
             • BOLINHAS (S T Q Q S S D) — cada dia da semana com a cor daquele dia: verde bateu a meta do dia, laranja perto, vermelho abaixo. Só contorno = dia sem fechamento lançado. Apagada = domingo, feriado ou dia que ainda não chegou.
@@ -3012,13 +3012,8 @@ function renderDesempenho(){
                 + Math.round(c.proj) + '%.' : '.');
         return semaforoHTML(pct, 1, 'Semana', dica);
       })()}
-      <label class="btn ghost" style="margin-top:8px;display:inline-block;cursor:pointer;">trocar foto<input type="file" accept="image/*" data-foto="${esc(n)}" style="display:none;"></label>
     </div>`;
   }).join('') || '<p class="hint">Sem colaboradoras para esta loja.</p>';
-  document.querySelectorAll('[data-foto]').forEach(inp=>{
-    inp.onchange = (e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader();
-      r.onload=()=>{ FOTOS[inp.dataset.foto]=r.result; renderDesempenho(); }; r.readAsDataURL(f); };
-  });
 
   // ===== Compilado semanal (% da meta semanal) =====
   // A semana corrente fica à vista; o histórico abre ao clicar, para a tela não crescer sem fim.
@@ -3507,6 +3502,29 @@ function dataCurta(iso){
   return isNaN(d) ? null : d.toLocaleDateString('pt-BR');
 }
 /* Lista do cadastro da equipe: e-mail, cargo e o perfil de acesso que ele gera */
+/* Reduz a imagem no proprio navegador antes de guardar: quadrado central,
+   lado de `lado` px, JPEG. Sai em torno de 15 KB, que cabe no cadastro. */
+function fotoReduzida(arquivo, lado){
+  return new Promise((ok, erro)=>{
+    const fr = new FileReader();
+    fr.onerror = ()=> erro(new Error('não consegui ler o arquivo'));
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=> erro(new Error('arquivo não parece uma imagem'));
+      img.onload = ()=>{
+        const l = lado || 256;
+        const c = document.createElement('canvas');
+        c.width = l; c.height = l;
+        const menor = Math.min(img.width, img.height);
+        const sx = (img.width - menor)/2, sy = (img.height - menor)/2;
+        c.getContext('2d').drawImage(img, sx, sy, menor, menor, 0, 0, l, l);
+        ok(c.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(arquivo);
+  });
+}
 function renderEquipeCad(){
   const box = document.getElementById('equipe-list');
   if(!box) return;
@@ -3522,10 +3540,12 @@ function renderEquipeCad(){
       ? `senha de <strong>${esc(troca)}</strong>`
       : '<span class="hint">senha ainda não criada</span>';
   };
-  box.innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail de acesso</th><th>Cargo</th><th>Perfil no painel</th><th>Loja</th><th>Acesso</th><th></th></tr></thead>
+  const temFotoCol = EQUIPE.some(e=>Object.prototype.hasOwnProperty.call(e||{},'foto'));
+  box.innerHTML = `<table><thead><tr><th>Foto</th><th>Nome</th><th>E-mail de acesso</th><th>Cargo</th><th>Perfil no painel</th><th>Loja</th><th>Acesso</th><th></th></tr></thead>
     <tbody>${rows.map(({e,i})=>{
       if(equipeEditando===i){
         return `<tr>
+          <td>${avatarHTML(e.nome, 34)}</td>
           <td><input type="text" data-ee="nome" value="${esc(e.nome)}" style="width:120px;"></td>
           <td><input type="email" data-ee="email" value="${esc(e.email||'')}" style="width:200px;"></td>
           <td><select data-ee="cargo">${['Colaboradora','Sócia','Sócio'].map(c=>`<option ${c===e.cargo?'selected':''}>${c}</option>`).join('')}</select></td>
@@ -3537,6 +3557,14 @@ function renderEquipeCad(){
         </tr>`;
       }
       return `<tr>
+      <td style="white-space:nowrap;">
+        <label title="Enviar ou trocar a foto de ${esc(e.nome)}" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+          ${avatarHTML(e.nome, 34)}
+          <span class="hint" style="font-size:10.5px;text-decoration:underline;">${FOTOS[e.nome]?'trocar':'enviar'}</span>
+          <input type="file" accept="image/*" data-eqfoto="${esc(e.nome)}" style="display:none;">
+        </label>
+        ${FOTOS[e.nome]?`<button class="btn ghost" data-eqfotodel="${esc(e.nome)}" title="Remover a foto" style="padding:0 4px;font-size:11px;">✕</button>`:''}
+      </td>
       <td class="strong">${esc(e.nome)}</td>
       <td>${e.email ? esc(e.email) : '<span class="hint">sem e-mail</span>'}</td>
       <td>${esc(e.cargo)}</td>
@@ -3548,7 +3576,42 @@ function renderEquipeCad(){
         <button class="btn ghost" data-eqsenha="${esc(e.email)}" title="Enviar e-mail para a pessoa criar uma nova senha" style="padding:2px 8px;">zerar senha</button>`:''}
         <button class="btn ghost" data-eqeditar="${i}" title="Editar" style="padding:2px 6px;">✏️</button>
         <button class="btn ghost" data-eqdel="${i}" title="Remover" style="padding:2px 6px;">🗑️</button></td>
-    </tr>`;}).join('') || '<tr><td colspan="7" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>`;
+    </tr>`;}).join('') || '<tr><td colspan="8" class="hint">Nenhuma pessoa cadastrada.</td></tr>'}</tbody></table>
+    ${temFotoCol?'':'<p class="hint" style="margin:6px 0 0 0;">A foto vale só nesta sessão até a coluna <code>foto</code> ser criada no banco.</p>'}`;
+
+  /* Foto da equipe: reduzida para 256px antes de salvar. Uma foto de celular
+     tem varios MB; guardada crua ela entraria em toda leitura do cadastro e
+     deixaria o painel lento para todo mundo. */
+  box.querySelectorAll('[data-eqfoto]').forEach(inp=>{
+    inp.onchange = async (ev)=>{
+      const arq = ev.target.files && ev.target.files[0];
+      if(!arq) return;
+      const nome = inp.dataset.eqfoto;
+      const pessoa = EQUIPE.find(x=>x.nome === nome);
+      try{
+        const mini = await fotoReduzida(arq, 256);
+        FOTOS[nome] = mini;
+        if(pessoa && pessoa.id && temFotoCol){
+          pessoa.foto = mini;
+          await tnUpdate('equipe', {id: pessoa.id}, {foto: mini});
+        }
+        renderEquipeCad(); renderAll();
+      }catch(e){ alert('Não deu para ler a imagem: ' + (e && e.message ? e.message : e)); }
+    };
+  });
+  box.querySelectorAll('[data-eqfotodel]').forEach(b=>{
+    b.onclick = async ()=>{
+      const nome = b.dataset.eqfotodel;
+      if(!confirm('Remover a foto de ' + nome + '? Volta a aparecer as iniciais.')) return;
+      const pessoa = EQUIPE.find(x=>x.nome === nome);
+      delete FOTOS[nome];
+      if(pessoa && pessoa.id && temFotoCol){
+        pessoa.foto = null;
+        await tnUpdate('equipe', {id: pessoa.id}, {foto: null});
+      }
+      renderEquipeCad(); renderAll();
+    };
+  });
 
   box.querySelectorAll('[data-eqsenha]').forEach(b=>{
     b.onclick = async ()=>{
@@ -8930,7 +8993,10 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
   try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}
   try{ tnReplaceArray(PATRIMONIO,res.patrimonio,r=>({id:r.id,data:r.data,tipo:r.tipo,loja:r.loja,descricao:r.descricao,valor:+r.valor,fornecedor:r.fornecedor,contato:r.contato,status:r.status})); }catch(e){}
-  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email})); }catch(e){}
+  try{ tnReplaceArray(EQUIPE,res.equipe,r=>({id:r.id,nome:r.nome,cargo:r.cargo,loja:r.loja,email:r.email,foto:r.foto})); }catch(e){}
+  /* Foto salva no cadastro vence a que veio no arquivo: e ela que a socia
+     subiu pelo painel, e vale para todo mundo que abrir. */
+  try{ EQUIPE.forEach(e=>{ if(e && e.foto) FOTOS[e.nome] = e.foto; }); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
