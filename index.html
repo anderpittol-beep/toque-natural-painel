@@ -2748,6 +2748,58 @@ function pctCarinha(pct, fracao){
   if(proj >= 50)  return {emoji:'😐', diz:'atrás da meta', proj, f};
   return {emoji:'😕', diz:'bem atrás da meta', proj, f};
 }
+/* Semaforo do mural: verde a partir de 91, amarelo de 50 a 90, vermelho
+   abaixo de 50 — lido no RITMO, a mesma conta da carinha, senao a luz e o
+   rosto se contradiriam no mesmo card.
+   A trilha mostra as tres zonas em tom fraco e um risco nos limites (50 e 90),
+   entao da para ver o quanto falta para a proxima cor sem ler numero nenhum. */
+const SEMAFORO_ZONAS = [
+  {ate: 50,       cor:'var(--critical)', nome:'vermelho', diz:'abaixo do ritmo'},
+  {ate: 91,       cor:'var(--warning)',  nome:'amarelo',  diz:'quase no ritmo'},
+  {ate: Infinity, cor:'var(--good)',     nome:'verde',    diz:'no ritmo'}
+];
+function semaforoZona(proj){
+  const v = +proj || 0;
+  return SEMAFORO_ZONAS.find(z => v < z.ate) || SEMAFORO_ZONAS[2];
+}
+function semaforoHTML(pct, fracao){
+  const c = pctCarinha(pct, fracao);
+  const proj = c ? c.proj : (+pct||0);
+  const z = semaforoZona(proj);
+  const larg = Math.max(1.5, Math.min(proj, 100));
+  const dica = 'Semáforo ' + z.nome + ' — ' + z.diz + ': mantendo este ritmo a semana fecha em '
+             + Math.round(proj) + '% da meta' + (c && c.f < 0.999
+                ? ' (' + (+pct||0).toFixed(0) + '% vendido com ' + Math.round(c.f*100) + '% dos dias úteis corridos)' : '') + '.';
+  /* As tres luzes: so a da vez fica acesa, as outras ficam apagadas como num
+     semaforo de verdade — a leitura e imediata, sem depender de cor sozinha. */
+  const luz = (cor, on) => `<span style="width:9px;height:9px;border-radius:50%;background:${cor};
+      opacity:${on?1:.18};${on?'box-shadow:0 0 0 2px color-mix(in srgb, '+cor+' 28%, transparent);':''}
+      display:inline-block;"></span>`;
+  return `<div title="${esc(dica)}" style="margin-top:6px;">
+    <div style="display:flex;align-items:center;gap:7px;">
+      <span style="display:inline-flex;gap:3px;align-items:center;padding:2px 4px;border-radius:6px;
+            background:var(--surface-1);flex-shrink:0;">
+        ${luz('var(--critical)', z.nome==='vermelho')}
+        ${luz('var(--warning)',  z.nome==='amarelo')}
+        ${luz('var(--good)',     z.nome==='verde')}
+      </span>
+      <span style="position:relative;flex:1;height:9px;border-radius:5px;overflow:hidden;
+            background-color:var(--surface-1);
+            background-image:linear-gradient(to right,
+              color-mix(in srgb, var(--critical) 14%, var(--surface-1)) 0 50%,
+              color-mix(in srgb, var(--warning) 14%, var(--surface-1)) 50% 90%,
+              color-mix(in srgb, var(--good) 14%, var(--surface-1)) 90% 100%);">
+        <span style="position:absolute;inset:0 auto 0 0;width:${larg.toFixed(1)}%;
+              background:${z.cor};border-radius:5px;"></span>
+        <span style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
+        <span style="position:absolute;left:90%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
+      </span>
+      <span class="strong" style="font-size:11px;color:${z.cor};flex-shrink:0;">${Math.round(proj)}%</span>
+    </div>
+    <div class="hint" style="font-size:10px;margin-top:2px;">${esc(z.diz)} · projeção da semana</div>
+  </div>`;
+}
+
 /* O emoji pronto, com a explicacao no titulo */
 function carinhaHTML(pct, fracao, tam){
   const c = pctCarinha(pct, fracao);
@@ -2879,7 +2931,7 @@ function renderDesempenho(){
         ${pct.toFixed(0)}%</div>
       <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
       ${aviso}
-      <div class="hbar-track" style="height:8px;"><div class="hbar-fill" style="width:${Math.min(pct,100)}%;background:${pctColor(pct)};"></div></div>
+      ${semaforoHTML(pct, fracSemDe(n))}
       <label class="btn ghost" style="margin-top:8px;display:inline-block;cursor:pointer;">trocar foto<input type="file" accept="image/*" data-foto="${esc(n)}" style="display:none;"></label>
     </div>`;
   }).join('') || '<p class="hint">Sem colaboradoras para esta loja.</p>';
