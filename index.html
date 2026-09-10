@@ -5915,10 +5915,20 @@ function renderCaixa(){
   /* Quanto se paga a folha e quanto se recolhe de encargo e informacao das
      socias. A aba pode estar liberada para as colaboradoras — estas linhas
      nao. */
+  const hojeISO = (()=>{ const d = TODAY; const p2 = n=>String(n).padStart(2,'0');
+    return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); })();
+  /* Sem data de pagamento (marcacao antiga) conta como paga ha tempo. */
+  const pagoAntesDeHoje = quando => !quando || String(quando).slice(0,10) < hojeISO;
+  const pagaDeOntemOuAntes = f => !!f.pago && pagoAntesDeHoje(f.pago_em);
+  const folhaAVista = [], folhaRecolhida = [];
+  const guardaFolha = (html, recolher) => { (recolher ? folhaRecolhida : folhaAVista).push(html); return ''; };
+  /* Executa por efeito colateral: enche folhaAVista e folhaRecolhida. */
   const folhaRows = !socia ? '' : (
     Object.keys(folhaPorLoja).sort().map(l=>{
       if(!temEncPago)
-        return `<tr><td class="strong">Gente e Gestão (folha + encargos) <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`;
+        return guardaFolha(
+          `<tr><td class="strong">Gente e Gestão (folha + encargos) <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(folhaPorLoja[l])}</td>${checkFolha(l, !!folhaPagaLoja[l], 'gfpago')}</tr>`,
+          !!folhaPagaLoja[l]);
       /* Uma linha por pessoa: cada uma recebe no seu dia, e o check tem de
          acompanhar quem ja foi pago — nao a loja inteira de uma vez. O campo
          pago ja e por pessoa no banco, entao a granularidade so estava
@@ -5935,7 +5945,9 @@ function renderCaixa(){
                  ${g.pago?'<span class="hint" style="color:var(--good);">pago</span>':''}
                </label></td><td></td>`
           : '';
-        return `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`;
+        return guardaFolha(
+          `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`,
+          !!g.pago && pagoAntesDeHoje(g.pago_em));
       }).join('')
       + (()=>{
           const venc = String(ENCARGO_DIA_VENC).padStart(2,'0') + '/' + String(fxMes).padStart(2,'0');
@@ -5946,35 +5958,25 @@ function renderCaixa(){
           const cel = atrasado
             ? `<span style="color:var(--warning);" title="Passou do vencimento e ainda não foi recolhido">${venc}</span>`
             : venc;
-          return `<tr><td class="strong">Gente e Gestão — encargos <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>${cel}</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`;
+          const quandoEnc = (genteList.find(g=>g.loja===l && g.encargo_pago_em)||{}).encargo_pago_em;
+          return guardaFolha(
+            `<tr><td class="strong">Gente e Gestão — encargos <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>${cel}</td><td>${BRL(folhaEncargoPorLoja[l])}</td>${checkFolha(l, !!encargoPagoLoja[l], 'gepago')}</tr>`,
+            !!encargoPagoLoja[l] && pagoAntesDeHoje(quandoEnc));
         })();
     }).join('')
     + Object.keys(provPorLoja).sort().map(l=>
-      `<tr><td class="strong">Retenção de 13º e férias <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`).join('')
+      guardaFolha(`<tr><td class="strong">Retenção de 13º e férias <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(provPorLoja[l])}</td>${podeEditar?'<td class="hint" style="text-align:center;">provisão</td><td></td>':''}</tr>`, false)).join('')
   );
   const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
   /* Recolhe a fixa paga em um dia ANTERIOR a hoje. Sem pago_em (marcacao
      antiga) conta como paga ha tempo. O total nao muda: as linhas so saem da
      vista. */
-  const hojeISO = (()=>{ const d = TODAY; const p2 = n=>String(n).padStart(2,'0');
-    return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); })();
-  const pagaDeOntemOuAntes = f => {
-    if(!f.pago) return false;
-    if(!f.pago_em) return true;
-    return String(f.pago_em).slice(0,10) < hojeISO;
-  };
   const fixasAVista = fixas.filter(f=> !pagaDeOntemOuAntes(f));
   const fixasAntigas = fixas.filter(pagaDeOntemOuAntes);
   const editandoAntiga = fixasAntigas.some(f=> podeEditar && fixaEditando && fxKey(f)===fixaEditando);
   const abrePagas = fixasPagasAberto || editandoAntiga;
   const somaAntigas = fixasAntigas.reduce((a2,f)=> a2 + (+f.valor||0), 0);
-  const linhaPagas = fixasAntigas.length
-    ? `<tr class="clickable" data-fxpagas="1" style="cursor:pointer;">
-         <td colspan="${podeEditar?6:4}" class="hint" style="padding:7px 8px;">
-           ${abrePagas?'▾':'▸'} ${fixasAntigas.length} despesa${fixasAntigas.length>1?'s':''} já paga${fixasAntigas.length>1?'s':''} · ${BRL(somaAntigas)}
-         </td></tr>`
-    : '';
 
   document.getElementById('tbl-fixas').innerHTML = `
     <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th>${podeEditar?'<th>Pago</th><th></th>':''}</tr></thead>
@@ -6005,11 +6007,21 @@ function renderCaixa(){
           <button class="btn ghost" data-fxeditar="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
       </tr>`;};
+    /* folhaRows ja rodou aqui em cima e separou as linhas da folha em
+       folhaAVista / folhaRecolhida — os pagos entram na mesma linha recolhida
+       das fixas, para nao virarem dois blocos no mesmo quadro. */
+    const nRecolhidas = fixasAntigas.length + folhaRecolhida.length;
+    const linhaPagas = nRecolhidas
+      ? `<tr class="clickable" data-fxpagas="1" style="cursor:pointer;">
+           <td colspan="${podeEditar?6:4}" class="hint" style="padding:7px 8px;">
+             ${abrePagas?'▾':'▸'} ${nRecolhidas} linha${nRecolhidas>1?'s':''} já paga${nRecolhidas>1?'s':''}${fixasAntigas.length?' · fixas '+BRL(somaAntigas):''}
+           </td></tr>`
+      : '';
     return fixasAVista.map(linhaFixa).join('')
+         + folhaAVista.join('')
          + linhaPagas
-         + (abrePagas ? fixasAntigas.map(linhaFixa).join('') : '');
+         + (abrePagas ? fixasAntigas.map(linhaFixa).join('') + folhaRecolhida.join('') : '');
     })()}
-    ${folhaRows}
     <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?`<td class="hint" style="text-align:center;">${pagasQtd}/${fixas.length}</td><td></td>`:''}</tr></tbody>`;
 
   // ações de editar / excluir (materializa o mês herdado antes de alterar)
@@ -6063,10 +6075,14 @@ function renderCaixa(){
       gtAno = fc.ano; gtMes = fc.mes;
       await gtMaterializar();
       const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===loja);
+      const quandoEnc = marcado ? new Date().toISOString() : null;
       for(const g of alvos){
         g.encargo_pago = marcado;
+        g.encargo_pago_em = quandoEnc;
         g.atualizado_em = new Date().toISOString();
-        if(g.id) await tnUpdate('folha', {id:g.id}, {encargo_pago:g.encargo_pago, atualizado_em:g.atualizado_em});
+        const campos = {encargo_pago:g.encargo_pago, atualizado_em:g.atualizado_em};
+        if(temEncargoPagoEm()) campos.encargo_pago_em = g.encargo_pago_em;
+        if(g.id) await tnUpdate('folha', {id:g.id}, campos);
       }
       gtAno = gAnoAnt; gtMes = gMesAnt;
       chk.disabled = false;
@@ -6750,6 +6766,8 @@ function pesLegendaHTML(){
    a coluna no banco a tela volta a um check so, em vez de quebrar. */
 const temEncargoPago = () => (typeof GENTE!=='undefined') &&
   GENTE.some(x => Object.prototype.hasOwnProperty.call(x, 'encargo_pago'));
+const temEncargoPagoEm = () =>
+  GENTE.some(x => Object.prototype.hasOwnProperty.call(x, 'encargo_pago_em'));
 const temRecorrencia = () => PES_LANC.some(x => Object.prototype.hasOwnProperty.call(x, 'recorrencia'));
 /* ===== IMPORTAR FATURA DO CARTAO =====
    O app do banco lista cada compra em ate tres pedacos: a descricao numa
@@ -9082,7 +9100,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,vinculo:r.vinculo||'CLT',loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em,encargo_pago:!!r.encargo_pago})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,vinculo:r.vinculo||'CLT',loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em,encargo_pago:!!r.encargo_pago,encargo_pago_em:r.encargo_pago_em})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
