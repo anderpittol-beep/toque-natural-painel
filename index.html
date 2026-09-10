@@ -213,8 +213,11 @@
   details.add-form[open] > summary{margin-bottom:10px;}
   details.add-form > .feedback-form{margin-top:0;}
   .card{background:var(--surface-card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
-  /* Os KPIs sao numeros curtos: 16/18 de respiro deixava metade do card vazio */
-  .stat-tile{padding:11px 13px;}
+  /* Os KPIs sao numeros curtos: 16/18 de respiro deixava metade do card vazio.
+     A grade iguala a altura pelo cartao mais alto (o do Ritmo, que tem varias
+     linhas), entao o conteudo dos outros ficava colado no topo com um vazio
+     embaixo: centralizado, a faixa fica equilibrada. */
+  .stat-tile{padding:11px 13px;display:flex;flex-direction:column;justify-content:center;}
   .stat-tile .label{font-size:11.5px;color:var(--text-muted);margin-bottom:3px;}
   .stat-tile .value{font-size:21px;font-weight:600;line-height:1.15;}
   .stat-tile .delta{font-size:11.5px;margin-top:3px;line-height:1.4;color:var(--text-secondary);}
