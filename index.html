@@ -754,7 +754,11 @@ window.TN_CONFIG = {
 
         <div class="card" style="margin-bottom:16px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Mural da equipe — <span id="mural-periodo">semana atual</span></h3>
-          <p class="hint" style="margin:0 0 12px 0;">Comparação justa entre lojas: cada colaboradora medida pela % da própria meta. Clique em "trocar foto" para personalizar. A carinha lê o RITMO, não o total: compara o que já foi vendido com o que era esperado até aqui, contando só os dias úteis da semana — domingo e feriado ficam de fora, e o dia de hoje só entra depois que a loja lança o fechamento. Por isso 40% na terça vale 🤩 e 40% no sábado vale 😐. As faixas são: 🤩 no ritmo de bater a meta (projeta 100% ou mais), 😃 quase no ritmo (85% a 99%), 🙂 um pouco atrás (70% a 84%), 😐 atrás da meta (50% a 69%) e 😕 bem atrás da meta (abaixo de 50%).</p>
+          <p class="hint" style="margin:0 0 12px 0;">Comparação justa entre lojas: cada colaboradora medida pela % da própria meta. Clique em "trocar foto" para personalizar.
+            • CORES — Verde: 96% ou mais, bateu a meta. Laranja: 70% a 95%, quase lá. Vermelho: abaixo de 70%, atrás da meta.
+            • CARINHAS — dentro de cada cor há dois degraus: 🤩 96% ou mais; 😃 85% a 95%; 🙂 70% a 84%; 😐 50% a 69%; 😕 abaixo de 50%.
+            • BOLINHAS (S T Q Q S S D) — cada dia da semana com a cor daquele dia: verde bateu a meta do dia, laranja perto, vermelho abaixo. Só contorno = dia sem fechamento lançado. Apagada = domingo, feriado ou dia que ainda não chegou.
+            • BARRA DA SEMANA — lê o RITMO, não o total: compara o vendido com o esperado até aqui, contando só os dias úteis; domingo e feriado ficam de fora e o dia de hoje só entra depois que a loja lança o fechamento. Por isso 40% na terça pode ser verde e 40% no sábado, vermelho.</p>
           <div class="grid grid-3" id="mural"></div>
         </div>
 
@@ -1915,15 +1919,15 @@ function renderEquipeFotos(){
   }).join('');
   /* Legenda das carinhas, encostada a direita: quem olha o mural precisa saber
      o que cada rosto quer dizer sem ter que passar o mouse. */
-  const legenda = `<div style="margin-left:auto;flex:0 0 auto;align-self:center;font-size:11px;line-height:1.45;color:var(--text-secondary);">
-      <div class="strong" style="font-size:11px;margin-bottom:2px;">Como ler as carinhas</div>
-      ${[['🤩','no ritmo de bater a meta (100% ou mais)'],
-         ['😃','quase no ritmo (85% a 99%)'],
-         ['🙂','um pouco atrás (70% a 84%)'],
-         ['😐','atrás da meta (50% a 69%)'],
-         ['😕','bem atrás da meta (abaixo de 50%)']]
-        .map(([e,t])=>`<div><span style="font-size:12px;">${e}</span> ${esc(t)}</div>`).join('')}
-      <div class="hint" style="font-size:10px;margin-top:3px;">medido pelo ritmo: o que já era esperado até hoje, em dias úteis</div>
+  const bola = cor => `<span style="width:9px;height:9px;border-radius:50%;background:${cor};display:inline-block;vertical-align:middle;"></span>`;
+  const legenda = `<div style="margin-left:auto;flex:0 0 auto;align-self:center;font-size:11px;line-height:1.5;color:var(--text-secondary);">
+      <div class="strong" style="font-size:11px;margin-bottom:3px;">Como ler o semáforo</div>
+      <ul style="margin:0;padding-left:15px;">
+        <li>${bola('var(--good)')} <strong>Verde — 96% ou mais:</strong> bateu a meta 🤩</li>
+        <li>${bola('var(--warning)')} <strong>Laranja — 70% a 95%:</strong> quase lá 😃 🙂</li>
+        <li>${bola('var(--critical)')} <strong>Vermelho — abaixo de 70%:</strong> atrás da meta 😐 😕</li>
+      </ul>
+      <div class="hint" style="font-size:10px;margin-top:4px;">as bolinhas S T Q Q S S mostram cada dia; a barra mostra a semana pelo ritmo — o que já era esperado até hoje, em dias úteis</div>
     </div>`;
   box.innerHTML = cards + (cards ? legenda : '');
   box.style.display = cards ? 'flex' : 'none';
@@ -2742,10 +2746,13 @@ function pctCarinha(pct, fracao){
   const f = (fracao == null) ? 1 : Math.min(fracao, 1);
   const proj = (+pct || 0) / f;          // onde chega mantendo este ritmo
   const parcial = f < 0.999;
-  if(proj >= 100) return {emoji:'🤩', diz: parcial ? 'no ritmo de bater a meta' : 'meta batida', proj, f};
-  if(proj >= 85)  return {emoji:'😃', diz: parcial ? 'quase no ritmo' : 'quase lá', proj, f};
-  if(proj >= 70)  return {emoji:'🙂', diz: parcial ? 'um pouco atrás do ritmo' : 'no caminho', proj, f};
-  if(proj >= 50)  return {emoji:'😐', diz:'atrás da meta', proj, f};
+  /* Os cortes de 70 e 96 sao os mesmos do semaforo: assim a carinha nunca
+     aparece sorrindo num card de luz vermelha. Dentro de cada cor ainda ha
+     dois degraus, que e o que separa "quase virando" de "longe". */
+  if(proj >= 96) return {emoji:'🤩', diz: parcial ? 'no ritmo de bater a meta' : 'meta batida', proj, f};
+  if(proj >= 85) return {emoji:'😃', diz: parcial ? 'quase no ritmo' : 'quase lá', proj, f};
+  if(proj >= 70) return {emoji:'🙂', diz: parcial ? 'um pouco atrás do ritmo' : 'no caminho', proj, f};
+  if(proj >= 50) return {emoji:'😐', diz:'atrás da meta', proj, f};
   return {emoji:'😕', diz:'bem atrás da meta', proj, f};
 }
 /* Semaforo do mural: verde a partir de 91, amarelo de 50 a 90, vermelho
@@ -2754,8 +2761,8 @@ function pctCarinha(pct, fracao){
    A trilha mostra as tres zonas em tom fraco e um risco nos limites (50 e 90),
    entao da para ver o quanto falta para a proxima cor sem ler numero nenhum. */
 const SEMAFORO_ZONAS = [
-  {ate: 50,       cor:'var(--critical)', nome:'vermelho', diz:'abaixo do ritmo', dizDia:'abaixo da meta do dia'},
-  {ate: 91,       cor:'var(--warning)',  nome:'amarelo',  diz:'quase no ritmo',  dizDia:'perto da meta do dia'},
+  {ate: 70,       cor:'var(--critical)', nome:'vermelho', diz:'abaixo do ritmo', dizDia:'abaixo da meta do dia'},
+  {ate: 96,       cor:'var(--warning)',  nome:'laranja',  diz:'quase no ritmo',  dizDia:'perto da meta do dia'},
   {ate: Infinity, cor:'var(--good)',     nome:'verde',    diz:'no ritmo',        dizDia:'bateu a meta do dia'}
 ];
 function semaforoZona(proj){
@@ -2787,13 +2794,13 @@ function semaforoHTML(pct, fracao, rotulo, dicaExtra){
       <span style="position:relative;flex:1;height:9px;border-radius:5px;overflow:hidden;
             background-color:var(--surface-1);
             background-image:linear-gradient(to right,
-              color-mix(in srgb, var(--critical) 14%, var(--surface-1)) 0 50%,
-              color-mix(in srgb, var(--warning) 14%, var(--surface-1)) 50% 90%,
-              color-mix(in srgb, var(--good) 14%, var(--surface-1)) 90% 100%);">
+              color-mix(in srgb, var(--critical) 14%, var(--surface-1)) 0 70%,
+              color-mix(in srgb, var(--warning) 14%, var(--surface-1)) 70% 96%,
+              color-mix(in srgb, var(--good) 14%, var(--surface-1)) 96% 100%);">
         <span style="position:absolute;inset:0 auto 0 0;width:${larg.toFixed(1)}%;
               background:${z.cor};border-radius:5px;"></span>
-        <span style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
-        <span style="position:absolute;left:90%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
+        <span style="position:absolute;left:70%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
+        <span style="position:absolute;left:96%;top:0;bottom:0;width:1px;background:var(--border);opacity:.7;"></span>
       </span>
       <span class="strong" style="font-size:11px;color:${z.cor};flex-shrink:0;">${Math.round(proj)}%</span>
     </div>
@@ -8787,7 +8794,7 @@ function abrirNota(texto, origem){
   dlg.innerHTML = `<div class="card" style="max-width:480px;width:100%;">
       <div style="display:flex;gap:8px;align-items:flex-start;">
         <span style="font-size:18px;line-height:1.2;">${notaIcone(texto)}</span>
-        <div style="font-size:12.5px;line-height:1.55;">${esc(texto)}</div>
+        <div style="font-size:12.5px;line-height:1.55;white-space:pre-line;">${esc(texto)}</div>
       </div>
       <div style="margin-top:10px;text-align:right;">
         <button class="btn ghost" data-notafechar="1" style="padding:3px 12px;">fechar</button>
@@ -8805,7 +8812,9 @@ function aplicarNotas(){
   document.querySelectorAll('p.section-desc, p.hint').forEach(el=>{
     if(!notaEhExplicacao(el)) return;
     el.dataset[NOTA_MARCA] = '1';
-    const texto = (el.textContent||'').trim();
+    /* Topico comecado por "•" vira linha propria: no HTML a quebra e so
+       espaco, e o balao mostraria tudo emendado. */
+    const texto = (el.textContent||'').replace(/\s*•\s*/g, '\n• ').replace(/[ \t]+/g,' ').trim();
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'btn ghost';
