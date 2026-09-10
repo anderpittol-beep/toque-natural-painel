@@ -2655,22 +2655,34 @@ function ritmoTile(r, refLabel){
                 r.duCorridos + ' de ' + r.duMes + ').';
   const fer = r.feriados.length
     ? '<div class="delta">Fora da conta: ' + esc(r.feriados.join(' · ')) + '.</div>' : '';
-  const aviso = r.semLancar > 0
-    ? '<div class="delta" style="color:var(--warning);">' + r.semLancar +
-      (r.semLancar === 1 ? ' dia útil ainda sem fechamento lançado — o número pode estar melhor do que parece.'
-                         : ' dias úteis ainda sem fechamento lançado — o número pode estar melhor do que parece.') +
+  /* O dia de hoje ja saiu da conta quando falta o fechamento: avisar de novo
+     sobre ele seria repetir. O aviso fica para os dias anteriores em aberto. */
+  const emAberto = r.hojeForaDaConta ? Math.max(0, r.semLancar - 1) : r.semLancar;
+  const aviso = emAberto > 0
+    ? '<div class="delta" style="color:var(--warning);">' + emAberto +
+      (emAberto === 1 ? ' dia útil anterior ainda sem fechamento lançado — o número pode estar melhor do que parece.'
+                      : ' dias úteis anteriores ainda sem fechamento lançado — o número pode estar melhor do que parece.') +
       '</div>'
     : '';
+  const hoje = r.hojeForaDaConta
+    ? '<div class="delta">⏳ Hoje ainda não entrou na conta: entra quando o fechamento for lançado.</div>' : '';
+  const ate = r.ultimoDia
+    ? '<div class="delta">🕒 Atualizado até ' + esc(r.ultimoDia) + '.</div>' : '';
   return '<div class="card stat-tile"><div class="label">Ritmo de ' + esc(refLabel) + '</div>' +
          '<div class="value" style="font-size:20px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
-         '<div class="delta">' + esc(linha) + '</div>' + fer + aviso + '</div>';
+         '<div class="delta">' + esc(linha) + '</div>' + fer + hoje + ate + aviso + '</div>';
 }
-function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
+function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado){
   const ano = refMes.getFullYear(), mes = refMes.getMonth();
   const duMes = diasUteisNoMes(ano, mes);
   const mesCorrente = (ano === TODAY.getFullYear() && mes === TODAY.getMonth());
-  /* mes fechado cobra o mes inteiro; mes correndo cobra so ate hoje */
-  const duCorridos = mesCorrente ? (duMes - diasUteisRestantes(TODAY, false)) : duMes;
+  /* mes fechado cobra o mes inteiro; mes correndo cobra so ate hoje.
+     E o dia de hoje so entra depois que o fechamento e lancado: as meninas
+     lancam a noite, entao de manha o dia inteiro de meta era cobrado contra
+     zero de venda e o cartao acusava defasagem que nao existia. */
+  let duCorridos = mesCorrente ? (duMes - diasUteisRestantes(TODAY, false)) : duMes;
+  const hojeForaDaConta = mesCorrente && ehDiaUtil(TODAY) && !hojeLancado;
+  if(hojeForaDaConta) duCorridos = Math.max(0, duCorridos - 1);
   if(!meta || !duMes || !duCorridos) return null;
   const esperado = meta * duCorridos / duMes;
   const razao = esperado > 0 ? vendas / esperado : 0;
@@ -2681,7 +2693,7 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados){
   else if(razao >= 1.00){ rotulo = 'No ritmo'; cor = 'var(--good)'; }
   else if(razao >= 0.85){ rotulo = 'Pouco atrás'; cor = 'var(--warning)'; }
   else { rotulo = 'Defasada'; cor = 'var(--critical)'; }
-  return {rotulo, cor, esperado, dif, razao, duCorridos, duMes, semLancar,
+  return {rotulo, cor, esperado, dif, razao, duCorridos, duMes, semLancar, hojeForaDaConta,
           feriados: feriadosDoMes(ano, mes),
           pctEsperado: duCorridos / duMes * 100};
 }
@@ -5376,7 +5388,10 @@ function renderCaixa(){
     const d = parseBR(c.data);
     return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth();
   }).map(c=>c.data)).size;
-  const ritmo = ritmoDoMes(vendasMes, metaMesLojas, refMes, diasComLancamento);
+  const hojeStr = hojeBR();
+  const hojeLancado = caixa.some(c=>c.data === hojeStr);
+  const ritmo = ritmoDoMes(vendasMes, metaMesLojas, refMes, diasComLancamento, hojeLancado);
+  if(ritmo && datasCx[0]) ritmo.ultimoDia = datasCx[0].toLocaleDateString('pt-BR');
   document.getElementById('caixadia-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Vendas de ${esc(refLabel)}</div><div class="value">${BRL(vendasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Meta de ${esc(refLabel)}</div><div class="value">${BRL(metaMesLojas)}</div></div>
