@@ -5211,7 +5211,11 @@ function renderDisponibilidade(){
 let COMPRAS = [];
 let cpAno = TODAY.getFullYear(), cpMes = TODAY.getMonth()+1;
 let compraEditando = null;
+let comprasAnterioresAberto = false;
 let boletoEditando = null;
+/* Fixa paga so recolhe NO DIA SEGUINTE: no dia em que a pessoa marca, a linha
+   fica a vista para ela conferir o que acabou de fazer. */
+let fixasPagasAberto = false;
 /* A lista de pagos cresce o mes inteiro e empurra o resto da tela para baixo.
    Fica a vista so o ultimo dia lancado — que e o que se confere no dia — e os
    anteriores abrem num clique. */
@@ -5333,7 +5337,22 @@ function renderCompras(){
         ? linhaPlanilha('compras', 'Compras da planilha ('+cpCompetencia()+')', dePlanilha, 5, podeEd) : '';
       const visiveis   = (dePlanilha.length && !planilhaAberta['compras'])
         ? lista.filter(c=>!ehDaPlanilha(c)) : lista;
-      return cabecalho + visiveis.map(c=>{
+      /* Fica a vista so o ultimo dia lancado — e o que se confere no dia. O
+         resto do mes abre num clique; o total continua somando tudo. */
+      const diaDe = c => String(c.data||'').slice(0,10);
+      const dataTopo = visiveis.reduce((a2,c)=> diaDe(c) > a2 ? diaDe(c) : a2, '');
+      const doDia = visiveis.filter(c=> diaDe(c) === dataTopo);
+      const antes = visiveis.filter(c=> diaDe(c) !== dataTopo);
+      const editandoAntes = antes.some(c=> editavel(c) && compraEditando && c.id===compraEditando);
+      const abreAntes = comprasAnterioresAberto || editandoAntes;
+      const somaAntes = antes.reduce((a2,c)=> a2 + (+c.valor||0), 0);
+      const linhaMais = antes.length
+        ? `<tr class="clickable" data-cpantes="1" style="cursor:pointer;">
+             <td colspan="${podeEd?7:6}" class="hint" style="padding:7px 8px;">
+               ${abreAntes?'▾':'▸'} ${antes.length} compra${antes.length>1?'s':''} anterior${antes.length>1?'es':''} no mês · ${BRL(somaAntes)}
+             </td></tr>`
+        : '';
+      const linhaCompra = c=>{
       if(editavel(c) && compraEditando && c.id===compraEditando){
         return `<tr>
           <td><input type="date" data-ce="data" value="${esc(String(c.data).slice(0,10))}"></td>
@@ -5383,7 +5402,10 @@ function renderCompras(){
           <button class="btn ghost" data-cpeditar="${esc(c.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-cpdividir="${esc(c.id||'')}" title="Dividir esta nota entre lojas" style="padding:2px 6px;">➗</button>
           <button class="btn ghost" data-cpexcluir="${esc(c.id||'')}" title="Excluir" style="padding:2px 6px;">🗑️</button>`:'<span class="hint">planilha</span>'}</td>`:''}
-      </tr>`;}).join('') || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`);
+      </tr>`;};
+      const corpo = doDia.map(linhaCompra).join('') + linhaMais
+                  + (abreAntes ? antes.map(linhaCompra).join('') : '');
+      return cabecalho + (corpo || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`));
     })()}
     <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr>
     ${(()=>{
@@ -5395,6 +5417,9 @@ function renderCompras(){
         Entram no lucro mas não aparecem saindo do caixa. Se a loja paga, gere a saída — no cartão da loja, use o modo “Pago no cartão da loja”.</td></tr>`;
     })()}</tbody>`;
 
+  tb.querySelectorAll('[data-cpantes]').forEach(tr=>{
+    tr.onclick = ()=>{ comprasAnterioresAberto = !comprasAnterioresAberto; renderCaixa(); };
+  });
   tb.querySelectorAll('[data-cpeditar]').forEach(b=>{ b.onclick=()=>{ compraEditando=b.dataset.cpeditar; compraDividindo=null; renderCaixa(); }; });
   tb.querySelectorAll('[data-cpdividir]').forEach(b=>{ b.onclick=()=>{ compraDividindo=b.dataset.cpdividir; compraEditando=null; renderCaixa(); }; });
   tb.querySelectorAll('[data-cdcancelar]').forEach(b=>{ b.onclick=()=>{ compraDividindo=null; renderCaixa(); }; });
@@ -5929,9 +5954,32 @@ function renderCaixa(){
   );
   const pagasQtd = fixas.filter(f=>f.pago).length;
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo','Todas'];
+  /* Recolhe a fixa paga em um dia ANTERIOR a hoje. Sem pago_em (marcacao
+     antiga) conta como paga ha tempo. O total nao muda: as linhas so saem da
+     vista. */
+  const hojeISO = (()=>{ const d = TODAY; const p2 = n=>String(n).padStart(2,'0');
+    return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); })();
+  const pagaDeOntemOuAntes = f => {
+    if(!f.pago) return false;
+    if(!f.pago_em) return true;
+    return String(f.pago_em).slice(0,10) < hojeISO;
+  };
+  const fixasAVista = fixas.filter(f=> !pagaDeOntemOuAntes(f));
+  const fixasAntigas = fixas.filter(pagaDeOntemOuAntes);
+  const editandoAntiga = fixasAntigas.some(f=> podeEditar && fixaEditando && fxKey(f)===fixaEditando);
+  const abrePagas = fixasPagasAberto || editandoAntiga;
+  const somaAntigas = fixasAntigas.reduce((a2,f)=> a2 + (+f.valor||0), 0);
+  const linhaPagas = fixasAntigas.length
+    ? `<tr class="clickable" data-fxpagas="1" style="cursor:pointer;">
+         <td colspan="${podeEditar?6:4}" class="hint" style="padding:7px 8px;">
+           ${abrePagas?'▾':'▸'} ${fixasAntigas.length} despesa${fixasAntigas.length>1?'s':''} já paga${fixasAntigas.length>1?'s':''} · ${BRL(somaAntigas)}
+         </td></tr>`
+    : '';
+
   document.getElementById('tbl-fixas').innerHTML = `
     <thead><tr><th>Descrição</th><th>Loja</th><th>Venc.</th><th>Valor</th>${podeEditar?'<th>Pago</th><th></th>':''}</tr></thead>
-    <tbody>${fixas.map(f=>{
+    <tbody>${(()=>{
+    const linhaFixa = f => {
       if(podeEditar && fixaEditando && fxKey(f)===fixaEditando){
         return `<tr>
           <td><input type="text" data-fe="descricao" value="${esc(f.descricao)}" style="width:100%;box-sizing:border-box;"></td>
@@ -5956,7 +6004,11 @@ function renderCaixa(){
         <td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-fxeditar="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-fxexcluir="1" data-fxdesc="${esc(f.descricao)}" data-fxloja="${esc(f.loja)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
-      </tr>`;}).join('')}
+      </tr>`;};
+    return fixasAVista.map(linhaFixa).join('')
+         + linhaPagas
+         + (abrePagas ? fixasAntigas.map(linhaFixa).join('') : '');
+    })()}
     ${folhaRows}
     <tr><td colspan="3" class="strong" style="text-align:right;">${soTotal ? 'Despesa total do mês (planilha)' : 'Total fixo/mês (com folha e retenções)'}</td><td class="strong">${BRL(totFixas)}</td>${podeEditar?`<td class="hint" style="text-align:center;">${pagasQtd}/${fixas.length}</td><td></td>`:''}</tr></tbody>`;
 
@@ -6054,6 +6106,9 @@ function renderCaixa(){
       chk.disabled = false;
       renderCaixa(); renderGente(); renderDisponibilidade();
     };
+  });
+  document.querySelectorAll('[data-fxpagas]').forEach(tr=>{
+    tr.onclick = ()=>{ fixasPagasAberto = !fixasPagasAberto; renderCaixa(); };
   });
   document.querySelectorAll('[data-fxpago]').forEach(chk=>{
     chk.onchange = async ()=>{
