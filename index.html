@@ -2766,7 +2766,9 @@ const SEMAFORO_ZONAS = [
   {ate: Infinity, cor:'var(--good)',     nome:'verde',    diz:'no ritmo',        dizDia:'bateu a meta do dia'}
 ];
 function semaforoZona(proj){
-  const v = +proj || 0;
+  /* Arredonda antes de decidir: o numero exibido e arredondado, e uma luz
+     laranja ao lado de "96%" pareceria erro de conta. */
+  const v = Math.round(+proj || 0);
   return SEMAFORO_ZONAS.find(z => v < z.ate) || SEMAFORO_ZONAS[2];
 }
 function semaforoHTML(pct, fracao, rotulo, dicaExtra){
@@ -2997,7 +2999,19 @@ function renderDesempenho(){
       <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
       ${aviso}
       ${bolinhasSemanaHTML(lojaOf(n), wAtual && wAtual.mon)}
-      ${semaforoHTML(pct, fracSemDe(n), 'Semana')}
+      ${(()=>{
+        /* A barra mostra o percentual REAL da semana (o mesmo numero grande do
+           card) e a cor sai das faixas do semaforo. O ritmo continua vivo na
+           carinha e na dica, para nao se perder a leitura de "esta cedo ainda". */
+        const f = fracSemDe(n);
+        const c = pctCarinha(pct, f);
+        const z = semaforoZona(pct);
+        const dica = 'Semana: ' + pct.toFixed(0) + '% da meta — ' + z.dizDia.replace('do dia','da semana')
+          + (c && c.f < 0.999
+              ? '. No ritmo de hoje (' + Math.round(c.f*100) + '% dos dias úteis corridos), a semana fecha em '
+                + Math.round(c.proj) + '%.' : '.');
+        return semaforoHTML(pct, 1, 'Semana', dica);
+      })()}
       <label class="btn ghost" style="margin-top:8px;display:inline-block;cursor:pointer;">trocar foto<input type="file" accept="image/*" data-foto="${esc(n)}" style="display:none;"></label>
     </div>`;
   }).join('') || '<p class="hint">Sem colaboradoras para esta loja.</p>';
