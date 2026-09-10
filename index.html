@@ -2754,9 +2754,9 @@ function pctCarinha(pct, fracao){
    A trilha mostra as tres zonas em tom fraco e um risco nos limites (50 e 90),
    entao da para ver o quanto falta para a proxima cor sem ler numero nenhum. */
 const SEMAFORO_ZONAS = [
-  {ate: 50,       cor:'var(--critical)', nome:'vermelho', diz:'abaixo do ritmo'},
-  {ate: 91,       cor:'var(--warning)',  nome:'amarelo',  diz:'quase no ritmo'},
-  {ate: Infinity, cor:'var(--good)',     nome:'verde',    diz:'no ritmo'}
+  {ate: 50,       cor:'var(--critical)', nome:'vermelho', diz:'abaixo do ritmo', dizDia:'abaixo da meta do dia'},
+  {ate: 91,       cor:'var(--warning)',  nome:'amarelo',  diz:'quase no ritmo',  dizDia:'perto da meta do dia'},
+  {ate: Infinity, cor:'var(--good)',     nome:'verde',    diz:'no ritmo',        dizDia:'bateu a meta do dia'}
 ];
 function semaforoZona(proj){
   const v = +proj || 0;
@@ -2799,6 +2799,51 @@ function semaforoHTML(pct, fracao, rotulo, dicaExtra){
     </div>
     ${rotulo?'':`<div class="hint" style="font-size:10px;margin-top:2px;">${esc(z.diz)} · projeção da semana</div>`}
   </div>`;
+}
+
+/* A semana em bolinhas: uma por dia, com a inicial dentro e a cor do semaforo
+   daquele dia. Le-se a semana inteira de relance — onde a loja bateu, onde
+   ficou perto e onde falhou — sem abrir tabela nenhuma.
+   Domingo e feriado nao viram cobranca: a loja nao abre. Dia que ainda nao
+   chegou fica apagado; dia sem fechamento lancado fica so com o contorno,
+   porque falta lancamento nao e venda ruim. */
+const DIA_INICIAL = ['D','S','T','Q','Q','S','S'];
+function bolinhasSemanaHTML(loja, mon){
+  if(!mon) return '';
+  const hoje = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const bolas = [];
+  for(let k = 0; k < 7; k++){
+    const d = new Date(mon); d.setDate(d.getDate() + k);
+    const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const rot = String(dd.getDate()).padStart(2,'0') + '/' + String(dd.getMonth()+1).padStart(2,'0');
+    const letra = DIA_INICIAL[dd.getDay()];
+    let cor = '', fundo = 'transparent', borda = 'var(--border)', texto = 'var(--text-muted)', op = 1, dica;
+    const fer = feriadoDe(dd);
+    if(dd.getDay() === 0 || fer){
+      dica = rot + ' · ' + (fer ? fer : 'domingo') + ' — loja fechada, fora da conta';
+      op = .45;
+    }else if(dd > hoje){
+      dica = rot + ' · ainda não chegou';
+      op = .3;
+    }else{
+      const reg = CAIXA_DIARIO.find(c=>c.loja===loja && c.data === dd.toLocaleDateString('pt-BR'));
+      if(!reg){
+        dica = rot + ' · sem fechamento lançado';
+        borda = 'var(--text-muted)';
+      }else{
+        const meta = metaDoDia(loja, reg.data);
+        const vend = +reg.vendas || 0;
+        const pct = meta > 0 ? vend/meta*100 : 0;
+        const z = semaforoZona(pct);
+        cor = z.cor; fundo = z.cor; borda = z.cor; texto = '#fff';
+        dica = rot + ' · ' + BRL(vend) + (meta > 0 ? ' de ' + BRL(meta) + ' (' + Math.round(pct) + '%) — ' + z.dizDia : ' — sem meta lançada');
+      }
+    }
+    bolas.push(`<span title="${esc(dica)}" style="width:20px;height:20px;border-radius:50%;
+      display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;
+      background:${fundo};border:1.5px solid ${borda};color:${texto};opacity:${op};flex-shrink:0;">${letra}</span>`);
+  }
+  return `<div style="display:flex;gap:4px;justify-content:center;margin-top:8px;">${bolas.join('')}</div>`;
 }
 
 /* O emoji pronto, com a explicacao no titulo */
@@ -2944,19 +2989,8 @@ function renderDesempenho(){
         ${pct.toFixed(0)}%</div>
       <div class="hint" style="margin:4px 0 0;">${BRL(val)} / meta sem. ${BRL(meta)}</div>
       ${aviso}
-      ${(()=>{
-        const dia = diaDaColab(n);
-        const hoje = dia && dia.data === hojeBR();
-        /* O rotulo carrega a data: sem isso, ninguem sabe se a linha do dia e a
-           de hoje ou a do ultimo fechamento lancado. */
-        const rot = dia ? ('Dia ' + (hoje ? 'hoje' : dia.data.slice(0,5))) : 'Dia';
-        const linhaDia = dia && dia.meta > 0
-          ? semaforoHTML(dia.pct, 1, rot,
-              'Dia ' + dia.data + (hoje?' (hoje)':' — último fechamento lançado') + ': ' + BRL(dia.vendas)
-              + ' de ' + BRL(dia.meta) + ' de meta do dia (' + Math.round(dia.pct) + '%).')
-          : `<div class="hint" style="font-size:10px;margin-top:6px;text-align:left;">Dia · sem fechamento lançado</div>`;
-        return linhaDia + semaforoHTML(pct, fracSemDe(n), 'Semana');
-      })()}
+      ${bolinhasSemanaHTML(lojaOf(n), wAtual && wAtual.mon)}
+      ${semaforoHTML(pct, fracSemDe(n), 'Semana')}
       <label class="btn ghost" style="margin-top:8px;display:inline-block;cursor:pointer;">trocar foto<input type="file" accept="image/*" data-foto="${esc(n)}" style="display:none;"></label>
     </div>`;
   }).join('') || '<p class="hint">Sem colaboradoras para esta loja.</p>';
