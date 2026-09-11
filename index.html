@@ -2639,12 +2639,27 @@ function vendedorasAtuais(){
 }
 function lojaOf(nome){ const e=EQUIPE.find(x=>x.nome===nome); return e?e.loja:''; }
 function metaMensal(nome){ return METAS_MENSAIS[lojaOf(nome)]||0; }
+/* A foto e guardada pelo primeiro nome, mas o cadastro pode ter o nome
+   completo ("Anderson Pittol"), acento ou caixa diferente. Sem essa busca
+   tolerante, quem edita o cadastro perde a foto sem entender por que. */
+function fotoDe(nome){
+  if(FOTOS[nome]) return FOTOS[nome];
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+  const alvo = norm(nome); if(!alvo) return '';
+  const primeiro = alvo.split(/\s+/)[0];
+  const chave = Object.keys(FOTOS).find(k=>{
+    const kn = norm(k);
+    return kn === alvo || kn === primeiro || kn.split(/\s+/)[0] === primeiro;
+  });
+  return chave ? FOTOS[chave] : '';
+}
 function avatarHTML(name, size){
   size=size||40;
   const color = STORE_PIE_COLOR[lojaOf(name)]||'#666';
   const ini = String(name).trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
-  const inner = FOTOS[name]
-    ? `<img src="${FOTOS[name]}" alt="${esc(name)}" style="width:100%;height:100%;object-fit:cover;">`
+  const foto = fotoDe(name);
+  const inner = foto
+    ? `<img src="${foto}" alt="${esc(name)}" style="width:100%;height:100%;object-fit:cover;">`
     : `<span style="color:#fff;font-weight:700;font-size:${Math.round(size*0.4)}px;">${esc(ini)}</span>`;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;background:${color};flex-shrink:0;">${inner}</span>`;
 }
@@ -3576,10 +3591,10 @@ function renderEquipeCad(){
       <td style="white-space:nowrap;">
         <label title="Enviar ou trocar a foto de ${esc(e.nome)}" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
           ${avatarHTML(e.nome, 34)}
-          <span class="hint" style="font-size:10.5px;text-decoration:underline;">${FOTOS[e.nome]?'trocar':'enviar'}</span>
+          <span class="hint" style="font-size:10.5px;text-decoration:underline;">${fotoDe(e.nome)?'trocar':'enviar'}</span>
           <input type="file" accept="image/*" data-eqfoto="${esc(e.nome)}" style="display:none;">
         </label>
-        ${FOTOS[e.nome]?`<button class="btn ghost" data-eqfotodel="${esc(e.nome)}" title="Remover a foto" style="padding:0 4px;font-size:11px;">✕</button>`:''}
+        ${fotoDe(e.nome)?`<button class="btn ghost" data-eqfotodel="${esc(e.nome)}" title="Remover a foto" style="padding:0 4px;font-size:11px;">✕</button>`:''}
       </td>
       <td class="strong">${esc(e.nome)}</td>
       <td>${e.email ? esc(e.email) : '<span class="hint">sem e-mail</span>'}</td>
