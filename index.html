@@ -9326,7 +9326,23 @@ function motivoDoErro(prefixo){
   return prefixo + '\n\n' + msg;
 }
 async function tnUpdate(tabela,match,valores){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).update(valores).match(match); if(error) console.warn('update',tabela,error.message);} }catch(e){ console.warn(e); } }
-async function tnDelete(tabela,match){ try{ if(window.TN&&window.TN.sb){ const {error}=await window.TN.sb.from(tabela).delete().match(match); if(error) console.warn('delete',tabela,error.message);} }catch(e){ console.warn(e); } }
+/* Excluir de verdade: se o banco recusar (ou apagar zero linhas por causa da
+   permissão), a tela não pode mentir que sumiu. Avisamos e recarregamos. */
+async function tnDelete(tabela,match){
+  try{
+    if(!(window.TN&&window.TN.sb)) return false;
+    const {data,error} = await window.TN.sb.from(tabela).delete().match(match).select();
+    if(error){ TN_ULTIMO_ERRO = error; console.warn('delete',tabela,error.message); tnFalhaAoExcluir(); return false; }
+    if(!data || !data.length){ TN_ULTIMO_ERRO = {code:'42501', message:'row-level security'}; tnFalhaAoExcluir(); return false; }
+    return true;
+  }catch(e){ TN_ULTIMO_ERRO = e; console.warn(e); tnFalhaAoExcluir(); return false; }
+}
+let TN_AVISO_EXCLUIR = false;
+function tnFalhaAoExcluir(){
+  if(TN_AVISO_EXCLUIR) return; TN_AVISO_EXCLUIR = true;
+  alert(motivoDoErro('Não foi possível excluir. O item continua salvo.'));
+  setTimeout(()=> location.reload(), 300);
+}
 /* Meta mensal da loja: gravada no Supabase para valer em qualquer dispositivo */
 async function tnUpsertMeta(loja, valor){
   try{
