@@ -8604,11 +8604,9 @@ function marcarMetaDiaVista(){ try{ localStorage.setItem(metaDiaChave(), '1'); }
 function mostrarMetaDoDia(){
   if(document.getElementById('tn-metadia')) return;
   const socia = (typeof perfil !== 'undefined' && perfil === 'socia');
-  /* TEMPORARIO — enquanto a Andreia avalia o formato, o aviso reabre a cada
-     entrada no painel para ela, em vez de uma vez por dia. Tirar esta linha
-     devolve a regra normal. */
-  const emTeste = nomeDoUsuario().trim().toLowerCase().startsWith('andreia');
-  if(socia && !emTeste && metaDiaJaVistaHoje()) return;
+  /* A socia ve toda vez que abre ou atualiza, e so para de ver se pedir para
+     dispensar o dia. A colaboradora ve sempre: e a meta dela. */
+  if(socia && metaDiaJaVistaHoje()) return;
   const minha = lojaDoUsuario();
   let itens = metaPorDiaAtual();
   if(!socia){
@@ -8644,9 +8642,12 @@ function mostrarMetaDoDia(){
     <p class="hint" style="margin:0 0 16px;">É quanto precisa vender por dia útil daqui até o fim do mês.</p>
     ${itens.map(cartao).join('')}
     <button class="btn primary" id="tn-metadia-ok" style="width:100%;">Entendi, bora vender</button>
+    ${socia ? '<button class="btn ghost" id="tn-metadia-hoje" style="width:100%;margin-top:8px;">Não quero ver mais hoje</button>' : ''}
   </div>`;
   document.body.appendChild(div);
-  document.getElementById('tn-metadia-ok').onclick = ()=>{ if(socia) marcarMetaDiaVista(); div.remove(); };
+  document.getElementById('tn-metadia-ok').onclick = ()=>{ div.remove(); };
+  const btnHoje = document.getElementById('tn-metadia-hoje');
+  if(btnHoje) btnHoje.onclick = ()=>{ marcarMetaDiaVista(); div.remove(); };
 }
 /* Cada sócia trabalha a partir da sua loja: Andreia em Itaipulândia, Vanessa em
    Ouro Verde. A loja dela já vem escolhida nos lançamentos — as outras seguem
