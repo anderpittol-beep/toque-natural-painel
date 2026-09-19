@@ -3133,8 +3133,17 @@ function renderDesempenho(){
           <td>${x.meta?BRL(x.meta):'<span class="hint">—</span>'}</td>
           <td style="color:${pctColor(pct)};font-weight:600;">${x.meta?carinhaHTML(pct, fracaoMesRef(cAno, cMes-1))+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
           <td>${ehMesAtual ? (falta>0?BRL(falta):'<span class="badge b-good"><span class="dot"></span>meta batida</span>') : '<span class="hint">—</span>'}</td>
-          <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
-            ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
+          <td>${(()=>{
+            if(!ehMesAtual) return '<span class="hint">—</span>';
+            if(falta<=0) return '<span class="badge b-good"><span class="dot"></span>meta batida</span>';
+            if(!duRest) return '<span class="hint">sem dia útil restante</span>';
+            /* Este e o numero que decide o dia: fica circulado, para nao se
+               perder no meio da linha. Vermelho quando o ritmo pedido ja passa
+               de uma vez e meia o ritmo normal do mes. */
+            const apertado = porDia > ritmo*1.5;
+            const cor = apertado ? 'var(--critical)' : 'var(--good)';
+            return `<span title="${apertado?'Ritmo apertado: acima de uma vez e meia a meta diária normal':'Meta por dia útil até o fim do mês'}" style="display:inline-block;border:2px solid ${cor};color:${cor};border-radius:999px;padding:5px 14px;font-weight:800;font-size:15px;white-space:nowrap;">${BRL(porDia)}</span>`;
+          })()}</td>
           <td>${celComissao}</td>
         </tr>`;};
       /* Renderiza todas as linhas (a comissao do recorte soma o periodo inteiro),
@@ -8534,6 +8543,59 @@ function iniciarLembreteDiario(){
   checarLembreteDiario();
   setInterval(checarLembreteDiario, 60000);   // repassa a cada minuto, caso a pagina fique aberta ate as 18h
 }
+/* META POR DIA RESTANTE — o numero que decide o dia. A socia ve uma vez por
+   dia; a colaboradora ve toda vez que entra, porque a meta e dela e o quadro
+   fica longe, no meio da tela de desempenho. */
+function metaPorDiaAtual(){
+  const rotulo = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
+  const j = (FINANCEIRO.meses||[]).indexOf(rotulo);
+  if(j < 0) return [];
+  const duRest = diasUteisRestantes(TODAY, false);
+  return STORES.map(l=>{
+    const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
+    const meta = METAS_MENSAIS[l] || 0;
+    const falta = Math.max(0, meta - rec);
+    return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null};
+  }).filter(x=> x.meta > 0);
+}
+function metaDiaChave(){ return 'tn_metadia_' + hojeBR() + '_' + (TN_EMAIL||'anon'); }
+function metaDiaJaVistaHoje(){ try{ return localStorage.getItem(metaDiaChave()) === '1'; }catch(e){ return false; } }
+function marcarMetaDiaVista(){ try{ localStorage.setItem(metaDiaChave(), '1'); }catch(e){} }
+function mostrarMetaDoDia(){
+  if(document.getElementById('tn-metadia')) return;
+  const socia = (typeof perfil !== 'undefined' && perfil === 'socia');
+  if(socia && metaDiaJaVistaHoje()) return;
+  const minha = lojaDoUsuario();
+  let itens = metaPorDiaAtual();
+  if(!socia){
+    if(!minha) return;                    // sem loja no cadastro, nao ha meta para cobrar
+    itens = itens.filter(x=> x.loja === minha);
+  }
+  if(!itens.length) return;
+  const cartao = x => {
+    const batida = x.falta <= 0;
+    const cor = batida ? 'var(--good)' : (x.porDia === null ? 'var(--warning)' : 'var(--text-primary)');
+    const valor = batida ? 'meta batida 🎉'
+      : (x.porDia === null ? 'sem dia útil restante' : BRL(x.porDia));
+    return `<div style="border:3px solid ${cor};border-radius:16px;padding:18px 14px;margin-bottom:12px;">
+      <div class="strong" style="font-size:15px;margin-bottom:4px;">${esc(x.loja)}</div>
+      <div style="font-size:clamp(34px,9vw,54px);font-weight:800;line-height:1.05;color:${cor};">${valor}</div>
+      <div class="hint" style="margin-top:6px;">por dia útil, nos ${x.duRest} dia(s) que restam · faltam ${BRL(x.falta)} de ${BRL(x.meta)}</div>
+    </div>`;
+  };
+  const div = document.createElement('div');
+  div.id = 'tn-metadia';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+  div.innerHTML = `<div style="background:var(--surface-card);color:var(--text-primary);max-width:460px;width:100%;padding:24px;border-radius:18px;box-shadow:0 14px 50px rgba(0,0,0,.4);text-align:center;">
+    <div style="font-size:34px;margin-bottom:2px;">🎯</div>
+    <div class="strong" style="font-size:18px;margin-bottom:2px;">Meta por dia restante</div>
+    <p class="hint" style="margin:0 0 16px;">É quanto precisa vender por dia útil daqui até o fim do mês.</p>
+    ${itens.map(cartao).join('')}
+    <button class="btn primary" id="tn-metadia-ok" style="width:100%;">Entendi, bora vender</button>
+  </div>`;
+  document.body.appendChild(div);
+  document.getElementById('tn-metadia-ok').onclick = ()=>{ if(socia) marcarMetaDiaVista(); div.remove(); };
+}
 /* Cada sócia trabalha a partir da sua loja: Andreia em Itaipulândia, Vanessa em
    Ouro Verde. A loja dela já vem escolhida nos lançamentos — as outras seguem
    disponíveis, para atribuir ou dividir a nota. */
@@ -9188,6 +9250,7 @@ async function tnAfterLogin(sb){
   congelarFolhaFechada();
   cpAplicarLojaPadrao();   // cada sócia abre na própria loja
   iniciarLembreteDiario();
+  mostrarMetaDoDia();
   tnVerificarAcessoCasa();
 }
 
