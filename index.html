@@ -8574,6 +8574,30 @@ function metaPorDiaAtual(){
     return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null, ritmo:r};
   }).filter(x=> x.meta > 0);
 }
+/* Quando a loja esta atras do ritmo, o painel nao pode so mostrar o tamanho do
+   buraco: precisa dizer o que fazer hoje. Sao acoes de balcao, que cabem no
+   expediente e nao dependem de aprovacao. Giram pelo dia do mes para a lista
+   nao virar paisagem. */
+const ACOES_COMERCIAIS = [
+  'Puxe a lista de quem não compra há mais de 30 dias e mande mensagem individual, com o produto que a pessoa costuma levar.',
+  'Escolha um combo do dia (dois itens que combinam) e ofereça a todo mundo que entrar na loja.',
+  'Monte degustação na entrada com o produto de maior margem e convide quem passa na calçada.',
+  'Ligue para quem comprou suplemento há cerca de 30 dias: o pote está acabando agora.',
+  'Poste nos stories o produto do dia com preço e chame para retirada no balcão.',
+  'Refaça a vitrine com os itens parados há mais semanas e coloque preço visível.',
+  'Ofereça o segundo item com desconto para quem já está pagando no caixa.',
+  'Fale com as clientes do grupo de WhatsApp e avise das novidades que chegaram esta semana.',
+  'Peça indicação a quem comprou hoje: desconto na próxima compra para quem trouxer uma amiga.',
+  'Separe os produtos próximos do vencimento e faça promoção relâmpago do dia.',
+  'Ofereça entrega no bairro para pedidos fechados por WhatsApp até a tarde.',
+  'Revise os produtos sem estoque na prateleira: venda perdida por falta é a mais cara.'
+];
+function acoesDoDia(quantas){
+  const base = TODAY.getDate() * 3;
+  const out = [];
+  for(let i=0; i<quantas; i++) out.push(ACOES_COMERCIAIS[(base + i) % ACOES_COMERCIAIS.length]);
+  return out;
+}
 function metaDiaChave(){ return 'tn_metadia_' + hojeBR() + '_' + (TN_EMAIL||'anon'); }
 function metaDiaJaVistaHoje(){ try{ return localStorage.getItem(metaDiaChave()) === '1'; }catch(e){ return false; } }
 function marcarMetaDiaVista(){ try{ localStorage.setItem(metaDiaChave(), '1'); }catch(e){} }
@@ -8600,6 +8624,10 @@ function mostrarMetaDoDia(){
       ${x.ritmo ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border,rgba(0,0,0,.1));">
         <span style="display:inline-block;border:3px solid ${x.ritmo.cor};color:${x.ritmo.cor};border-radius:999px;padding:6px 16px;font-weight:800;font-size:22px;white-space:nowrap;">${BRL(Math.abs(cent(x.ritmo.dif)))}</span>
         <div class="hint" style="font-size:11px;margin-top:4px;">${x.ritmo.dif < 0 ? 'a recuperar do acumulado' : 'à frente do acumulado'} — ${esc(x.ritmo.rotulo)}, no dia útil ${x.ritmo.duCorridos} de ${x.ritmo.duMes}</div>
+      </div>` : ''}
+      ${(x.ritmo && x.ritmo.dif < 0) ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border,rgba(0,0,0,.1));text-align:left;">
+        <div class="strong" style="font-size:12px;margin-bottom:5px;">🚀 Para recuperar hoje</div>
+        <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.45;">${acoesDoDia(3).map(a=>`<li style="margin-bottom:4px;">${esc(a)}</li>`).join('')}</ul>
       </div>` : ''}
     </div>`;
   };
