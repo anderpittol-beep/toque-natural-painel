@@ -8604,7 +8604,11 @@ function marcarMetaDiaVista(){ try{ localStorage.setItem(metaDiaChave(), '1'); }
 function mostrarMetaDoDia(){
   if(document.getElementById('tn-metadia')) return;
   const socia = (typeof perfil !== 'undefined' && perfil === 'socia');
-  if(socia && metaDiaJaVistaHoje()) return;
+  /* TEMPORARIO — enquanto a Andreia avalia o formato, o aviso reabre a cada
+     entrada no painel para ela, em vez de uma vez por dia. Tirar esta linha
+     devolve a regra normal. */
+  const emTeste = nomeDoUsuario().trim().toLowerCase().startsWith('andreia');
+  if(socia && !emTeste && metaDiaJaVistaHoje()) return;
   const minha = lojaDoUsuario();
   let itens = metaPorDiaAtual();
   if(!socia){
