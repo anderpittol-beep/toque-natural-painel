@@ -6691,12 +6691,24 @@ function viewTemDados(v){
   }
 }
 
+/* Telas ainda sem dado real ficam so com o master enquanto ele monta o
+   conteudo. Quando uma delas estiver pronta para todos, basta incluir o nome
+   dela aqui — o resto do painel ja respeita esta lista. */
+const VIEWS_LIBERADAS = [];
+function viewLiberada(v, socia){
+  if(v === 'pessoais') return ACESSO_CASA;
+  if(!(socia || VIEWS_COLAB.indexOf(v) !== -1)) return false;
+  if(viewTemDados(v)) return true;
+  if(VIEWS_LIBERADAS.indexOf(v) !== -1) return true;
+  return ehMaster();
+}
 function aplicarMenuDoPerfil(socia){
+  const master = ehMaster();
   document.querySelectorAll('#nav button[data-view]').forEach(b=>{
     const v = b.dataset.view;
-    const liberado = (v === 'pessoais') ? ACESSO_CASA : (socia || VIEWS_COLAB.indexOf(v) !== -1);
+    const liberado = viewLiberada(v, socia);
     b.style.display = liberado ? '' : 'none';
-    const vazio = socia && !viewTemDados(v);
+    const vazio = liberado && !viewTemDados(v);
     b.classList.toggle('sem-dados', vazio);
     let tag = b.querySelector('.tag-vazio');
     if(vazio && !tag){
@@ -6714,22 +6726,22 @@ function aplicarMenuDoPerfil(socia){
     }
     g.style.display = algum ? '' : 'none';
   });
-  /* se o acesso a tela particular nao valer, ela nao fica aberta */
+  /* tela aberta que deixou de valer para este usuario nao pode continuar na frente */
   const ativa = document.querySelector('.view.active');
-  if(!ACESSO_CASA && ativa && ativa.id === 'view-pessoais') setView(socia ? 'visao-geral' : 'desempenho');
+  if(ativa && !viewLiberada(ativa.id.replace('view-',''), socia)) setView(socia ? 'visao-geral' : 'desempenho');
   aplicarMarcaDagua(socia);
 }
 
 function aplicarMarcaDagua(socia){
   document.querySelectorAll('section.view').forEach(sec=>{
     const v = sec.id.replace('view-','');
-    const vazio = socia && !viewTemDados(v);
+    const vazio = viewLiberada(v, socia) && !viewTemDados(v);
     sec.classList.toggle('marca-dagua', vazio);
     let aviso = sec.querySelector(':scope > .aviso-vazio');
     if(vazio && !aviso){
       aviso = document.createElement('div');
       aviso.className = 'aviso-vazio';
-      aviso.textContent = 'Sem dados reais ainda — o que aparece abaixo é só a estrutura da tela. Assim que os lançamentos entrarem, ela sai da marca d\u2019água.';
+      aviso.textContent = 'Sem dados reais ainda — o que aparece abaixo é só a estrutura da tela. Só o usuário master enxerga esta tela enquanto ela estiver assim; quando os lançamentos entrarem, ela sai da marca d\u2019água e fica visível para os demais.';
       sec.insertBefore(aviso, sec.firstChild);
     }else if(!vazio && aviso){ aviso.remove(); }
   });
