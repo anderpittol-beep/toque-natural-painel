@@ -776,7 +776,7 @@ window.TN_CONFIG = {
         <div class="card" style="margin-bottom:16px;">
           <details class="add-form" style="margin:0;">
             <summary>Meta mensal por loja</summary>
-            <p class="hint" style="margin:8px 0 10px 0;">Base de todo o resto: a meta do dia, a meta da semana e os percentuais saem daqui. Só o perfil Sócio edita.</p>
+            <p class="hint" style="margin:8px 0 10px 0;">Base de todo o resto: a meta do dia, a meta da semana e os percentuais saem daqui. Só o perfil Sócio(a) edita.</p>
             <div id="metas-box" class="filters"></div>
           </details>
         </div>
@@ -930,7 +930,7 @@ window.TN_CONFIG = {
       <!-- EQUIPE -->
       <section class="view" id="view-equipe">
         <h2 class="section-title">Tarefas da equipe</h2>
-        <p class="section-desc">Delegue tarefas por colaborador e por loja, acompanhando o avanço de cada ação do Plano de Ação. <span class="hint">(O <strong>cadastro da equipe</strong> e o <strong>feedback</strong> ficam em <strong>Gente e Gestão</strong>, restritos aos Sócio.)</span></p>
+        <p class="section-desc">Delegue tarefas por colaborador e por loja, acompanhando o avanço de cada ação do Plano de Ação. <span class="hint">(O <strong>cadastro da equipe</strong> e o <strong>feedback</strong> ficam em <strong>Gente e Gestão</strong>, restritos aos sócios.)</span></p>
 
         <div class="card" id="card-plano" style="margin-bottom:16px;">
           <div class="toolbar" style="justify-content:space-between;align-items:center;">
@@ -1170,7 +1170,7 @@ window.TN_CONFIG = {
       <!-- GENTE E GESTÃO (confidencial) -->
       <section class="view" id="view-gente">
         <h2 class="section-title">Gente e Gestão <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial</span></h2>
-        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita aos Sócio — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
+        <p class="section-desc">Folha por pessoa: salário base + comissão/bonificação do mês + encargos. Lançe aqui e o total entra automaticamente nas despesas fixas de cada loja (Caixa &amp; despesas). Área restrita aos sócios — as colaboradoras não veem esta seção nem os salários no Caixa.</p>
         <div class="grid grid-4" id="gente-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
           <div class="toolbar" style="justify-content:space-between;align-items:flex-start;gap:8px;">
@@ -1188,7 +1188,7 @@ window.TN_CONFIG = {
             <summary>Lançar pessoa na folha</summary>
             <form class="feedback-form" id="form-gente" style="grid-template-columns:repeat(6,1fr);margin-top:10px;">
               <input type="text" id="gt-pessoa" placeholder="Pessoa" required>
-              <select id="gt-papel"><option>Colaboradora</option><option>Sócia</option></select>
+              <select id="gt-papel"><option>Colaboradora</option><option>Sócio(a)</option></select>
               <select id="gt-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
               <input type="number" id="gt-salario" placeholder="Salário base" step="0.01">
               <input type="number" id="gt-horas" placeholder="Horas por dia (ex.: 8)" step="0.5">
@@ -1212,14 +1212,14 @@ window.TN_CONFIG = {
         </div>
 
         <div class="card" id="card-equipe-cad" style="margin-top:20px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só Sócio</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas". O <strong>cargo define o acesso</strong>: Sócio/Sócia entra como perfil Sócio, os demais como Colaboradora.</p>
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Cadastro da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>só sócios</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Quem estiver aqui aparece para receber tarefas e feedback. Sócios usam loja "Todas". O <strong>cargo define o acesso</strong>: Sócio(a) entra com acesso total, os demais como Colaboradora.</p>
           <details class="add-form">
             <summary>Cadastrar pessoa na equipe</summary>
             <form class="feedback-form" id="form-equipe" style="grid-template-columns:repeat(4,1fr);">
               <input type="text" id="eq-nome" placeholder="Nome" required>
               <input type="email" id="eq-email" placeholder="E-mail de acesso">
-              <select id="eq-cargo"><option>Colaboradora</option><option>Sócia</option><option>Sócio</option></select>
+              <select id="eq-cargo"><option>Colaboradora</option><option>Sócio(a)</option></select>
               <select id="eq-loja"><option>Todas</option><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Adicionar</button>
             </form>
@@ -1230,8 +1230,8 @@ window.TN_CONFIG = {
 
 
         <div class="card" id="card-feedback" style="margin-top:20px;">
-          <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só Sócio</span></h3>
-          <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos Sócio.</p>
+          <h3 style="font-size:14px;margin:0 0 10px 0;">Feedback da equipe <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>confidencial · só sócios</span></h3>
+          <p class="hint" style="margin:0 0 10px 0;">Registre reconhecimentos e pontos de atenção por colaborador. Visível apenas aos sócios.</p>
           <details class="add-form">
             <summary>Registrar feedback</summary>
             <form class="feedback-form" id="form-feedback">
@@ -1450,10 +1450,10 @@ let CRM_CONTATOS = [];
 
 /* Sócias-gestoras: Andreia e Vanessa · Colaboradoras: uma por loja */
 let EQUIPE = [
- {nome:"Andreia",cargo:"Sócia",loja:"Todas"},
- {nome:"Vanessa",cargo:"Sócia",loja:"Todas"},
- {nome:"Anderson Pittol",cargo:"Sócio",loja:"Todas"},
- {nome:"Jandrey",cargo:"Sócio",loja:"Todas"},
+ {nome:"Andreia",cargo:"Sócio(a)",loja:"Todas"},
+ {nome:"Vanessa",cargo:"Sócio(a)",loja:"Todas"},
+ {nome:"Anderson Pittol",cargo:"Sócio(a)",loja:"Todas"},
+ {nome:"Jandrey",cargo:"Sócio(a)",loja:"Todas"},
  {nome:"Heloisa",cargo:"Colaboradora",loja:"Ouro Verde"},
  {nome:"Tainara",cargo:"Colaboradora",loja:"Itaipulândia"},
  {nome:"Mayara",cargo:"Colaboradora",loja:"Toledo"},
@@ -1822,9 +1822,19 @@ function inssProgressivo(base){
             retirada de R$ 6.000,00 aparecer como R$ 5.340,00 a pagar — valor
             que nunca foi pago assim. O encargo da socia continua na coluna
             propria, que la ele e custo da empresa e nao desconto dela. */
+/* Sócio, sócia, sócios, sócias: uma coisa só no painel. O texto guardado pode
+   variar (cadastros antigos, folha, planilha), então quem decide é esta função,
+   nunca uma comparação literal. O rótulo mostrado é sempre PAPEL_SOCIO. */
+const PAPEL_SOCIO = 'Sócio(a)';
+const PAPEL_COLAB = 'Colaboradora';
+function ehSocio(texto){ return /^s[óo]ci/i.test(String(texto||'').trim()); }
+function papelPadrao(texto){ return ehSocio(texto) ? PAPEL_SOCIO : PAPEL_COLAB; }
+/* Usuário master: alcance total, preparado para as ações que ainda virão. */
+const USUARIO_MASTER = 'Anderson Pittol';
+function ehMaster(){ return nomeDoUsuario().trim().toLowerCase() === USUARIO_MASTER.toLowerCase(); }
 function gDesconto(g){
   const s = +g.salario||0;
-  if(g.papel === 'Sócia') return 0;
+  if(ehSocio(g.papel)) return 0;
   if(gVinculo(g) === 'MEI') return 0;
   return inssProgressivo(s);
 }
@@ -2974,7 +2984,7 @@ function renderDesempenho(){
   const nomes = vendedorasAtuais();
   const socioMeta = (typeof perfil!=='undefined' && perfil==='socia');
   document.getElementById('metas-box').innerHTML = [...new Set(nomes.map(lojaOf))].map(l=>
-    `<span class="hint" style="margin-right:4px;">Meta mensal ${esc(l)}</span><input type="number" data-meta="${esc(l)}" value="${METAS_MENSAIS[l]||0}" step="500" style="width:110px;margin-right:14px;" ${socioMeta?'':'disabled title="Somente o perfil Sócio edita a meta."'}>`).join('');
+    `<span class="hint" style="margin-right:4px;">Meta mensal ${esc(l)}</span><input type="number" data-meta="${esc(l)}" value="${METAS_MENSAIS[l]||0}" step="500" style="width:110px;margin-right:14px;" ${socioMeta?'':'disabled title="Somente o perfil Sócio(a) edita a meta."'}>`).join('');
   if(socioMeta){
     document.querySelectorAll('[data-meta]').forEach(inp=>{
       inp.onchange = ()=>{ METAS_MENSAIS[inp.dataset.meta] = num(inp.value)||0; tnUpsertMeta(inp.dataset.meta, METAS_MENSAIS[inp.dataset.meta]); renderAll(); };
@@ -3595,9 +3605,8 @@ function fotoReduzida(arquivo, lado){
 function renderEquipeCad(){
   const box = document.getElementById('equipe-list');
   if(!box) return;
-  const ordem = {'Sócia':0,'Sócio':0,'Colaboradora':1};
-  const rows = EQUIPE.map((e,i)=>({e,i})).sort((a,b)=> (ordem[a.e.cargo]??2)-(ordem[b.e.cargo]??2) || String(a.e.nome).localeCompare(b.e.nome));
-  const acesso = c => (['Sócio','Sócia'].includes(c) ? 'Sócio' : 'Colaboradora');
+  const rows = EQUIPE.map((e,i)=>({e,i})).sort((a,b)=> (ehSocio(a.e.cargo)?0:1)-(ehSocio(b.e.cargo)?0:1) || String(a.e.nome).localeCompare(b.e.nome));
+  const acesso = c => papelPadrao(c);
   const situacao = e=>{
     const a = ACESSOS[String(e.email||'').toLowerCase()];
     if(!e.email) return '<span class="hint">—</span>';
@@ -3615,7 +3624,7 @@ function renderEquipeCad(){
           <td>${avatarHTML(e.nome, 34)}</td>
           <td><input type="text" data-ee="nome" value="${esc(e.nome)}" style="width:120px;"></td>
           <td><input type="email" data-ee="email" value="${esc(e.email||'')}" style="width:200px;"></td>
-          <td><select data-ee="cargo">${['Colaboradora','Sócia','Sócio'].map(c=>`<option ${c===e.cargo?'selected':''}>${c}</option>`).join('')}</select></td>
+          <td><select data-ee="cargo">${[PAPEL_COLAB, PAPEL_SOCIO].map(c=>`<option ${papelPadrao(e.cargo)===c?'selected':''}>${c}</option>`).join('')}</select></td>
           <td class="hint">segue o cargo</td>
           <td><select data-ee="loja">${['Todas','Itaipulândia','Ouro Verde','Toledo'].map(l=>`<option ${l===e.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td class="hint">—</td>
@@ -3635,7 +3644,7 @@ function renderEquipeCad(){
       <td class="strong">${esc(e.nome)}</td>
       <td>${e.email ? esc(e.email) : '<span class="hint">sem e-mail</span>'}</td>
       <td>${esc(e.cargo)}</td>
-      <td><span class="badge ${acesso(e.cargo)==='Sócio'?'b-warning':'b-good'}"><span class="dot"></span>${acesso(e.cargo)}</span></td>
+      <td><span class="badge ${ehSocio(e.cargo)?'b-warning':'b-good'}"><span class="dot"></span>${acesso(e.cargo)}</span></td>
       <td>${esc(e.loja)}</td>
       <td>${situacao(e)}</td>
       <td style="text-align:right;white-space:nowrap;">
@@ -4306,7 +4315,7 @@ function renderInstagram(){
       const { data, error } = await window.TN.sb.from('ig_pautas').update(dados).eq('id', id).select();
       b.disabled = false;
       if(error) return alert('Não deu para salvar: ' + error.message);
-      if(!data || !data.length) return alert('Só o perfil Sócio pode alterar a pauta da semana.');
+      if(!data || !data.length) return alert('Só o perfil Sócio(a) pode alterar a pauta da semana.');
       await tnCarregarPautas();
       await tnCarregarHistPautas();
     };
@@ -4333,7 +4342,7 @@ function renderInstagram(){
         .update(dados).eq('id', b.dataset.pasalvar).select();
       b.disabled = false;
       if(error) return alert('Não deu para salvar: ' + error.message);
-      if(!data || !data.length) return alert('Só o perfil Sócio pode alterar a pauta da semana.');
+      if(!data || !data.length) return alert('Só o perfil Sócio(a) pode alterar a pauta da semana.');
       pautaEditando = null;
       await tnCarregarPautas();
       await tnCarregarHistPautas();
@@ -4347,7 +4356,7 @@ function renderInstagram(){
       await igArquivar(pautas.find(p=>p.id===id));
       const { data, error } = await window.TN.sb.from('ig_pautas').delete().eq('id', id).select();
       if(error) return alert('Não deu para excluir: ' + error.message);
-      if(!data || !data.length) return alert('Só o perfil Sócio pode excluir uma pauta.');
+      if(!data || !data.length) return alert('Só o perfil Sócio(a) pode excluir uma pauta.');
       await tnCarregarPautas();
       await tnCarregarHistPautas();
     };
@@ -6499,18 +6508,18 @@ function renderGente(){
   renderFolhaHeader();
   const s = currentStore();
   const list = folhaDaCompetencia(gtAno, gtMes).filter(g=> selStores().includes(g.loja));
-  const socias = list.filter(g=>g.papel==='Sócia');
-  const colabs = list.filter(g=>g.papel==='Colaboradora');
+  const socias = list.filter(g=>ehSocio(g.papel));
+  const colabs = list.filter(g=>!ehSocio(g.papel));
   const soma = arr => arr.reduce((a,g)=>a+gTotal(g),0);
   const comiss = list.reduce((a,g)=>a+gComissao(g),0);
   fatCacheLimpar();   // faturamento pode ter mudado desde o ultimo render
   document.getElementById('gente-kpis').innerHTML = `
     <div class="card stat-tile accent-warning"><div class="label">Folha total / mês</div><div class="value">${BRL(soma(list))}</div></div>
-    <div class="card stat-tile"><div class="label">Sócias (pró-labore + encargos)</div><div class="value">${BRL(soma(socias))}</div></div>
+    <div class="card stat-tile"><div class="label">Sócios (pró-labore + encargos)</div><div class="value">${BRL(soma(socias))}</div></div>
     <div class="card stat-tile"><div class="label">Colaboradoras</div><div class="value">${BRL(soma(colabs))}</div></div>
     <div class="card stat-tile accent-good"><div class="label">Comissões do mês</div><div class="value">${BRL(comiss)}</div></div>
   `;
-  const rows = list.slice().sort((a,b)=> (a.papel===b.papel?0:(a.papel==='Sócia'?-1:1)) || a.loja.localeCompare(b.loja));
+  const rows = list.slice().sort((a,b)=> (ehSocio(a.papel)?0:1)-(ehSocio(b.papel)?0:1) || a.loja.localeCompare(b.loja));
   const podeEd = (typeof perfil!=='undefined' && perfil==='socia') && gtGerenciavel();
   const lojasOpt = ['Itaipulândia','Ouro Verde','Toledo'];
   const prov = rows.map(g=>({g, p:gProvisao(g)}));
@@ -6529,7 +6538,7 @@ function renderGente(){
       if(podeEd && folhaEditando && gtKey(g)===folhaEditando){
         return `<tr>
           <td><input type="text" data-ge="pessoa" value="${esc(g.pessoa)}" style="width:100%;box-sizing:border-box;"></td>
-          <td><select data-ge="papel">${['Colaboradora','Sócia'].map(x=>`<option ${x===g.papel?'selected':''}>${x}</option>`).join('')}</select></td>
+          <td><select data-ge="papel">${[PAPEL_COLAB, PAPEL_SOCIO].map(x=>`<option ${papelPadrao(g.papel)===x?'selected':''}>${x}</option>`).join('')}</select></td>
           <td><select data-ge="loja">${lojasOpt.map(l=>`<option ${l===g.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td><input type="number" data-ge="horas_dia" value="${g.horas_dia==null?'':+g.horas_dia}" step="0.5" placeholder="h/dia" style="width:66px;"></td>
           <td><input type="number" data-ge="salario" value="${+g.salario||0}" step="0.01" style="width:100px;"></td>
@@ -6554,7 +6563,7 @@ function renderGente(){
       const fatTxt = BRL(fat) + (pctG!=null ? ' · ' + pctG.toFixed(0) + '% da meta' : '');
       return `<tr>
         <td class="strong">${esc(g.pessoa)}</td>
-        <td>${esc(g.papel)}${g.papel==='Sócia'?' <span class="hint">(informal)</span>'
+        <td>${esc(papelPadrao(g.papel))}${ehSocio(g.papel)?' <span class="hint">(informal)</span>'
              : (gVinculo(g)==='MEI'?' <span class="hint">(MEI · serviço)</span>':' <span class="hint">(CLT)</span>')}</td>
         <td>${esc(g.loja)}</td>
         <td>${jorn?`${jorn}h/dia <span class="hint">${Math.round(gHorasMes(g))}h/mês</span>`:'—'}</td>
@@ -6733,7 +6742,7 @@ function applyPerfil(){
   const tg = document.getElementById('perfil-toggle');
   if(tg){
     tg.style.display = (perfilReal==='socia') ? '' : 'none';
-    tg.textContent = socia ? 'ver como colab.' : '← voltar a Sócio';
+    tg.textContent = socia ? 'ver como colab.' : '← voltar a Sócio(a)';
     // na prévia o botão fica em destaque, para a saída ficar sempre evidente
     tg.className = socia ? 'btn ghost' : 'btn primary';
     tg.style.fontWeight = socia ? '' : '600';
@@ -6743,7 +6752,11 @@ function applyPerfil(){
   aplicarMenuDoPerfil(socia);
   const cf = document.getElementById('card-feedback'); if(cf) cf.style.display = socia ? '' : 'none';
   const ce = document.getElementById('card-equipe-cad'); if(ce) ce.style.display = socia ? '' : 'none';
-  document.getElementById('perfil-label').textContent = socia ? 'Sócio' : (perfilReal==='socia' ? 'Prévia: Colab.' : 'Colaboradora');
+  /* O master aparece como master: e o mesmo acesso de socio hoje, mas o papel
+     ja fica nomeado para as acoes que so ele vai poder fazer. */
+  document.getElementById('perfil-label').textContent =
+    socia ? (ehMaster() ? 'Master' : PAPEL_SOCIO)
+          : (perfilReal==='socia' ? 'Prévia: Colab.' : PAPEL_COLAB);
   document.getElementById('perfil-btn').textContent = 'Sair';
   if(!socia){
     const atual = document.querySelector('.view.active');
