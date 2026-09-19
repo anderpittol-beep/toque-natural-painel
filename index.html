@@ -8796,6 +8796,12 @@ function cpRenderParcelas(){
     dica.textContent = textos[modo] || '';
     dica.style.color = (modo === 'nenhum') ? 'var(--warning)' : '';
   }
+  /* no a vista o campo de parcelas nao faz sentido: fica travado em 1 */
+  const pc = document.getElementById('cp-parcelas');
+  if(pc){
+    if(modo === 'avista'){ pc.value = 1; pc.disabled = true; }
+    else pc.disabled = false;
+  }
   if(venc) venc.title = (modo === 'cartao')
     ? 'Vencimento da fatura do cartão' : 'Vencimento da 1ª parcela — em branco usa 30 dias após a compra';
   if(!caixa) return;
@@ -8861,8 +8867,9 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
      !confirm('A divisão entre as lojas (' + BRL(somaPartes) + ') não fecha com a nota (' + BRL(totalNota) + ').\n\nLançar assim mesmo?')) return;
 
   const nf = document.getElementById('cp-nf').value.trim();
-  const parcelas = parseInt(document.getElementById('cp-parcelas').value) || 1;
   const modo = (document.getElementById('cp-modo')||{}).value || 'mensal';
+  /* À vista não tem parcela: a nota inteira sai de uma vez, na data da compra. */
+  const parcelas = (modo === 'avista') ? 1 : (parseInt(document.getElementById('cp-parcelas').value) || 1);
 
   /* Os boletos são da nota inteira: no modo manual, cada linha já é um boleto. */
   let manuaisBase = null;
@@ -8905,7 +8912,8 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   if(criadosTotal) alert(criadosTotal +
     (modo === 'cartao'
       ? (criadosTotal===1 ? ' saída gerada na data da fatura do cartão' : ' saídas geradas nas datas das faturas do cartão')
-      : (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados')) +
+      : (modo === 'avista' ? ' saída à vista gerada, já quitada'
+        : (criadosTotal===1 ? ' boleto gerado' : ' boletos gerados'))) +
     ' a partir desta nota, em ' + lojaPadrao + '.' +
     (modo === 'cartao' ? '\n\nNão lance o boleto do fornecedor: esta compra já saiu pelo cartão.' : '') +
     (lojasOk.length>1 ? '\n\nA despesa ficou dividida entre ' + lojasOk.join(', ') + '.' : ''));
