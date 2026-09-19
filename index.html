@@ -558,6 +558,7 @@ window.TN_CONFIG = {
                   <p class="hint" id="cp-modo-dica" style="grid-column:1/-1;margin:0;"></p>
                   <select id="cp-modo" style="grid-column:1/-1;">
                     <option value="mensal">Boletos a cada 30 dias, a partir da 1ª parcela</option>
+                    <option value="avista">À vista — sai do caixa na data da compra</option>
                     <option value="cartao">Pago no cartão da loja — saída na data da fatura</option>
                     <option value="manual">Informar a data e o valor de cada boleto</option>
                     <option value="nenhum">Não gerar boletos agora (nada sai do caixa)</option>
@@ -8789,6 +8790,7 @@ function cpRenderParcelas(){
   if(dica){
     const textos = {
       mensal: 'A data ao lado é o vencimento da 1ª parcela. Em branco, usa 30 dias após a compra.',
+      avista: 'Pagamento à vista: gera uma única saída, já quitada, na data da compra. Entra direto nas despesas do mês.',
       cartao: 'A data ao lado é o vencimento da FATURA do cartão, não o da compra. A saída de caixa cai no mês em que a fatura debita. Parcelado no cartão: informe o número de parcelas e cada uma vira uma fatura seguinte.',
       manual: 'Informe abaixo a data e o valor de cada boleto.',
       nenhum: 'Atenção: a nota entra no lucro, mas NÃO gera saída de caixa. Use só quando a loja realmente não vai pagar — cartão pessoal sem reembolso, por exemplo.'
@@ -8871,8 +8873,10 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
   /* À vista não tem parcela: a nota inteira sai de uma vez, na data da compra. */
   const parcelas = (modo === 'avista') ? 1 : (parseInt(document.getElementById('cp-parcelas').value) || 1);
 
-  /* Os boletos são da nota inteira: no modo manual, cada linha já é um boleto. */
+  /* Os boletos são da nota inteira: no modo manual, cada linha já é um boleto.
+     No à vista é uma saída só, na data da compra, já paga. */
   let manuaisBase = null;
+  if(modo === 'avista') manuaisBase = [{ data: d, valor: Math.round(totalNota*100)/100 }];
   if(modo === 'manual'){
     manuaisBase = [...document.querySelectorAll('#cp-parcelas-lista [data-cpp]')].map(l=>({
       data: l.querySelector('[data-cppd]').value,
@@ -8906,6 +8910,7 @@ document.getElementById('form-compra').addEventListener('submit', async e=>{
        isso visivel na lista, para ninguem lancar o boleto do fornecedor
        tambem e duplicar a mesma compra. */
     if(modo === 'cartao') notaCheia.viaCartao = true;
+    if(modo === 'avista') notaCheia.aVista = true;
     criadosTotal = await gerarParcelas(notaCheia, document.getElementById('cp-venc1').value, manuaisBase) || 0;
   }
 
@@ -8952,7 +8957,8 @@ async function gerarParcelas(compra, venc1, manuais){
       competencia: MES_ABREV[venc.getMonth()+1] + '/' + String(venc.getFullYear()).slice(2),
       loja: compra.loja,
       descricao: (compra.fornecedor||'Compra') + ' ' + (i+1) + '/' + n + (compra.nf ? ' · NF ' + compra.nf : '') +
-                 (compra.viaCartao ? ' · cartão da loja' : ''),
+                 (compra.viaCartao ? ' · cartão da loja' : '') +
+                 (compra.aVista ? ' · à vista' : ''),
       valor: centavos/100,
       status: venc <= hoje ? 'Pago' : 'Pendente',
       origem: 'painel',
