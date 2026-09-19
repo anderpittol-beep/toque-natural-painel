@@ -2684,28 +2684,35 @@ function ritmoTile(r, refLabel){
                 '<div class="value" style="font-size:17px;">—</div>' +
                 '<div class="delta">Defina a meta mensal da loja para acompanhar o ritmo.</div></div>';
   const atras = r.dif < 0;
-  const linha = (atras ? 'Faltam ' : 'À frente ') + BRL(Math.abs(cent(r.dif))) +
-                ' para o esperado de ' + BRL(cent(r.esperado)) +
+  /* O numero que importa e quanto falta recuperar: sai do meio da frase e vira
+     o destaque do cartao, circulado. O resto vira legenda miuda. */
+  const linha = 'para o esperado de ' + BRL(cent(r.esperado)) +
                 ' (' + r.pctEsperado.toFixed(0) + '% da meta no dia útil ' +
                 r.duCorridos + ' de ' + r.duMes + ').';
   const fer = r.feriados.length
-    ? '<div class="delta">Fora da conta: ' + esc(r.feriados.join(' · ')) + '.</div>' : '';
+    ? '<div class="delta" style="font-size:11px;">Fora da conta: ' + esc(r.feriados.join(' · ')) + '.</div>' : '';
   /* O dia de hoje ja saiu da conta quando falta o fechamento: avisar de novo
      sobre ele seria repetir. O aviso fica para os dias anteriores em aberto. */
   const emAberto = r.hojeForaDaConta ? Math.max(0, r.semLancar - 1) : r.semLancar;
   const aviso = emAberto > 0
-    ? '<div class="delta" style="color:var(--warning);">' + emAberto +
+    ? '<div class="delta" style="color:var(--warning);font-size:11px;">' + emAberto +
       (emAberto === 1 ? ' dia útil anterior ainda sem fechamento lançado — o número pode estar melhor do que parece.'
                       : ' dias úteis anteriores ainda sem fechamento lançado — o número pode estar melhor do que parece.') +
       '</div>'
     : '';
   const hoje = r.hojeForaDaConta
-    ? '<div class="delta">⏳ Hoje ainda não entrou na conta: entra quando o fechamento for lançado.</div>' : '';
+    ? '<div class="delta" style="font-size:11px;">⏳ Hoje ainda não entrou na conta: entra quando o fechamento for lançado.</div>' : '';
   const ate = r.ultimoDia
-    ? '<div class="delta">🕒 Atualizado até ' + esc(r.ultimoDia) + '.</div>' : '';
+    ? '<div class="delta" style="font-size:11px;">🕒 Atualizado até ' + esc(r.ultimoDia) + '.</div>' : '';
+  const destaque = '<div style="margin:8px 0 4px;">' +
+      '<span style="display:inline-block;border:3px solid ' + r.cor + ';color:' + r.cor +
+      ';border-radius:999px;padding:7px 18px;font-weight:800;font-size:clamp(20px,5vw,26px);white-space:nowrap;">' +
+      BRL(Math.abs(cent(r.dif))) + '</span>' +
+      '<div class="delta" style="font-size:11px;margin-top:4px;">' +
+      (atras ? 'a recuperar ' : 'à frente ') + esc(linha) + '</div></div>';
   return '<div class="card stat-tile"><div class="label">Ritmo de ' + esc(refLabel) + '</div>' +
-         '<div class="value" style="font-size:20px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
-         '<div class="delta">' + esc(linha) + '</div>' + fer + hoje + ate + aviso + '</div>';
+         '<div class="value" style="font-size:17px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
+         destaque + fer + hoje + ate + aviso + '</div>';
 }
 function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado){
   const ano = refMes.getFullYear(), mes = refMes.getMonth();
@@ -8555,7 +8562,16 @@ function metaPorDiaAtual(){
     const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
     const meta = METAS_MENSAIS[l] || 0;
     const falta = Math.max(0, meta - rec);
-    return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null};
+    /* O acumulado a recuperar e outra conta: nao e o que falta do mes, e o
+       quanto a loja esta atras do esperado para o dia de hoje. */
+    const dias = CAIXA_DIARIO.filter(c=>{
+      const d = parseBR(c.data);
+      return c.loja === l && d && d.getFullYear()===TODAY.getFullYear() && d.getMonth()===TODAY.getMonth();
+    });
+    const vendasMes = dias.reduce((a,c)=> a + (+c.vendas||0), 0);
+    const hojeLancado = dias.some(c=> c.data === hojeBR());
+    const r = ritmoDoMes(vendasMes, meta, TODAY, new Set(dias.map(c=>c.data)).size, hojeLancado);
+    return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null, ritmo:r};
   }).filter(x=> x.meta > 0);
 }
 function metaDiaChave(){ return 'tn_metadia_' + hojeBR() + '_' + (TN_EMAIL||'anon'); }
@@ -8580,7 +8596,11 @@ function mostrarMetaDoDia(){
     return `<div style="border:3px solid ${cor};border-radius:16px;padding:18px 14px;margin-bottom:12px;">
       <div class="strong" style="font-size:15px;margin-bottom:4px;">${esc(x.loja)}</div>
       <div style="font-size:clamp(34px,9vw,54px);font-weight:800;line-height:1.05;color:${cor};">${valor}</div>
-      <div class="hint" style="margin-top:6px;">por dia útil, nos ${x.duRest} dia(s) que restam · faltam ${BRL(x.falta)} de ${BRL(x.meta)}</div>
+      <div class="hint" style="margin-top:6px;font-size:11px;">por dia útil, nos ${x.duRest} dia(s) que restam · faltam ${BRL(x.falta)} de ${BRL(x.meta)}</div>
+      ${x.ritmo ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border,rgba(0,0,0,.1));">
+        <span style="display:inline-block;border:3px solid ${x.ritmo.cor};color:${x.ritmo.cor};border-radius:999px;padding:6px 16px;font-weight:800;font-size:22px;white-space:nowrap;">${BRL(Math.abs(cent(x.ritmo.dif)))}</span>
+        <div class="hint" style="font-size:11px;margin-top:4px;">${x.ritmo.dif < 0 ? 'a recuperar do acumulado' : 'à frente do acumulado'} — ${esc(x.ritmo.rotulo)}, no dia útil ${x.ritmo.duCorridos} de ${x.ritmo.duMes}</div>
+      </div>` : ''}
     </div>`;
   };
   const div = document.createElement('div');
