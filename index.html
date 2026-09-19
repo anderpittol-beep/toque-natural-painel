@@ -2732,7 +2732,10 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado){
           feriados: feriadosDoMes(ano, mes),
           pctEsperado: duCorridos / duMes * 100};
 }
-function pctColor(p){ return p>=100?'var(--good)':(p>=70?'var(--warning)':'var(--critical)'); }
+/* Uma unica regra de cor no painel: a mesma do semaforo e da legenda do mural
+   (verde 96%+, laranja 70% a 95%, vermelho abaixo de 70%). Antes este ponto
+   exigia 100%, entao 99% aparecia laranja com a carinha verde ao lado. */
+function pctColor(p){ return semaforoZona(p).cor; }
 /* Carinha da meta: mede o RITMO, nao o acumulado. Na terca-feira ninguem tem
    como ter 100% da semana; cobrar isso faz a colaboradora comecar todo periodo
    com a cara triste. Entao o realizado e comparado com o que ja era esperado
@@ -2959,6 +2962,7 @@ function feriadosDoMes(ano,mes){
   }
   return out;
 }
+let histMesesAberto = false;   // meses anteriores do quadro de faturamento
 function renderDesempenho(){
   const nomes = vendedorasAtuais();
   const socioMeta = (typeof perfil!=='undefined' && perfil==='socia');
@@ -3096,7 +3100,8 @@ function renderDesempenho(){
     const pctTot = totMeta ? totRec/totMeta*100 : 0;
     hb.innerHTML = `
       <thead><tr><th>Mês</th><th>Loja</th><th>Colaboradora</th><th>Faturamento</th><th>Meta do mês</th><th>% da meta</th><th>Falta</th><th>Meta por dia restante</th><th>Comissão</th></tr></thead>
-      <tbody>${linhas.map(x=>{
+      <tbody>${(()=>{
+      const linhaHTML = x=>{
         const pct = x.meta ? x.rec/x.meta*100 : 0;
         /* falta e meta por dia so fazem sentido no mes que ainda esta correndo */
         const ehMesAtual = x.mes === (MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2));
@@ -3131,10 +3136,25 @@ function renderDesempenho(){
           <td class="strong" style="color:${porDia && porDia>ritmo*1.5?'var(--critical)':'var(--text)'};">${
             ehMesAtual ? (falta<=0 ? '<span class="hint">—</span>' : (duRest ? BRL(porDia) : '<span class="hint">sem dia útil restante</span>')) : '<span class="hint">—</span>'}</td>
           <td>${celComissao}</td>
-        </tr>`;}).join('') || `<tr><td colspan="9" class="hint">Sem faturamento no recorte escolhido.</td></tr>`}
+        </tr>`;};
+      /* Renderiza todas as linhas (a comissao do recorte soma o periodo inteiro),
+         mas so o mes corrente fica a vista: os anteriores abrem num clique. */
+      const feitas = linhas.map(x=>({mes:x.mes, html: linhaHTML(x)}));
+      if(!feitas.length) return `<tr><td colspan="9" class="hint">Sem faturamento no recorte escolhido.</td></tr>`;
+      const rotuloAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
+      const atuais = feitas.filter(f=> f.mes === rotuloAtual);
+      const antigas = feitas.filter(f=> f.mes !== rotuloAtual);
+      if(!antigas.length || !atuais.length) return feitas.map(f=>f.html).join('');
+      const qtdMeses = new Set(antigas.map(f=>f.mes)).size;
+      const aviso = `<tr data-histmeses style="cursor:pointer;"><td colspan="9" class="hint">${histMesesAberto?'▾':'▸'} ${qtdMeses} ${qtdMeses===1?'mês anterior':'meses anteriores'} — clique para ${histMesesAberto?'recolher':'ver'}</td></tr>`;
+      return aviso + (histMesesAberto ? antigas.map(f=>f.html).join('') : '') + atuais.map(f=>f.html).join('');
+    })()}
       ${linhas.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total do recorte</td><td class="strong">${BRL(totRec)}</td><td>${BRL(totMeta)}</td><td style="color:${pctColor(pctTot)};font-weight:600;">${carinhaHTML(pctTot, fracaoMesRef(TODAY.getFullYear(), TODAY.getMonth()))} ${pctTot.toFixed(0)}%</td><td colspan="2"></td><td class="strong" style="color:var(--good);">${BRL(comissaoRecorte)}</td></tr>`:''}</tbody>
       <tfoot><tr><td colspan="9" class="hint">Dias úteis no mês (seg–sáb): ${duMes} · restantes a partir de amanhã: ${duRest}. A meta por dia é o que falta dividido por esses dias — sobe se o mês atrasa, cai se adianta.<br>
         Comissão por <strong>% da meta da loja</strong>, cumulativa, de Ago/26 em diante: ${COMISSAO_FAIXAS_PCT.map((f,i)=>`${COMISSAO_EMOJI[i+1]} ${f.pct}% → +${BRL(f.valor)}`).join(' · ')} — quem bate 140% da meta recebe ${BRL(COMISSAO_FAIXAS_PCT.reduce((a,f)=>a+f.valor,0))}. Até Jul/26 a regra era por valor faturado. Quem faz meia jornada recebe metade.</td></tr></tfoot>`;
+    hb.querySelectorAll('[data-histmeses]').forEach(tr=>{
+      tr.onclick = ()=>{ histMesesAberto = !histMesesAberto; renderDesempenho(); };
+    });
   }
 
   // ===== Premiações (por % da meta) =====
