@@ -8710,10 +8710,11 @@ function mostrarNovidades(){
   if(document.getElementById('tn-novidades')) return;
   if(document.getElementById('tn-metadia')) return;      // uma tela de cada vez
   const socia = (typeof perfil !== 'undefined' && perfil === 'socia');
-  if(socia){ marcarNovidadesVistas(); return; }          // quem publica nao precisa do aviso
   const nome = nomeDoUsuario();
-  const artes = artesNovas();
-  const linkNovo = linkMaterialNovo();
+  /* Arte nova e aviso para quem executa: quem publica nao precisa ser avisado
+     do proprio trabalho. Tarefa com prazo vale para todo mundo, socia incluida. */
+  const artes = socia ? [] : artesNovas();
+  const linkNovo = socia ? false : linkMaterialNovo();
   const tarefas = tarefasDoDia(nome);
   if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); return; }
   const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
