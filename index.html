@@ -8706,6 +8706,25 @@ function tarefasDoDia(nome){
     return dt && dt <= limite;                // atrasada, para hoje ou para amanha
   }).sort((a,b)=> (parseBR(a.prazo)||0) - (parseBR(b.prazo)||0));
 }
+/* Tarefa recem-atribuida tambem e novidade, mesmo com prazo longe: se ninguem
+   avisa, ela so aparece quando alguem lembra de abrir a aba. */
+function tarefasNovas(nome){
+  const desde = novidadesVistoAte();
+  if(!desde || !nome) return [];
+  return TAREFAS.filter(t=> String(t.status||'') !== 'concluida'
+    && String(t.colaborador||'').trim().toLowerCase() === nome.trim().toLowerCase()
+    && t.criado_em && String(t.criado_em) > desde);
+}
+function tarefasParaAvisar(nome){
+  const novas = tarefasNovas(nome);
+  const prazo = tarefasDoDia(nome);
+  const vistas = new Set();
+  return novas.concat(prazo).filter(t=>{
+    const k = t.id != null ? 't'+t.id : (t.titulo||'') + '|' + (t.prazo||'');
+    if(vistas.has(k)) return false;
+    vistas.add(k); return true;
+  }).map(t=> ({...t, nova: novas.indexOf(t) !== -1}));
+}
 function mostrarNovidades(){
   if(document.getElementById('tn-novidades')) return;
   if(document.getElementById('tn-metadia')) return;      // uma tela de cada vez
@@ -8713,9 +8732,9 @@ function mostrarNovidades(){
   const nome = nomeDoUsuario();
   /* Arte nova e aviso para quem executa: quem publica nao precisa ser avisado
      do proprio trabalho. Tarefa com prazo vale para todo mundo, socia incluida. */
-  const artes = socia ? [] : artesNovas();
-  const linkNovo = socia ? false : linkMaterialNovo();
-  const tarefas = tarefasDoDia(nome);
+  const artes = artesNovas();
+  const linkNovo = linkMaterialNovo();
+  const tarefas = tarefasParaAvisar(nome);
   if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); return; }
   const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
   const quando = t => {
@@ -8737,8 +8756,8 @@ function mostrarNovidades(){
       <button class="btn ghost" id="tn-nov-ig" style="width:100%;margin-top:10px;">Abrir Instagram — Pautas</button>
     </div>` : ''}
     ${tarefas.length ? `<div style="border:2px solid var(--warning,#d9a441);border-radius:14px;padding:14px;margin-bottom:12px;">
-      <div class="strong" style="font-size:13px;margin-bottom:6px;">📌 ${tarefas.length === 1 ? 'Tarefa no prazo' : tarefas.length + ' tarefas no prazo'}</div>
-      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${tarefas.slice(0,6).map(t=>`<li>${esc(t.titulo||'')} — ${quando(t)}</li>`).join('')}</ul>
+      <div class="strong" style="font-size:13px;margin-bottom:6px;">📌 ${tarefas.length === 1 ? 'Tarefa para você' : tarefas.length + ' tarefas para você'}</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${tarefas.slice(0,6).map(t=>`<li>${esc(t.titulo||'')}${t.nova?' <span style="color:var(--good);font-weight:700;">nova</span>':''}${t.prazo?' — '+quando(t):''}</li>`).join('')}</ul>
       <button class="btn ghost" id="tn-nov-tk" style="width:100%;margin-top:10px;">Abrir Equipe: tarefas</button>
     </div>` : ''}
     <button class="btn primary" id="tn-nov-ok" style="width:100%;">Vi tudo</button>
@@ -9411,7 +9430,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
-  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,loja:r.loja||'',titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||''})); }catch(e){}
+  try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,loja:r.loja||'',titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||'',criado_em:r.criado_em||null})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
   populateEquipeSelects();
   await carregarPrefs();    // restaura a última análise deste usuário
