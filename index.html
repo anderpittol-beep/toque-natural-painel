@@ -8669,9 +8669,84 @@ function mostrarMetaDoDia(){
     ${socia ? '<button class="btn ghost" id="tn-metadia-hoje" style="width:100%;margin-top:8px;">Ocultar até amanhã</button>' : ''}
   </div>`;
   document.body.appendChild(div);
-  document.getElementById('tn-metadia-ok').onclick = ()=>{ div.remove(); };
+  document.getElementById('tn-metadia-ok').onclick = ()=>{ div.remove(); mostrarNovidades(); };
   const btnHoje = document.getElementById('tn-metadia-hoje');
-  if(btnHoje) btnHoje.onclick = ()=>{ marcarMetaDiaVista(); div.remove(); };
+  if(btnHoje) btnHoje.onclick = ()=>{ marcarMetaDiaVista(); div.remove(); mostrarNovidades(); };
+}
+/* AVISO DE NOVIDADES — arte nova no Instagram e tarefa com prazo apertado.
+   Sem isto, a arte entra no painel e passa batido: alguém precisa avisar no
+   WhatsApp. O painel avisa sozinho, uma vez por novidade, para quem executa. */
+function novidadesChave(){ return 'tn_novidades_' + (TN_EMAIL||'anon'); }
+function novidadesVistoAte(){ try{ return localStorage.getItem(novidadesChave()) || ''; }catch(e){ return ''; } }
+function marcarNovidadesVistas(){
+  const agora = new Date().toISOString();
+  try{
+    localStorage.setItem(novidadesChave(), agora);
+    localStorage.setItem('tn_ig_link_' + (TN_EMAIL||'anon'), IG_PADRAO_LINK || '');
+  }catch(e){}
+}
+function linkMaterialNovo(){
+  const desde = novidadesVistoAte();
+  if(!desde || !IG_PADRAO_LINK) return false;
+  try{ return localStorage.getItem('tn_ig_link_' + (TN_EMAIL||'anon')) !== IG_PADRAO_LINK; }catch(e){ return false; }
+}
+function artesNovas(){
+  const desde = novidadesVistoAte();
+  if(!desde) return [];                       // primeira visita nao vira enxurrada
+  return IG_PAUTAS.filter(p => p.atualizado_em && String(p.atualizado_em) > desde)
+                  .sort((a,b)=> String(a.atualizado_em) < String(b.atualizado_em) ? 1 : -1);
+}
+function tarefasDoDia(nome){
+  if(!nome) return [];
+  const limite = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()+1);
+  return TAREFAS.filter(t=>{
+    if(String(t.status||'') === 'concluida') return false;
+    if(String(t.colaborador||'').trim().toLowerCase() !== nome.trim().toLowerCase()) return false;
+    const dt = parseBR(t.prazo);
+    return dt && dt <= limite;                // atrasada, para hoje ou para amanha
+  }).sort((a,b)=> (parseBR(a.prazo)||0) - (parseBR(b.prazo)||0));
+}
+function mostrarNovidades(){
+  if(document.getElementById('tn-novidades')) return;
+  if(document.getElementById('tn-metadia')) return;      // uma tela de cada vez
+  const socia = (typeof perfil !== 'undefined' && perfil === 'socia');
+  if(socia){ marcarNovidadesVistas(); return; }          // quem publica nao precisa do aviso
+  const nome = nomeDoUsuario();
+  const artes = artesNovas();
+  const linkNovo = linkMaterialNovo();
+  const tarefas = tarefasDoDia(nome);
+  if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); return; }
+  const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
+  const quando = t => {
+    const dt = parseBR(t.prazo); if(!dt) return '';
+    const dif = Math.round((dt.getTime() - hojeMs) / 86400000);
+    if(dif < 0) return '<span style="color:var(--critical);font-weight:700;">atrasada</span>';
+    if(dif === 0) return '<span style="color:var(--warning);font-weight:700;">para hoje</span>';
+    return '<span class="hint">para amanhã</span>';
+  };
+  const div = document.createElement('div');
+  div.id = 'tn-novidades';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+  div.innerHTML = `<div style="background:var(--surface-card);color:var(--text-primary);max-width:460px;width:100%;padding:24px;border-radius:18px;box-shadow:0 14px 50px rgba(0,0,0,.4);text-align:left;">
+    <div style="font-size:32px;text-align:center;margin-bottom:2px;">🔔</div>
+    <div class="strong" style="font-size:18px;text-align:center;margin-bottom:14px;">Novidades para você</div>
+    ${(artes.length || linkNovo) ? `<div style="border:2px solid var(--accent,#1f7a4d);border-radius:14px;padding:14px;margin-bottom:12px;">
+      <div class="strong" style="font-size:13px;margin-bottom:6px;">🎨 ${linkNovo && !artes.length ? 'Material novo no Instagram' : (artes.length === 1 ? 'Arte nova no Instagram' : artes.length + ' artes novas no Instagram')}</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${artes.slice(0,5).map(p=>`<li>${esc(p.dia||'')}${p.pilar?' — '+esc(p.pilar):''}</li>`).join('')}${linkNovo?'<li>A pasta do material padrão foi atualizada.</li>':''}</ul>
+      <button class="btn ghost" id="tn-nov-ig" style="width:100%;margin-top:10px;">Abrir Instagram — Pautas</button>
+    </div>` : ''}
+    ${tarefas.length ? `<div style="border:2px solid var(--warning,#d9a441);border-radius:14px;padding:14px;margin-bottom:12px;">
+      <div class="strong" style="font-size:13px;margin-bottom:6px;">📌 ${tarefas.length === 1 ? 'Tarefa no prazo' : tarefas.length + ' tarefas no prazo'}</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${tarefas.slice(0,6).map(t=>`<li>${esc(t.titulo||'')} — ${quando(t)}</li>`).join('')}</ul>
+      <button class="btn ghost" id="tn-nov-tk" style="width:100%;margin-top:10px;">Abrir Equipe: tarefas</button>
+    </div>` : ''}
+    <button class="btn primary" id="tn-nov-ok" style="width:100%;">Vi tudo</button>
+  </div>`;
+  document.body.appendChild(div);
+  const fechar = aba => { marcarNovidadesVistas(); div.remove(); if(aba) setView(aba); };
+  document.getElementById('tn-nov-ok').onclick = ()=> fechar(null);
+  const bIg = document.getElementById('tn-nov-ig'); if(bIg) bIg.onclick = ()=> fechar('instagram');
+  const bTk = document.getElementById('tn-nov-tk'); if(bTk) bTk.onclick = ()=> fechar('equipe');
 }
 /* Cada sócia trabalha a partir da sua loja: Andreia em Itaipulândia, Vanessa em
    Ouro Verde. A loja dela já vem escolhida nos lançamentos — as outras seguem
@@ -9355,13 +9430,14 @@ async function tnAfterLogin(sb){
   await tnLoadAll(sb);
   tnCarregarAcessos();
   tnCarregarConfig();
-  tnCarregarPautas();
+  await tnCarregarPautas();
   tnCarregarWhatsapp();
   tnCarregarCorrecoes();
   congelarFolhaFechada();
   cpAplicarLojaPadrao();   // cada sócia abre na própria loja
   iniciarLembreteDiario();
   mostrarMetaDoDia();
+  mostrarNovidades();
   tnVerificarAcessoCasa();
 }
 
