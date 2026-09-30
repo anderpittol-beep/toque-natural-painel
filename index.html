@@ -1289,9 +1289,14 @@ window.TN_CONFIG = {
               </select>
               <input type="text" id="pes-desc" placeholder="Descrição" required>
               <input type="number" id="pes-valor" placeholder="Valor" step="0.01" required>
-              <input type="number" id="pes-pnum" placeholder="Parcela" min="1" step="1">
+              <select id="pes-vmodo" title="O valor digitado é o da parcela ou o total da compra?">
+                <option value="parcela">valor da parcela</option>
+                <option value="total">valor total (dividir)</option>
+              </select>
+              <input type="number" id="pes-pnum" placeholder="Parcela nº" min="1" step="1">
               <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
               <input type="number" id="pes-dia" placeholder="Dia que debita" min="1" max="31" step="1" title="Dia do mês em que a despesa debita na conta">
+              <p class="hint" id="pes-previa" style="grid-column:1/-1;margin:0;"></p>
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar despesa</button>
             </form>
           </details>
@@ -7067,6 +7072,8 @@ function pesDebitoHTML(x){
 /* 'variavel' foi unificado em 'fixa'; registro antigo continua lendo como fixa */
 const pesTipo = x => (x && x.tipo==='variavel') ? 'fixa' : (x ? x.tipo : x);
 const pesComp = () => MESES_NOMES[pesMes-1] + ' de ' + pesAno;
+/* rotulo de um mes adiante do que esta na tela, para a previa dizer ate quando vai */
+const pesMesLabel = (ano, mes, adiante) => { const d = new Date(ano, (mes-1) + (adiante||0), 1); return MESES_NOMES[d.getMonth()] + ' de ' + d.getFullYear(); };
 const pesDoMes = arr => arr.filter(x => +x.ano===pesAno && +x.mes===pesMes);
 const pesSoma  = arr => arr.reduce((a,x)=> a + (+x.valor||0), 0);
 
@@ -7922,17 +7929,48 @@ function ligarFormulariosPessoais(){
     await tnCarregarPessoais();
   };
 
+  /* "250 em 2x" era gravado como 250 na primeira parcela. Agora o formulario
+     pergunta se o valor digitado e o da parcela ou o total da compra, e mostra
+     antes de gravar o que vai acontecer em cada mes. */
+  function pesValorParcela(){
+    const total = +val('pes-valor') || 0;
+    const n = val('pes-ptot') ? +val('pes-ptot') : 0;
+    if(val('pes-vmodo') !== 'total' || n < 2) return total;
+    /* as parcelas seguintes copiam este valor ao rolar de mes, entao todas
+       precisam ser iguais: divisao simples, arredondada ao centavo */
+    return Math.round(Math.round(total*100)/n)/100;
+  }
+  function pesPrevia(){
+    const el = document.getElementById('pes-previa');
+    if(!el) return;
+    const n = val('pes-ptot') ? +val('pes-ptot') : 0;
+    const num = val('pes-pnum') ? +val('pes-pnum') : 1;
+    const v = pesValorParcela();
+    if(!v){ el.textContent = ''; return; }
+    if(n > 1){
+      const ultima = pesMesLabel(pesAno, pesMes, n - num);
+      el.textContent = 'Vai lançar a parcela ' + num + '/' + n + ' de ' + BRL(v) + ' em ' + pesComp()
+        + '. As seguintes aparecem sozinhas ao abrir cada mês, até ' + ultima + '.';
+    }else{
+      el.textContent = 'Vai lançar ' + BRL(v) + ' em ' + pesComp() + ', sem parcela.';
+    }
+  }
+  ['pes-valor','pes-vmodo','pes-pnum','pes-ptot'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.oninput = el.onchange = pesPrevia;
+  });
+  pesPrevia();
   const f = document.getElementById('form-pes');
   if(f) f.onsubmit = async ev=>{
     ev.preventDefault();
     const dados = { ano:pesAno, mes:pesMes, tipo: val('pes-tipo'), descricao: val('pes-desc'),
-                    valor: +val('pes-valor')||0,
+                    valor: pesValorParcela(),
                     parcela_num: val('pes-pnum') ? +val('pes-pnum') : null,
                     parcela_total: val('pes-ptot') ? +val('pes-ptot') : null };
     if(temDiaDebito()) dados.dia_debito = val('pes-dia') ? +val('pes-dia') : null;
     const { error } = await sb().from('pes_lancamentos').insert(dados);
     if(error) return erro(error);
-    f.reset(); await tnCarregarPessoais();
+    f.reset(); pesPrevia(); await tnCarregarPessoais();
   };
 
   const fr = document.getElementById('form-pes-renda');
