@@ -468,7 +468,7 @@ window.TN_CONFIG = {
         <!-- DISPONIBILIDADE DE RECURSO — quanto há, quanto sai, o que sobra -->
         <div class="card" id="card-disponibilidade" style="margin-bottom:18px;">
           <h3 style="font-size:14px;margin:0 0 4px 0;">Disponibilidade de recurso</h3>
-          <p class="hint" style="margin:0 0 12px 0;">O que cada loja tem hoje: saldo em conta, o que a maquininha ainda vai repassar, o dinheiro em espécie e a reserva — menos o que ainda precisa ser pago. Vale sempre a <strong>última posição lançada</strong> de cada loja: cada registro é a fotografia de um dia, não uma soma. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
+          <p class="hint" style="margin:0 0 12px 0;">O que cada loja tem hoje: saldo em conta, o que a maquininha ainda vai repassar, o troco e o cofre (sem a gaveta do dia, que o painel soma pelo fechamento do caixa diário) e a reserva — menos o que ainda precisa ser pago. Vale sempre a <strong>última posição lançada</strong> de cada loja: cada registro é a fotografia de um dia, não uma soma. Os cenários projetam o mesmo cálculo para os próximos meses, usando as despesas recorrentes e a meta de venda de cada loja.</p>
 
           <details class="add-form">
             <summary>Registrar posição de caixa</summary>
@@ -477,7 +477,7 @@ window.TN_CONFIG = {
               <select id="dp-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
               <input type="number" id="dp-conta" placeholder="Saldo em conta" step="0.01">
               <input type="number" id="dp-maquininha" placeholder="A receber maquininha" step="0.01">
-              <input type="number" id="dp-especie" placeholder="Valor em espécie" step="0.01">
+              <input type="number" id="dp-especie" placeholder="Troco e cofre" step="0.01" title="Dinheiro guardado: troco e cofre. NÃO inclua a gaveta do dia — o painel soma o fechamento do caixa diário sozinho.">
               <input type="number" id="dp-reserva" placeholder="Reserva (aplicado)" step="0.01">
               <button class="btn primary" type="submit" id="dp-registrar" style="grid-column:1/-1;">Registrar posição</button>
             </form>
@@ -5178,7 +5178,7 @@ function renderDisponibilidade(){
   document.getElementById('disp-kpis').innerHTML = `
     <div class="card stat-tile accent-good"><div class="label">Saldo em conta</div><div class="value">${BRL(conta)}</div><div class="hint" title="${esc(detalhePos)}">${esc(rotuloPos)}</div></div>
     <div class="card stat-tile"><div class="label">A receber maquininha</div><div class="value">${BRL(maquininha)}</div><div class="hint">ainda vai cair na conta</div></div>
-    <div class="card stat-tile"><div class="label">Em espécie</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro em caixa</div></div>
+    <div class="card stat-tile"><div class="label">Troco e cofre</div><div class="value">${BRL(especie)}</div><div class="hint">dinheiro guardado · não inclui a gaveta do dia</div></div>
     <div class="card stat-tile"><div class="label">Fechamento do dia</div><div class="value">${BRL(caixaLojas)}</div><div class="hint">${esc(fechamentoDoDiaData(lojas) ? 'nas gavetas · ' + fechamentoDoDiaData(lojas) : 'sem fechamento lançado')}</div></div>
     <div class="card stat-tile"><div class="label">Reserva</div><div class="value">${BRL(reserva)}</div><div class="hint">guardado, fora do dia a dia</div></div>
     <div class="card stat-tile accent-warning"><div class="label">A pagar no mês</div><div class="value">${BRL(aPagarMes)}</div><div class="hint">o que ainda sai neste mês</div></div>
@@ -5221,7 +5221,7 @@ function renderDisponibilidade(){
   }
   const tb = document.getElementById('tbl-disp');
   if(tb) tb.innerHTML = `
-    <thead><tr><th>Data</th><th>Loja</th><th>Saldo em conta</th><th>Maquininha</th><th>Espécie</th><th>Reserva</th><th>Total</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Loja</th><th>Saldo em conta</th><th>Maquininha</th><th title="Troco e cofre — não inclui a gaveta do dia">Troco e cofre</th><th>Reserva</th><th>Total</th><th></th></tr></thead>
     <tbody>${lista.map(d=>{
       if(dispEditando && d.id===dispEditando){
         return `<tr>
@@ -5830,7 +5830,7 @@ function renderCaixa(){
       <table style="font-size:12.5px;">
         <tbody>
           ${principal
-            ? linha('Saldo em conta', contaDf) + linha('Em espécie', especieDf)
+            ? linha('Saldo em conta', contaDf) + linha('Troco e cofre', especieDf)
               + linha('A receber maquininha', maqDf)
               + (caixaDf ? linha('Fechamento do dia <span class="hint">nas gavetas</span>', caixaDf) : '')
             : linha('Saldo que entra do mês anterior', m.saldoInicial) + linha('Receita esperada', m.entra)}
