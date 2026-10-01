@@ -8851,7 +8851,9 @@ function mostrarMotivacao(){
   if(document.getElementById('tn-motiv')) return;
   if(document.getElementById('tn-metadia') || document.getElementById('tn-novidades')) return;
   const nome = nomeDoUsuario().trim().toLowerCase();
-  if(!SOCIAS_MOTIVADORAS.some(n => nome.startsWith(n))) return;
+  /* Andreia e Vanessa recebem a mensagem do dia; o master tambem, para acompanhar
+     e poder mandar ele mesmo quando precisar. */
+  if(!ehMaster() && !SOCIAS_MOTIVADORAS.some(n => nome.startsWith(n))) return;
   if(!manhaAgora() || !ehDiaUtil(TODAY) || motivDispensadoHoje()) return;
   const lojas = dadosMotivacao().filter(d=> d.meta !== null || d.batida);
   if(!lojas.length) return;
