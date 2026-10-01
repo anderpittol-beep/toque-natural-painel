@@ -1852,11 +1852,14 @@ const gAPagar = g => cent(gLiquido(g)+gComissao(g)+gExtras(g)+(g.vale||0));
    valor quase certamente esta desatualizado ou e outra coisa. Nao calculamos
    automatico de proposito: o valor oficial e o do holerite. */
 const FGTS_ALIQUOTA = 0.08;
-/* O encargo aqui e o FGTS, que vence no dia 7. Como a tela de um mes mostra a
-   folha do mes anterior, esse vencimento cai dentro do proprio mes exibido: a
-   folha de agosto aparece em setembro e o FGTS dela vence 07/09. Se a data
-   mudar, troca aqui num lugar so. */
-const ENCARGO_DIA_VENC = 7;
+/* A linha de encargos junta o FGTS e o INSS da folha. Os dois vencem no dia 20
+   do mes seguinte: a guia de INSS (DARF) e o FGTS Digital. Como a tela de um
+   mes mostra a folha do mes anterior, esse vencimento cai dentro do proprio
+   mes exibido: a folha de setembro aparece em outubro e a guia dela vence
+   20/10. Antes estava em dia 7, que era o prazo antigo do FGTS e fazia a linha
+   aparecer atrasada treze dias antes da hora. Se a data mudar, troca aqui num
+   lugar so. */
+const ENCARGO_DIA_VENC = 20;
 const gVinculo = g => (g.vinculo === 'MEI') ? 'MEI' : 'CLT';
 const encargoFaixa = g => { const s = +g.salario||0; return {min: cent(s*0.075), max: cent(s*0.10)}; };
 /* O que o encargo significa depende do vinculo:
