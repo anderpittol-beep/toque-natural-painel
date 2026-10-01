@@ -8780,6 +8780,142 @@ function tarefasDoDia(nome){
     return dt && dt <= limite;                // atrasada, para hoje ou para amanha
   }).sort((a,b)=> (parseBR(a.prazo)||0) - (parseBR(b.prazo)||0));
 }
+/* BOM DIA, VENDAS — todas as manhas, para a Andreia e a Vanessa.
+   Elas instigam as colaboradoras a vender naquele dia. O painel entrega a
+   mensagem pronta, com a meta do dia de cada loja, para copiar e mandar no
+   grupo de vendas ou no particular, no tom que elas preferirem (incentivo ou
+   puxao de orelha). O texto e editavel antes de copiar. */
+const SOCIAS_MOTIVADORAS = ['andreia', 'vanessa'];
+function manhaAgora(){ return new Date().getHours() < 12; }
+function motivChave(){ return 'tn_motiv_' + hojeBR() + '_' + (TN_EMAIL||'anon'); }
+function motivDispensadoHoje(){ try{ return localStorage.getItem(motivChave()) === '1'; }catch(e){ return false; } }
+const MSG_GRUPO = [
+  l => `Bom dia, time! 🌿 Hoje é dia de vender. Meta do dia:\n${l}\nAtenção em cada cliente, oferta do combo e pedido de indicação. Bora! 💪`,
+  l => `Bom dia, equipe Toque Natural! Cada cliente que entra hoje é uma venda em potencial. Sorriso, atenção e oferta. Meta de hoje:\n${l}\nConto com vocês! 🙌`,
+  l => `Bom dia! Vamos começar com energia. Quem vende bem hoje fecha o mês no verde. Meta do dia:\n${l}\nVamos juntas! 🚀`
+];
+const MSG_INCENTIVO = [
+  (n,l,m) => `Bom dia, ${n}! Hoje a meta da ${l} é ${m}. Você consegue, e qualquer coisa me chama. Vamos juntas! 💪`,
+  (n,l,m) => `Bom dia, ${n}! Dia de brilhar na ${l}: a meta de hoje é ${m}. Atenda com carinho, ofereça o combo e peça indicação. Conto com você! 🌿`,
+  (n,l,m) => `${n}, bom dia! Hoje é um dia novo para vender. Meta da ${l}: ${m}. Foco no cliente que entra e sorriso no rosto. Bora! 🚀`
+];
+const MSG_PUXAO = [
+  (n,l,m) => `${n}, bom dia. A ${l} está abaixo do ritmo do mês e a meta de hoje é ${m}. Preciso de você 100% no balcão: abordar todo cliente, oferecer o combo e chamar quem não compra há tempo. Vamos recuperar?`,
+  (n,l,m) => `${n}, precisamos falar das vendas. A ${l} está atrás do ritmo e hoje a meta é ${m}. Quero mais proatividade: nada de esperar o cliente pedir. Conto com você e quero ver a diferença hoje.`,
+  (n,l,m) => `Bom dia, ${n}. Os números da ${l} pedem atenção: estamos abaixo do ritmo e a meta de hoje é ${m}. Vamos mudar isso juntas. Mãos à obra desde a primeira hora, ok?`
+];
+const MSG_BATIDA = [
+  (n,l) => `Parabéns, ${n}! A ${l} já bateu a meta do mês. Vamos manter o ritmo e fechar com chave de ouro! 🏆`,
+  (n,l) => `${n}, bom dia! A meta do mês da ${l} já está batida, orgulho de você! Hoje é manter a energia no atendimento. 🌟`
+];
+const MSG_PARABENS = [
+  (n,l,m) => `Parabéns, ${n}! A ${l} está no ritmo do mês, e a meta de hoje é ${m}. Vamos manter! 👏`,
+  (n,l,m) => `${n}, bom dia! A ${l} está indo muito bem. Hoje a meta é ${m}: vamos seguir assim. Orgulho de você! 🌟`
+];
+/* Tenta a area de transferencia moderna e, se o navegador recusar (pagina sem
+   foco, permissao negada, navegador antigo), cai no metodo da caixa de texto
+   selecionada. So desiste se os dois falharem. */
+function copiarTexto(texto){
+  const alternativo = ()=> new Promise((ok, erro)=>{
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try{ document.execCommand('copy') ? ok() : erro(new Error('copy recusado')); }
+    catch(e){ erro(e); }
+    finally{ ta.remove(); }
+  });
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(texto).catch(alternativo);
+  }
+  return alternativo();
+}
+function dadosMotivacao(){
+  const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
+  return metaPorDiaAtual().map(x=>{
+    const col = EQUIPE.find(e=> !ehSocio(e.cargo) && e.loja === x.loja);
+    const ontem = CAIXA_DIARIO.filter(c=>{ const d = parseBR(c.data); return c.loja===x.loja && d && d.getTime() < hojeMs; })
+                              .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0))[0];
+    /* de manha o dia de hoje ainda esta inteiro pela frente, entao ele entra na
+       divisao. Sem isso, no ultimo dia util do mes nao sobrava dia nenhum. */
+    const diasIncl = diasUteisRestantes(TODAY, true);
+    const metaHoje = (x.falta > 0 && diasIncl > 0) ? x.falta / diasIncl : null;
+    return {
+      loja: x.loja, nome: col ? String(col.nome).split(' ')[0] : '',
+      meta: metaHoje, batida: x.falta <= 0, atras: x.falta > 0 && !!(x.ritmo && x.ritmo.dif < 0),
+      rotulo: x.ritmo ? x.ritmo.rotulo : '', ontem: ontem ? (+ontem.vendas||0) : null
+    };
+  });
+}
+function mostrarMotivacao(){
+  if(document.getElementById('tn-motiv')) return;
+  if(document.getElementById('tn-metadia') || document.getElementById('tn-novidades')) return;
+  const nome = nomeDoUsuario().trim().toLowerCase();
+  if(!SOCIAS_MOTIVADORAS.some(n => nome.startsWith(n))) return;
+  if(!manhaAgora() || !ehDiaUtil(TODAY) || motivDispensadoHoje()) return;
+  const lojas = dadosMotivacao().filter(d=> d.meta !== null || d.batida);
+  if(!lojas.length) return;
+  const dia = TODAY.getDate();
+  const pick = (arr, k) => arr[(dia + (k||0)) % arr.length];
+  const valor = d => d.batida ? 'manter o ritmo' : BRL(d.meta);
+  const listaGrupo = lojas.map(d => `• ${d.loja}: ${d.batida ? 'meta do mês batida, vamos manter' : BRL(d.meta)}`).join('\n');
+  const grupo = pick(MSG_GRUPO)(listaGrupo);
+  const caixaMsg = (id, rotulo, texto) => `<div style="margin-bottom:8px;">
+      <div class="hint" style="font-size:11px;margin-bottom:3px;">${rotulo}</div>
+      <textarea id="${id}" rows="4" style="width:100%;box-sizing:border-box;font-size:12.5px;line-height:1.4;">${esc(texto)}</textarea>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <button class="btn primary" data-copiar="${id}" style="flex:1;padding:6px;">Copiar</button>
+        <button class="btn ghost" data-wa="${id}" style="flex:1;padding:6px;">Abrir no WhatsApp</button>
+      </div></div>`;
+  const cartoes = lojas.map((d,i)=>{
+    const n = d.nome || 'colega';
+    const m = valor(d);
+    const status = d.batida ? '<span style="color:var(--good);font-weight:700;">meta batida</span>'
+                 : (d.atras ? '<span style="color:var(--critical);font-weight:700;">abaixo do ritmo</span>'
+                 : '<span style="color:var(--good);font-weight:700;">no ritmo</span>');
+    const ontemTxt = d.ontem === null ? '' : ` · ontem vendeu ${BRL(d.ontem)}`;
+    const msgs = d.batida
+      ? caixaMsg('mv-p'+i, 'Parabéns — meta do mês batida', pick(MSG_BATIDA,i)(n, d.loja))
+      : (d.atras
+        ? caixaMsg('mv-i'+i, 'Incentivo', pick(MSG_INCENTIVO,i)(n, d.loja, m)) + caixaMsg('mv-p'+i, 'Puxão de orelha', pick(MSG_PUXAO,i)(n, d.loja, m))
+        : caixaMsg('mv-i'+i, 'Incentivo', pick(MSG_INCENTIVO,i)(n, d.loja, m)) + caixaMsg('mv-p'+i, 'Parabéns', pick(MSG_PARABENS,i)(n, d.loja, m)));
+    return `<details style="border:1px solid var(--border,rgba(0,0,0,.15));border-radius:12px;padding:10px 12px;margin-bottom:8px;" ${d.atras?'open':''}>
+      <summary style="cursor:pointer;font-size:13px;"><strong>${esc(d.loja)}</strong> · ${esc(d.nome||'sem colaboradora cadastrada')} · ${status}${ontemTxt}</summary>
+      <div style="margin-top:8px;">${msgs}</div></details>`;
+  }).join('');
+  const div = document.createElement('div');
+  div.id = 'tn-motiv';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+  div.innerHTML = `<div style="background:var(--surface-card);color:var(--text-primary);max-width:520px;width:100%;max-height:92vh;overflow:auto;padding:22px;border-radius:18px;box-shadow:0 14px 50px rgba(0,0,0,.4);">
+    <div style="font-size:32px;text-align:center;">☀️</div>
+    <div class="strong" style="font-size:18px;text-align:center;margin-bottom:2px;">Bom dia, vendas!</div>
+    <p class="hint" style="text-align:center;margin:0 0 14px;">Mensagens prontas para estimular o time hoje. Edite se quiser, copie e envie no grupo ou no particular.</p>
+    <div style="border:2px solid var(--accent,#1f7a4d);border-radius:14px;padding:12px;margin-bottom:12px;">
+      <div class="strong" style="font-size:13px;margin-bottom:6px;">👥 Para o grupo de vendas</div>
+      ${caixaMsg('mv-g', 'Mensagem para o grupo', grupo)}
+    </div>
+    <div class="strong" style="font-size:13px;margin:0 0 6px;">💬 Individual, por loja</div>
+    ${cartoes}
+    <button class="btn primary" id="tn-motiv-ok" style="width:100%;margin-top:6px;">Fechar</button>
+    <button class="btn ghost" id="tn-motiv-hoje" style="width:100%;margin-top:6px;">Já enviei, ocultar até amanhã</button>
+  </div>`;
+  document.body.appendChild(div);
+  const val = id => (document.getElementById(id)||{}).value || '';
+  div.querySelectorAll('[data-copiar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const rot = b.textContent;
+      try{ await copiarTexto(val(b.dataset.copiar)); b.textContent = 'Copiado ✓'; }
+      catch(e){ b.textContent = 'Selecione e copie'; }
+      setTimeout(()=>{ b.textContent = rot; }, 1800);
+    };
+  });
+  div.querySelectorAll('[data-wa]').forEach(b=>{
+    b.onclick = ()=> window.open('https://wa.me/?text=' + encodeURIComponent(val(b.dataset.wa)), '_blank', 'noopener');
+  });
+  document.getElementById('tn-motiv-ok').onclick = ()=> div.remove();
+  document.getElementById('tn-motiv-hoje').onclick = ()=>{ try{ localStorage.setItem(motivChave(), '1'); }catch(e){} div.remove(); };
+}
+
 /* Tarefa recem-atribuida tambem e novidade, mesmo com prazo longe: se ninguem
    avisa, ela so aparece quando alguem lembra de abrir a aba. */
 function tarefasNovas(nome){
@@ -8809,7 +8945,7 @@ function mostrarNovidades(){
   const artes = artesNovas();
   const linkNovo = linkMaterialNovo();
   const tarefas = tarefasParaAvisar(nome);
-  if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); return; }
+  if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); mostrarMotivacao(); return; }
   const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
   const quando = t => {
     const dt = parseBR(t.prazo); if(!dt) return '';
@@ -8837,7 +8973,7 @@ function mostrarNovidades(){
     <button class="btn primary" id="tn-nov-ok" style="width:100%;">Vi tudo</button>
   </div>`;
   document.body.appendChild(div);
-  const fechar = aba => { marcarNovidadesVistas(); div.remove(); if(aba) setView(aba); };
+  const fechar = aba => { marcarNovidadesVistas(); div.remove(); if(aba) setView(aba); else mostrarMotivacao(); };
   document.getElementById('tn-nov-ok').onclick = ()=> fechar(null);
   const bIg = document.getElementById('tn-nov-ig'); if(bIg) bIg.onclick = ()=> fechar('instagram');
   const bTk = document.getElementById('tn-nov-tk'); if(bTk) bTk.onclick = ()=> fechar('equipe');
@@ -9560,6 +9696,7 @@ async function tnAfterLogin(sb){
   iniciarLembreteDiario();
   mostrarMetaDoDia();
   mostrarNovidades();
+  mostrarMotivacao();
   tnVerificarAcessoCasa();
 }
 
