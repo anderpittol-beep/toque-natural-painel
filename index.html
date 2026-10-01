@@ -5636,6 +5636,32 @@ async function fgtsDigitalParaFolha(d){
   });
   return alvos.length;
 }
+/* As duas marcas de "pago" andam juntas: a guia do FGTS Digital (despesas) e os
+   encargos da folha (Gente e Gestao). Os helpers gravam direto, sem acionar o
+   clique da outra marca, senao uma chamaria a outra sem parar. */
+async function sincEncargoPago(loja, marcado, ano, mes){
+  const fc = fxMesAnterior(+ano, +mes);
+  const gA = gtAno, gM = gtMes;
+  gtAno = fc.ano; gtMes = fc.mes;
+  try{ await gtMaterializar(); }finally{ gtAno = gA; gtMes = gM; }
+  const quando = marcado ? new Date().toISOString() : null;
+  const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===loja);
+  for(const g of alvos){
+    g.encargo_pago = marcado; g.encargo_pago_em = quando;
+    g.atualizado_em = new Date().toISOString();
+    const campos = {encargo_pago:marcado, atualizado_em:g.atualizado_em};
+    if(temEncargoPagoEm()) campos.encargo_pago_em = quando;
+    if(g.id) await tnUpdate('folha', {id:g.id}, campos);
+  }
+  return alvos.length;
+}
+async function sincFgtsLinhaPago(loja, marcado, ano, mes){
+  const l = DESPESAS_FIXAS.find(d=> ehFgtsDigital(d) && d.loja===loja && +d.ano===+ano && +d.mes===+mes);
+  if(!l) return false;                       // so existe herdada: nada gravado para marcar
+  l.pago = marcado; l.pago_em = marcado ? new Date().toISOString() : null;
+  if(l.id) await tnUpdate('despesas_fixas', {id:l.id}, {pago:l.pago, pago_em:l.pago_em});
+  return true;
+}
 function fixasDaCompetencia(ano, mes, prof){
   prof = prof || 0;
   const doMes = DESPESAS_FIXAS.filter(d=> +d.ano===ano && +d.mes===mes);
@@ -6207,6 +6233,7 @@ function renderCaixa(){
         if(g.id) await tnUpdate('folha', {id:g.id}, campos);
       }
       gtAno = gAnoAnt; gtMes = gMesAnt;
+      await sincFgtsLinhaPago(loja, marcado, fxAno, fxMes);   // a guia acompanha
       chk.disabled = false;
       renderCaixa(); renderAll();
     };
@@ -6258,6 +6285,7 @@ function renderCaixa(){
         d.pago = marcado;
         d.pago_em = marcado ? new Date().toISOString() : null;
         if(d.id) await tnUpdate('despesas_fixas', {id:d.id}, {pago:d.pago, pago_em:d.pago_em});
+        if(ehFgtsDigital(d)) await sincEncargoPago(d.loja, marcado, d.ano, d.mes);   // os encargos acompanham
       }
       chk.disabled = false;
       /* renderAll junto: a Disponibilidade desconta o que ja foi pago, e sem
