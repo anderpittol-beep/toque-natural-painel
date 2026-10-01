@@ -7132,9 +7132,36 @@ function renderPessoais(){
     }
     return [];
   }
+  /* No cartao a compra avulsa nao volta — a fatura muda todo mes. Mas parcela
+     em curso, assinatura e provisao continuam correndo, e escondê-las até
+     alguem digitar de novo fazia o mes seguinte nascer com sobra que nao
+     existe. Elas entram herdadas, com o numero da parcela ja adiantado, e
+     convivem com o que ja foi lancado no mes. */
+  function cartaoHerdado(reais){
+    const jaTem = new Set(reais.map(x=> String(x.descricao||'').trim().toLowerCase()));
+    let base = null;
+    for(let k=1; k<=12; k++){
+      const d = new Date(pesAno, pesMes-1-k, 1);
+      const a = d.getFullYear(), m = d.getMonth()+1;
+      const doMes = PES_LANC.filter(x=>+x.ano===a && +x.mes===m && pesTipo(x)==='cartao');
+      if(doMes.length){ base = {a, m, passos:k, itens: doMes.map(x=>({...x}))}; break; }
+    }
+    if(!base) return [];
+    let itens = base.itens;
+    for(let i=0; i<base.passos; i++){
+      const seguem = [];
+      itens.forEach(x=>{ const prox = pesProximaParcela(x); if(prox) seguem.push({...x, ...prox}); });
+      itens = seguem;
+      if(!itens.length) break;
+    }
+    const de = `${MES_ABREV[base.m]||base.m}/${String(base.a).slice(2)}`;
+    return itens.filter(x=> !jaTem.has(String(x.descricao||'').trim().toLowerCase()))
+                .map(x=>({...x, id:null, conferido:false, pago:false, pago_em:null, herdada:true, de}));
+  }
   const porTipo = t => {
     const reais = lancReais.filter(x=>pesTipo(x)===t);
-    if(reais.length || t==='cartao') return reais;
+    if(t==='cartao') return reais.concat(cartaoHerdado(reais));
+    if(reais.length) return reais;
     return herdadasDoTipo(t);
   };
   const lanc = ['cartao','fixa'].reduce((a,t)=>a.concat(porTipo(t)), []);
@@ -7179,25 +7206,34 @@ function renderPessoais(){
 
   /* Roda a lista do ultimo mes lancado ate (a,m), mes a mes, e devolve a soma
      do que ainda estaria vivo la. */
+  /* Um unico lancamento novo no mes (a Nutricionista de Novembro, por exemplo)
+     nao pode apagar as parcelas que continuam correndo. Entao o mes seguinte e
+     sempre a soma do que ja esta lancado nele MAIS o que herdaria do mes
+     anterior, sem repetir o que ja tem a mesma descricao. */
+  function itensDoMesTipo(a, m, t, prof){
+    prof = prof || 0;
+    const reais = PES_LANC.filter(x=> +x.ano===a && +x.mes===m && pesTipo(x)===t).map(x=>({...x}));
+    if(prof >= 24) return reais;
+    const d = new Date(a, m-2, 1);
+    const anteriores = itensDoMesTipo(d.getFullYear(), d.getMonth()+1, t, prof+1);
+    if(!anteriores.length) return reais;
+    const jaTem = new Set(reais.map(x=> String(x.descricao||'').trim().toLowerCase()));
+    anteriores.forEach(x=>{
+      const prox = pesProximaParcela(x);
+      if(!prox) return;
+      const chave = String(x.descricao||'').trim().toLowerCase();
+      if(jaTem.has(chave)) return;
+      jaTem.add(chave);
+      reais.push({...x, ...prox, _herdado: true});
+    });
+    return reais;
+  }
   function projetaTipo(a, m, t){
-    if(temNoMesTipo(a, m, t)) return {total: somaMesTipo(a, m, t), projetada: false};
-    let base = null;
-    for(let k=1; k<=24; k++){
-      const d = new Date(a, m-1-k, 1);
-      const aa = d.getFullYear(), mm = d.getMonth()+1;
-      if(temNoMesTipo(aa, mm, t)){ base = {ano:aa, mes:mm}; break; }
-    }
-    if(!base) return {total: 0, projetada: false};
-    let itens = PES_LANC.filter(x=> +x.ano===base.ano && +x.mes===base.mes && pesTipo(x)===t)
-                        .map(x=>({...x}));
-    const passos = ordMes(a, m) - ordMes(base.ano, base.mes);
-    for(let i=0; i<passos; i++){
-      const seguem = [];
-      itens.forEach(x=>{ const prox = pesProximaParcela(x); if(prox) seguem.push({...x, ...prox}); });
-      itens = seguem;
-      if(!itens.length) break;
-    }
-    return {total: itens.reduce((s2,x)=> s2 + (+x.valor||0), 0), projetada: true};
+    const itens = itensDoMesTipo(a, m, t);
+    return {
+      total: itens.reduce((s2,x)=> s2 + (+x.valor||0), 0),
+      projetada: itens.some(x=> x._herdado)
+    };
   }
 
   function previsaoDoMes(a, m){
