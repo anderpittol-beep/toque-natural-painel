@@ -9787,6 +9787,7 @@ async function tnAfterLogin(sb){
   mostrarNovidades();
   mostrarMotivacao();
   tnVerificarAcessoCasa();
+  toastLiberadoEm = Date.now() + 4000;   // gravacao automatica da abertura nao conta
 }
 
 async function tnInitApp(){
@@ -9806,7 +9807,10 @@ async function tnInitApp(){
     console.warn('Falha ao carregar Supabase, modo offline:',e);
     renderAll(); tnSetUpdate(LAST_UPDATE+' (offline)'); return;
   }
-  window.TN={sb};
+  /* o aviso de sucesso e um extra: se falhar ao instalar, o painel segue normal,
+     so sem o aviso */
+  try{ toastInstalar(sb); }catch(e){ console.warn('aviso de sucesso indisponivel', e); }
+  window.TN=Object.assign(window.TN||{}, {sb});
   // chegou por link de convite/recuperação de senha?
   sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ renderAll(); tnMode('setpass'); } });
   const hash = window.location.hash || '';
@@ -9925,6 +9929,162 @@ async function tnInsertRet(tabela,row){
     }
   }catch(e){ TN_ULTIMO_ERRO=e; console.warn(e); }
   return null;
+}
+/* ============ AVISO DE SUCESSO COM CANCELAR ============
+   Toda alteracao e toda exclusao gravada no banco mostra, no canto inferior
+   direito, "realizada com sucesso" por 5 segundos, com um botao Cancelar que
+   desfaz. Fica num ponto so: o cliente do banco e interceptado em update() e
+   delete(), entao qualquer tela entra de graca e ninguem precisa lembrar de
+   chamar o aviso. Antes de gravar, o painel guarda como a linha estava; se a
+   pessoa cancelar, devolve exatamente isso. */
+const TOAST_SEGUNDOS = 5;
+const TOAST_IGNORA = ['user_prefs','config_painel','sync_meta','profiles','ig_pautas_hist','wa_mensagens','wa_conversas','wa_instancias'];
+const TOAST_FILTROS = new Set(['eq','neq','gt','gte','lt','lte','like','ilike','is','in','match','not','or','filter','contains','containedBy','overlaps']);
+let toastGrupo = null, toastTimer = null, toastLiberadoEm = 0, toastUltimoGesto = 0;
+['click','change','submit','keydown'].forEach(ev=>
+  document.addEventListener(ev, ()=>{ toastUltimoGesto = Date.now(); }, true));
+/* so conta como acao da pessoa o que veio de um gesto dela, e so depois do painel
+   terminar de carregar: gravacao automatica da abertura nao pode acionar o aviso */
+const toastPodeAparecer = tabela =>
+  toastLiberadoEm > 0 && Date.now() >= toastLiberadoEm &&
+  (Date.now() - toastUltimoGesto) < 20000 && TOAST_IGNORA.indexOf(tabela) === -1;
+
+function toastMostrar(texto, opcoes){
+  opcoes = opcoes || {};
+  let el = document.getElementById('tn-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'tn-toast';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:10002;max-width:340px;display:flex;align-items:center;gap:12px;'
+      + 'padding:12px 14px;border-radius:12px;background:var(--surface-card,#fff);color:var(--text-primary,#1b1b1b);'
+      + 'border:1px solid var(--border,rgba(0,0,0,.15));box-shadow:0 8px 30px rgba(0,0,0,.28);font-size:13.5px;line-height:1.35;'
+      + 'opacity:0;transform:translateY(8px);transition:opacity .18s ease,transform .18s ease;';
+    document.body.appendChild(el);
+    requestAnimationFrame(()=>{ el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+  }
+  el.innerHTML = '<span style="font-size:20px;">' + (opcoes.erro ? '⚠️' : '✅') + '</span>'
+    + '<span style="flex:1;font-weight:600;">' + esc(texto) + '</span>'
+    + (opcoes.cancelar ? '<button class="btn ghost" id="tn-toast-cancelar" style="padding:5px 11px;font-weight:700;">Cancelar</button>' : '');
+  if(opcoes.cancelar){
+    const b = document.getElementById('tn-toast-cancelar');
+    if(b) b.onclick = opcoes.cancelar;
+  }
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(toastFechar, (opcoes.segundos || TOAST_SEGUNDOS) * 1000);
+}
+function toastFechar(){
+  const el = document.getElementById('tn-toast');
+  if(!el) return;
+  el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+  setTimeout(()=>{ if(el.parentNode) el.remove(); }, 200);
+  toastGrupo = null;       // a proxima acao abre um aviso novo
+}
+function toastRegistrar(op){
+  if(!toastGrupo) toastGrupo = [];
+  toastGrupo.push(op);
+  const tipos = new Set(toastGrupo.map(o=>o.tipo));
+  const texto = tipos.size > 1 ? 'Ação realizada com sucesso'
+              : (tipos.has('delete') ? 'Exclusão realizada com sucesso' : 'Alteração realizada com sucesso');
+  const desfazivel = toastGrupo.every(o=>o.antes && !o.antes.muitos && o.antes.length);
+  toastMostrar(texto, { cancelar: desfazivel ? toastDesfazer : null });
+}
+async function toastDesfazer(){
+  const ops = (toastGrupo || []).slice().reverse();
+  const tabelas = [...new Set(ops.map(o=>o.tabela))];
+  const bruto = window.TN && window.TN.sbBruto;
+  if(!bruto || !ops.length) return;
+  const b = document.getElementById('tn-toast-cancelar');
+  if(b){ b.disabled = true; b.textContent = 'Cancelando...'; }
+  clearTimeout(toastTimer);
+  let falhou = false;
+  for(const o of ops){
+    try{
+      if(o.tipo === 'delete'){
+        const r = await bruto.from(o.tabela).insert(o.antes);
+        if(r.error) falhou = true;
+      }else{
+        for(const linha of o.antes){
+          if(linha.id == null){ falhou = true; continue; }
+          const velho = {};
+          Object.keys(o.valores || {}).forEach(k=>{ velho[k] = linha[k]; });
+          const r = await bruto.from(o.tabela).update(velho).eq('id', linha.id);
+          if(r.error) falhou = true;
+        }
+      }
+    }catch(e){ console.warn('desfazer', e); falhou = true; }
+  }
+  toastGrupo = null;
+  try{
+    if(tabelas.some(t=>/^pes_/.test(t)) && typeof tnCarregarPessoais === 'function') await tnCarregarPessoais();
+    if(tabelas.indexOf('ig_pautas') !== -1 && typeof tnCarregarPautas === 'function') await tnCarregarPautas();
+    await tnLoadAll(window.TN.sb);
+  }catch(e){ console.warn(e); }
+  toastMostrar(falhou ? 'Não consegui cancelar tudo. Confira a tela.' : 'Ação cancelada. Voltou como estava.',
+               { erro: falhou, segundos: 4 });
+}
+async function toastSnapshot(bruto, tabela, filtros){
+  let q = bruto.from(tabela).select('*');
+  filtros.forEach(([nome, args])=>{ q = q[nome](...args); });
+  const { data, error } = await q.limit(201);
+  if(error || !Array.isArray(data)) return null;
+  return data.length > 200 ? { muitos: true } : data;
+}
+function toastEnvolver(construtor, bruto, tabela, tipo, valores){
+  const filtros = [];
+  const proxy = new Proxy(construtor, {
+    get(alvo, prop){
+      if(prop === 'then'){
+        return (ok, falha)=> executar().then(ok, falha);
+      }
+      const v = alvo[prop];
+      if(typeof v !== 'function') return v;
+      return (...a)=>{
+        const r = v.apply(alvo, a);
+        if(TOAST_FILTROS.has(prop)) filtros.push([prop, a]);
+        return r === alvo ? proxy : r;
+      };
+    }
+  });
+  async function executar(){
+    /* so guarda o "antes" quando o aviso vai mesmo aparecer: gravacao automatica
+       nao paga a consulta extra */
+    const avisar = toastPodeAparecer(tabela);
+    let antes = null;
+    if(avisar){
+      try{ antes = await toastSnapshot(bruto, tabela, filtros); }catch(e){ antes = null; }
+    }
+    const resultado = await construtor;       // o original, sem passar pelo proxy
+    if(!resultado || resultado.error || !avisar) return resultado;
+    /* nenhuma linha casou com o filtro: nada mudou, entao nao ha sucesso a mostrar */
+    if(Array.isArray(antes) && antes.length === 0) return resultado;
+    if(tipo === 'delete' && Array.isArray(resultado.data) && resultado.data.length === 0) return resultado;
+    try{ toastRegistrar({ tabela, tipo, valores, antes }); }catch(e){ console.warn('aviso', e); }
+    return resultado;
+  }
+  return proxy;
+}
+/* troca sb.from() por uma versao que observa update() e delete() */
+function toastInstalar(sb){
+  if(!sb || sb.__toast) return sb;
+  const bruto = { from: sb.from.bind(sb) };
+  const originalFrom = bruto.from;
+  sb.from = tabela => {
+    const q = originalFrom(tabela);
+    return new Proxy(q, {
+      get(alvo, prop){
+        const v = alvo[prop];
+        if((prop === 'update' || prop === 'delete') && typeof v === 'function'){
+          return (...a)=> toastEnvolver(v.apply(alvo, a), bruto, tabela, prop, prop === 'update' ? a[0] : null);
+        }
+        return typeof v === 'function' ? v.bind(alvo) : v;
+      }
+    });
+  };
+  sb.__toast = true;
+  window.TN = window.TN || {};
+  window.TN.sbBruto = bruto;
+  return sb;
 }
 /* Diz o que realmente aconteceu, em vez de culpar sempre a conexao */
 function motivoDoErro(prefixo){
