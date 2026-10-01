@@ -1866,8 +1866,17 @@ const encargoFaixa = g => { const s = +g.salario||0; return {min: cent(s*0.075),
    CLT  -> FGTS, 8% do salario bruto, entao da para conferir contra o salario.
    MEI  -> o DAS do mes, um valor fixo que nao acompanha o que ela recebe.
            Nao ha FGTS nenhum, e cobrar 8% aqui seria alarme falso. */
+/* Valor lancado na linha FGTS Digital das despesas do mes seguinte, se houver */
+function fgtsDigitalDaLoja(loja, ano, mes){
+  const p = mes === 12 ? {ano:ano+1, mes:1} : {ano, mes:mes+1};
+  const l = DESPESAS_FIXAS.find(d=> ehFgtsDigital(d) && d.loja===loja && +d.ano===p.ano && +d.mes===p.mes);
+  return l && (+l.valor) > 0 ? +l.valor : null;
+}
 function encargoSuspeito(g){
   if(g.papel !== 'Colaboradora') return null;        // socia nao tem FGTS sobre pro-labore
+  /* se o encargo vem da guia paga, ele pode diferir do holerite sem ser erro */
+  const guia = fgtsDigitalDaLoja(g.loja, +g.ano, +g.mes);
+  if(guia !== null) return null;
   if(gVinculo(g) === 'MEI') return null;             // MEI paga DAS, valor fixo
   const s = +g.salario||0; if(!s) return null;
   const e = +g.encargo||0, f = encargoFaixa(g);
@@ -2002,7 +2011,7 @@ function filteredClientes(){
    aparece nos boletos e afeta só o caixa, não o lucro. */
 function despesaPainelLoja(ano, mes, loja){
   const fixas = fixasDaCompetencia(ano, mes)
-    .reduce((a,d)=> a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0)), 0);
+    .reduce((a,d)=> a + (d.loja===loja ? valorFixaNaSoma(d) : (d.loja==='Todas' ? valorFixaNaSoma(d)/STORES.length : 0)), 0);
   const doMes = folhaDaCompetencia(ano, mes).filter(g=>g.loja===loja);
   const folha = doMes.reduce((a,g)=>a+gTotal(g),0);
   const prov  = doMes.reduce((a,g)=>a+gProvisao(g).total,0);
@@ -5082,7 +5091,7 @@ function dispAtualPorLoja(loja){
 function compromissoMensal(ano, mes, loja){
   const fixas = fixasDaCompetencia(ano, mes).reduce((a,d)=>{
     if(d.pago) return a;                       // ja saiu do caixa
-    return a + (d.loja===loja ? (+d.valor||0) : (d.loja==='Todas' ? (+d.valor||0)/STORES.length : 0));
+    return a + (d.loja===loja ? valorFixaNaSoma(d) : (d.loja==='Todas' ? valorFixaNaSoma(d)/STORES.length : 0));
   }, 0);
   const fc = fxMesAnterior(ano, mes);
   const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=>g.loja===loja);
@@ -5593,13 +5602,50 @@ function fxMesAnterior(a,m){ return m===1 ? {ano:a-1, mes:12} : {ano:a, mes:m-1}
 
 /* Despesas válidas para a competência: as do próprio mês; se ainda não houver
    lançamento nenhum, herda o mês anterior (recorrência). */
+/* FGTS DIGITAL — a guia de verdade. O valor que se paga no FGTS Digital nao e o
+   do holerite: vem com acrescimos. Por isso a linha "FGTS Digital" das despesas
+   e quem manda: o valor digitado nela vira o encargo das CLT na folha do mes
+   anterior (Gente e Gestao), e a propria linha NAO soma nos totais, porque o
+   mesmo dinheiro ja entra pelo encargo. Assim conta uma vez so, em qualquer
+   ordem de lancamento. O salario liquido nao muda: ele nao usa o encargo. */
+const ehFgtsDigital = d => /^fgts digital$/i.test(String((d && d.descricao) || '').trim());
+const valorFixaNaSoma = d => ehFgtsDigital(d) ? 0 : (+(d && d.valor) || 0);
+/* Leva o valor da guia (despesa) para o encargo das CLT da folha do mes
+   anterior. Com mais de uma CLT na loja, divide na proporcao do encargo que cada
+   uma ja tinha (ou igual, se nao tinha nenhum); a ultima fica com a sobra dos
+   centavos. MEI e socia nao entram: o encargo delas e outra coisa (DAS e INSS). */
+async function fgtsDigitalParaFolha(d){
+  if(!ehFgtsDigital(d) || !((+d.valor) > 0)) return 0;
+  const fc = fxMesAnterior(+d.ano, +d.mes);
+  const gA = gtAno, gM = gtMes;
+  gtAno = fc.ano; gtMes = fc.mes;
+  try{ await gtMaterializar(); }finally{ gtAno = gA; gtMes = gM; }
+  const alvos = GENTE.filter(g=> +g.ano===fc.ano && +g.mes===fc.mes && g.loja===d.loja
+                              && !ehSocio(g.papel) && gVinculo(g) !== 'MEI');
+  if(!alvos.length) return 0;
+  const total = Math.round((+d.valor) * 100);
+  const base = alvos.reduce((a,g)=> a + (+g.encargo||0), 0);
+  let resto = total;
+  alvos.forEach((g,i)=>{
+    const fatia = (i === alvos.length-1) ? resto
+                : Math.round(total * (base > 0 ? (+g.encargo||0)/base : 1/alvos.length));
+    resto -= fatia;
+    g.encargo = fatia / 100;
+    g.atualizado_em = new Date().toISOString();
+    if(g.id) tnUpdate('folha', {id:g.id}, {encargo:g.encargo, atualizado_em:g.atualizado_em});
+  });
+  return alvos.length;
+}
 function fixasDaCompetencia(ano, mes, prof){
   prof = prof || 0;
   const doMes = DESPESAS_FIXAS.filter(d=> +d.ano===ano && +d.mes===mes);
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
+  /* a guia muda todo mes: herdar o valor do mes passado faria a folha acreditar
+     numa guia que ainda nao foi lancada */
   return fixasDaCompetencia(p.ano, p.mes, prof+1)
-    .map(d=> ({...d, id:null, herdada:true, ano, mes, pago:false, pago_em:null}));
+    .map(d=> ({...d, id:null, herdada:true, ano, mes, pago:false, pago_em:null,
+               valor: ehFgtsDigital(d) ? 0 : d.valor}));
 }
 /* Materializa no banco as despesas herdadas, para poder editar/excluir o mês */
 async function fxMaterializar(){
@@ -5648,7 +5694,7 @@ function renderCaixa(){
   // KPIs
   const entradasMes = caixa.reduce((a,b)=>a+(b.entradas||0),0);
   const saidasMes = caixa.reduce((a,b)=>a+(b.saidas||0),0);
-  const totFixasBase = fixas.reduce((a,b)=>a+(b.valor||0),0);
+  const totFixasBase = fixas.reduce((a,b)=>a+valorFixaNaSoma(b),0);
   // folha (GENTE) entra nas despesas fixas
   /* A folha de um mes sai do caixa no mes SEGUINTE — o pagamento e no dia 05,
      como Gente e Gestao ja mostrava. Entao a despesa que aparece em Set/26 e a
@@ -5776,7 +5822,7 @@ function renderCaixa(){
     const fx = fixasDaCompetencia(ano, mes)
       .filter(d=> selStores().includes(d.loja) || d.loja==='Todas')
       .filter(d=> ehMesBase ? !d.pago : true)
-      .reduce((a,d)=>a+(+d.valor||0),0);
+      .reduce((a,d)=>a+valorFixaNaSoma(d),0);
 
     /* A folha paga num mes e a do mes ANTERIOR (pagamento dia 05), como a tela
        de Despesas ja mostra e onde o check grava. Este cartao lia a folha do
@@ -6239,7 +6285,13 @@ function renderCaixa(){
       if(!desc){ alert('A descrição não pode ficar vazia.'); return; }
       Object.assign(d, { descricao:desc, loja:get('loja'), venc:get('venc'), valor:num(get('valor'))||0 });
       if(d.id) tnUpdate('despesas_fixas',{id:d.id},{descricao:d.descricao, loja:d.loja, venc:d.venc, valor:d.valor});
-      fixaEditando = null; renderCaixa();
+      fixaEditando = null;
+      /* guia do FGTS Digital: o valor digitado aqui passa a ser o encargo da folha */
+      fgtsDigitalParaFolha(d).then(n=>{
+        if(n) avisoSucesso('FGTS Digital lançado', 'O valor foi levado para os encargos em Gente e Gestão.');
+        renderCaixa(); renderGente();
+      }).catch(e=>{ console.warn(e); renderCaixa(); });
+      renderCaixa();
     };
   });
   document.querySelectorAll('[data-fxexcluir]').forEach(b=>{
@@ -8585,6 +8637,10 @@ document.getElementById('form-fixa').addEventListener('submit', async e=>{
   DESPESAS_FIXAS.push(_fx);
   await tnInsertRet('despesas_fixas', _fx);
   e.target.reset(); renderCaixa();
+  if(await fgtsDigitalParaFolha(_fx)){
+    avisoSucesso('FGTS Digital lançado', 'O valor foi levado para os encargos em Gente e Gestão.');
+    renderCaixa(); renderGente();
+  }
 });
 /* Lembrete às 18h: sócia lança a posição de caixa do dia, colaboradora lança
    o fechamento do dia em Vendas & caixa diário. Confere sempre o lançamento
