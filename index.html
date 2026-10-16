@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:30";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:36";</script>
       </div>
     </div>
 
@@ -839,7 +839,7 @@ window.TN_CONFIG = {
               <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
               <datalist id="es-nomes"></datalist>
               <select id="es-categoria" title="Categoria do produto"><option value="">Categoria</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option></select>
-              <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
+              <select id="es-loja" title="Onde o lote está"><option>Toledo estoque antigo</option><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
               <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
@@ -3566,8 +3566,10 @@ function esData(v){
 }
 function esLojaCanon(txt){
   const n = esNorm(txt);
+  if(n === esNorm(ES_ANTIGO) || n === 'estoque antigo') return ES_ANTIGO;
   return STORES.find(l => esNorm(l) === n) || null;
 }
+const ES_ANTIGO = 'Toledo estoque antigo';   // onde mora todo o estoque velho de Toledo ate sair por transferencia, venda ou perda
 const esChave = o => [o.tipo||'mercadoria', esNorm(o.nome), o.loja, o.validade||'', (o.custo==null ? '' : Number(o.custo).toFixed(2))].join('|');
 /* Mobiliaria e equipamentos moram na mesma tabela, marcados por tipo, mas nao tem
    validade e podem estar numa loja encerrada (Toledo). Ficam fora da margem e
@@ -3644,33 +3646,40 @@ const esCampo = (rotulo, html, span2) => `<label style="display:flex;flex-direct
 
 /* ---------- baixa: venda ou perda ---------- */
 function esAbrirBaixa(p){
+  const mob = p.tipo === 'mobilia', antigo = !mob && p.loja === ES_ANTIGO;
+  const tipos = mob ? '<option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option>'
+    : antigo ? '<option value="transf">Transferência para uma loja</option><option value="perda">Perda (vencido, quebra, descarte)</option>'
+    : '<option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option>';
   const corpo =
-    esCampo('O que aconteceu', p.tipo==='mobilia'
-      ? `<select id="eb-tipo"><option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option></select>`
-      : `<select id="eb-tipo"><option value="transf">Transferência para outra loja</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
-    (p.tipo==='mobilia' ? '' : esCampo('Loja de destino', `<select id="eb-dest">${lojasAtivas().filter(l=>l!=='Toledo').map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`, true)) +
+    esCampo('O que aconteceu', `<select id="eb-tipo">${tipos}</select>`, true) +
+    (antigo ? esCampo('Loja de destino', `<select id="eb-dest">${lojasAtivas().map(l=>`<option>${esc(l)}</option>`).join('')}</select>`, true) : '') +
     esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
-    (p.tipo==='mobilia' ? esCampo('Valor recebido por unidade (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`) : `<div id="eb-calc" class="hint" style="grid-column:1/-1;"></div>`);
-  const fechar = esModal((p.tipo==='mobilia' ? 'Registrar venda — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, p.tipo==='mobilia' ? 'Confirmar' : 'Confirmar baixa', async val=>{
-    let tipo = val('eb-tipo'); const q = esNum(val('eb-qtd'));
-    if(tipo === 'transf' && p.tipo !== 'mobilia'){
-      if(!(q > 0)) return 'Informe a quantidade.';
-      if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
+    (antigo ? '' : esCampo(mob ? 'Valor recebido por unidade (R$)' : 'Preço de venda ' + esPorQue(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`)) +
+    (mob ? '' : `<div id="eb-calc" class="hint" style="grid-column:1/-1;"></div>`);
+  esModal((mob ? 'Registrar venda — ' : antigo ? 'Transferir — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, mob ? 'Confirmar' : antigo ? 'Confirmar' : 'Confirmar baixa', async val=>{
+    const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
+    if(!(q > 0)) return 'Informe a quantidade.';
+    if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
+    const agora = new Date().toISOString();
+    if(tipo === 'transf'){
+      /* tira do estoque antigo de Toledo e poe na loja escolhida; o capital so muda de lugar */
       const dest = val('eb-dest'); if(!dest) return 'Escolha a loja de destino.';
       const hoje = new Date().toLocaleDateString('pt-BR');
-      const nota = esQtd(q, p.unidade) + ' → ' + dest + ' em ' + hoje;
-      const novoT = { estoque: esR3(p.estoque - q), vendido: esR3(p.vendido + q),
-        recuperado: esR2(p.recuperado + esValor(q, p.unidade, p.custo)),   // sai pelo custo: o capital muda de loja, sem prejuízo
-        origem: [p.origem, 'Transferido: ' + nota].filter(Boolean).join(' | '), atualizado_em: new Date().toISOString() };
-      const { error: eT } = await window.TN.sb.from('produtos').update(novoT).eq('id', p.id);
-      if(eT) return 'Não consegui gravar: ' + eT.message;
+      const alvo = Object.assign({}, p, { loja: dest });
+      const igual = PRODUCTS.find(x => x.id !== p.id && esChave(x) === esChave(alvo));
+      const nota = 'Transferido de ' + ES_ANTIGO + ' em ' + hoje;
+      const sb = window.TN.sb;
+      let r;
+      if(igual) r = await sb.from('produtos').update({ qtd_inicial: esR3(igual.qtdInicial + q), estoque: esR3(igual.estoque + q), atualizado_em: agora }).eq('id', igual.id);
+      else r = await sb.from('produtos').insert({ nome:p.nome, categoria:p.categoria||null, loja:dest, unidade:p.unidade, qtd_inicial:esR3(q), estoque:esR3(q),
+        vendido:0, perdido:0, recuperado:0, validade:p.validade, custo:p.custo, preco:p.preco, origem:nota, tipo:p.tipo||'mercadoria' });
+      if(r.error) return 'Não consegui gravar: ' + r.error.message;
+      const r2 = await sb.from('produtos').update({ estoque: esR3(p.estoque - q), qtd_inicial: esR3(Math.max(0, p.qtdInicial - q)), atualizado_em: agora }).eq('id', p.id);
+      if(r2.error) return 'Entrou na loja, mas não consegui tirar do estoque antigo: ' + r2.error.message;
       await tnCarregarProdutos();
       return null;
     }
-    if(tipo === 'transf') tipo = 'venda';
-    if(!(q > 0)) return 'Informe a quantidade.';
-    if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
-    const novo = { estoque: esR3(p.estoque - q), atualizado_em: new Date().toISOString() };
+    const novo = { estoque: esR3(p.estoque - q), atualizado_em: agora };
     if(tipo === 'venda'){
       const preco = esNum(val('eb-preco'));
       if(preco == null || preco < 0) return 'Informe o preço de venda.';
@@ -3684,18 +3693,22 @@ function esAbrirBaixa(p){
     await tnCarregarProdutos();
     return null;
   });
-  const qi = document.getElementById('eb-qtd'), calc = document.getElementById('eb-calc');
+  const qi = document.getElementById('eb-qtd'), calc = document.getElementById('eb-calc'), pr0 = document.getElementById('eb-preco');
   const atualizaCalc = ()=>{ if(!calc) return; const q = esNum(qi.value)||0;
-    calc.innerHTML = q>0 ? `Esta saída vale <strong>${BRL(esValor(q,p.unidade,p.custo))}</strong> a custo e <strong>${p.preco==null?'—':BRL(esValor(q,p.unidade,p.preco))}</strong> a preço de venda. Entra como recuperado pelo custo (sem prejuízo); a venda acontece depois, na loja de destino.` : 'Informe a quantidade para ver o valor da saída.'; };
+    const tp = (document.getElementById('eb-tipo')||{}).value;
+    if(!(q > 0)){ calc.textContent = 'Informe a quantidade para ver o valor da saída.'; return; }
+    const cust = BRL(esValor(q,p.unidade,p.custo)), vend = p.preco==null ? '—' : BRL(esValor(q,p.unidade,p.preco));
+    calc.innerHTML = tp === 'transf' ? `Esta saída vale <strong>${cust}</strong> a custo e <strong>${vend}</strong> a preço de venda. O capital passa para a loja de destino, sem prejuízo; a venda acontece depois, lá.`
+      : tp === 'perda' ? `Perda de <strong>${cust}</strong> a custo.` : `Custo desta saída: <strong>${cust}</strong>.`; };
   if(qi && calc){ qi.addEventListener('input', atualizaCalc); atualizaCalc(); }
   const sel = document.getElementById('eb-tipo');
-  if(sel) sel.onchange = ()=>{ const pr = document.getElementById('eb-preco'); if(pr) pr.parentNode.style.opacity = sel.value==='venda' ? '1' : '.4'; const d = document.getElementById('eb-dest'); if(d) d.parentNode.style.opacity = sel.value==='transf' ? '1' : '.4'; };
+  if(sel) sel.onchange = ()=>{ if(pr0) pr0.parentNode.style.opacity = sel.value==='venda' ? '1' : '.4'; const d = document.getElementById('eb-dest'); if(d) d.parentNode.style.opacity = sel.value==='transf' ? '1' : '.4'; atualizaCalc(); };
 }
 
 /* ---------- corrigir lote ---------- */
 function esAbrirEditar(p){
   const mob = p.tipo === 'mobilia';
-  const lojas = mob ? STORES.slice() : [...new Set(lojasAtivas().concat([p.loja]))];
+  const lojas = mob ? STORES.slice() : [...new Set([ES_ANTIGO].concat(lojasAtivas(), [p.loja]))];
   const corpo =
     esCampo(mob ? 'Item' : 'Produto', `<input type="text" id="ee-nome" ${mob ? '' : 'list="es-nomes"'} autocomplete="off" value="${esc(p.nome)}" required>`, true) +
     esCampo('Categoria', `<select id="ee-cat"><option value=""></option>${ES_CATEGORIAS.concat(p.categoria && !ES_CATEGORIAS.includes(p.categoria) ? [p.categoria] : []).map(c=>`<option ${c===p.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select>`) +
@@ -3752,7 +3765,7 @@ function esColuna(r, ...nomes){
 }
 async function esImportar(texto){
   const rows = parseCSV(texto);
-  const ativas = lojasAtivas();
+  const ativas = lojasAtivas().concat([ES_ANTIGO]);
   const novos = new Map(), erros = []; let pulados = 0;
   rows.forEach((r, i) => {
     const linha = i + 2;
@@ -3924,7 +3937,7 @@ function renderEstoque(){
   mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
   document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
   const lojaSel = document.getElementById('es-loja');
-  if(lojaSel){ const atual = lojaSel.value; const lj = mob ? STORES : lojasAtivas(); lojaSel.innerHTML = lj.map(l=>`<option ${l===atual?'selected':''}>${esc(l)}</option>`).join(''); }
+  if(lojaSel){ const atual = lojaSel.value; const lj = mob ? STORES : [ES_ANTIGO].concat(lojasAtivas()); const alvo = atual && lj.includes(atual) ? atual : lj[0]; lojaSel.innerHTML = lj.map(l=>`<option ${l===alvo?'selected':''}>${esc(l)}</option>`).join(''); }
   const nomes = document.getElementById('es-nomes');
   const daAba = PRODUCTS.filter(p => mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia');
   if(nomes){
@@ -3934,7 +3947,7 @@ function renderEstoque(){
   }
 
   /* itens da aba, nas lojas escolhidas no topo */
-  const todos = PRODUCTS.filter(p => selStores().includes(p.loja) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
+  const todos = PRODUCTS.filter(p => (selStores().includes(p.loja) || p.loja === ES_ANTIGO) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
   const comStatus = todos.map(p => ({p, s: esStatus(p)}));
   const kpi = document.getElementById('est-kpis');
 
