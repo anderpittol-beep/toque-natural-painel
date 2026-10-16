@@ -393,8 +393,7 @@ window.TN_CONFIG = {
       <div class="nav-group">Consulta</div>
       <button data-view="manual"><span class="navicon">🔍</span>Manual de chás</button>
       <div class="nav-group">Operacional</div>
-      <button data-view="estoque"><span class="navicon">▣</span>Estoque &amp; pedidos</button>
-      <button data-view="validade"><span class="navicon">⏱</span>Validade</button>
+      <button data-view="estoque"><span class="navicon">▣</span>Estoque e validade</button>
       <button data-view="pedidos"><span class="navicon">▤</span>Pedidos &amp; entregas</button>
       <button data-view="equipe"><span class="navicon">◎</span>Equipe: tarefas</button>
       <button data-view="instagram"><span class="navicon">◫</span>Instagram — pautas</button>
@@ -824,35 +823,50 @@ window.TN_CONFIG = {
         </div>
       </section>
 
-      <!-- ESTOQUE -->
+      <!-- ESTOQUE E VALIDADE (uma tela so) -->
       <section class="view" id="view-estoque">
-        <h2 class="section-title">Estoque &amp; sugestão de pedido</h2>
-        <p class="section-desc">Estoque ideal = estoque mínimo de segurança + vendas médias do mês. A sugestão de pedido mostra quanto comprar para cobrir a demanda do próximo mês sem ficar exposto a ruptura.</p>
-        <div class="toolbar">
-          <div class="import-box">
-            <button class="btn" id="btn-import-estoque">Importar estoque (CSV)</button>
-            <button class="btn ghost" id="btn-template-estoque">baixar modelo</button>
-            <input type="file" id="file-estoque" accept=".csv">
-          </div>
+        <h2 class="section-title">Estoque e validade</h2>
+        <p class="section-desc">Cada linha é um lote: produto, quantidade, validade e quanto custou. Ordenado do vencimento mais próximo para o mais distante. Vencidos ou a menos de 15 dias pedem ação (promoção, troca ou baixa). Os valores ajudam a medir quanto do capital investido já voltou e quanto ainda dá para recuperar.</p>
+        <div class="grid grid-4" id="est-kpis" style="margin-bottom:16px;"></div>
+        <div class="card" style="margin-bottom:16px;" id="est-lancar-card">
+          <details class="add-form">
+            <summary>Lançar estoque (lote)</summary>
+            <form class="feedback-form" id="form-estoque" style="grid-template-columns:repeat(4,1fr);">
+              <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
+              <datalist id="es-nomes"></datalist>
+              <input type="text" id="es-categoria" placeholder="Categoria (opcional)">
+              <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
+              <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
+              <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option><option value="pct">pacote</option><option value="L">litro</option></select>
+              <input type="date" id="es-validade" title="Validade do lote (opcional)">
+              <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo">
+              <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0">
+              <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" style="grid-column:span 2;">
+              <button class="btn primary" type="submit" style="grid-column:span 1;">Lançar</button>
+              <p class="hint" id="es-previa" style="grid-column:1/-1;margin:0;"></p>
+            </form>
+            <div class="import-box" style="margin-top:10px;">
+              <button class="btn" id="es-btn-importar" type="button">Importar planilha (CSV)</button>
+              <button class="btn ghost" id="es-btn-modelo" type="button">baixar modelo</button>
+              <input type="file" id="es-file" accept=".csv">
+            </div>
+          </details>
+        </div>
+        <div class="toolbar" style="margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+          <input type="search" id="es-busca" placeholder="Buscar produto" style="min-width:180px;">
           <div class="filters">
-            <select id="estoqueStatusFilter">
-              <option value="">Todos os status</option>
-              <option value="urgente">Repor urgente</option>
-              <option value="repor">Repor em breve</option>
-              <option value="ok">Estoque ok</option>
+            <select id="es-filtro">
+              <option value="">Todos os lotes</option>
+              <option value="vencido">Vencidos</option>
+              <option value="critico">Críticos (até 15 dias)</option>
+              <option value="atencao">Atenção (16 a 45 dias)</option>
+              <option value="ok">Dentro do prazo</option>
+              <option value="sem">Sem validade</option>
             </select>
           </div>
+          <label class="hint" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="es-zerados"> mostrar esgotados</label>
         </div>
-        <div class="grid grid-3" id="estoque-kpis" style="margin-bottom:16px;"></div>
         <div class="card"><div style="overflow-x:auto;"><table id="tbl-estoque"></table></div></div>
-      </section>
-
-      <!-- VALIDADE -->
-      <section class="view" id="view-validade">
-        <h2 class="section-title">Controle de validade</h2>
-        <p class="section-desc">Ordenado do vencimento mais próximo para o mais distante. Produtos vencidos ou a menos de 15 dias do vencimento pedem ação imediata (promoção, troca com fornecedor ou baixa).</p>
-        <div class="grid grid-4" id="validade-kpis" style="margin-bottom:16px;"></div>
-        <div class="card"><div style="overflow-x:auto;"><table id="tbl-validade"></table></div></div>
       </section>
 
       <!-- CLIENTES -->
@@ -3454,68 +3468,346 @@ function renderMargem(){
   `;
 }
 
-/* ============ RENDER: ESTOQUE ============ */
-function renderEstoque(){
-  let prods = filteredProducts();
-  const filter = document.getElementById('estoqueStatusFilter').value;
-  const rows = prods.map(p=>({p, e: computeEstoque(p)}));
-  const counts = {urgente:0, repor:0, ok:0};
-  rows.forEach(r=>counts[r.e.status]++);
-  document.getElementById('estoque-kpis').innerHTML = `
-    <div class="card stat-tile accent-critical"><div class="label">Repor urgente</div><div class="value">${counts.urgente}</div></div>
-    <div class="card stat-tile accent-warning"><div class="label">Repor em breve</div><div class="value">${counts.repor}</div></div>
-    <div class="card stat-tile accent-good"><div class="label">Estoque ok</div><div class="value">${counts.ok}</div></div>
-  `;
-  let filteredRows = filter ? rows.filter(r=>r.e.status===filter) : rows;
-  filteredRows.sort((a,b)=>{const order={urgente:0,repor:1,ok:2}; return order[a.e.status]-order[b.e.status];});
-  const statusMap = {urgente:{label:'Repor urgente',badge:'critical'}, repor:{label:'Repor em breve',badge:'warning'}, ok:{label:'Ok',badge:'good'}};
-  document.getElementById('tbl-estoque').innerHTML = `
-    <thead><tr><th>Produto</th><th>Loja</th><th>Estoque atual</th><th>Nível</th><th>Mínimo</th><th>Vendas/mês</th><th>Sugestão de pedido</th><th>Status</th></tr></thead>
-    <tbody>${filteredRows.map(({p,e})=>{
-      const pctFill = Math.min(100, (p.estoque/e.ideal*100));
-      const color = e.status==='ok' ? 'var(--good)' : (e.status==='repor' ? 'var(--warning)' : 'var(--critical)');
-      const st = statusMap[e.status];
-      return `<tr>
-        <td class="strong">${esc(p.nome)}</td>
-        <td>${esc(p.loja)}</td>
-        <td>${p.estoque} un</td>
-        <td><span class="meter"><span style="width:${pctFill}%;background:${color};"></span></span></td>
-        <td>${p.estoqueMin} un</td>
-        <td>${p.vendasMes} un</td>
-        <td>${e.sugestao>0 ? `<strong>${e.sugestao} un</strong>` : '—'}</td>
-        <td><span class="badge ${badgeClass(st.badge)}"><span class="dot"></span>${st.label}</span></td>
-      </tr>`;
-    }).join('')}</tbody>
-  `;
+/* ============ ESTOQUE E VALIDADE (uma tela so) ============
+   Cada linha da tabela `produtos` e um LOTE: produto + loja + validade + custo.
+   estoque = qtd_inicial - vendido - perdido, sempre. Dai saem as contas do dono:
+     capital investido = qtd_inicial x custo
+     ja recuperado     = soma do que foi vendido (valor real da baixa)
+     a recuperar       = estoque x preco de venda
+     em risco          = estoque vencido ou a ate 15 dias, valorizado a custo */
+const ES_ORDEM = {vencido:0, critico:1, atencao:2, ok:3, sem:4, esgotado:5};
+const ES_ROTULO = {vencido:'Vencido', critico:'Crítico', atencao:'Atenção', ok:'Ok', sem:'Sem validade', esgotado:'Esgotado'};
+const ES_BADGE = {vencido:'critical', critico:'critical', atencao:'warning', ok:'good', sem:'muted', esgotado:'muted'};
+const esR2 = v => Math.round((+v||0)*100)/100;
+const esR3 = v => Math.round((+v||0)*1000)/1000;
+const esQtd = (q,u) => esR3(q).toLocaleString('pt-BR', {maximumFractionDigits:3}) + ' ' + (u||'un');
+const esNorm = t => String(t==null?'':t).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+function esNum(v){
+  if(v===''||v==null) return null;
+  let t = String(v).trim().replace(/[R$\s]/g,'');
+  if(t.indexOf(',') !== -1) t = t.replace(/\./g,'').replace(',','.');   // 1.200,50 -> 1200.50
+  const n = parseFloat(t); return isNaN(n) ? null : n;
+}
+function esData(v){
+  const t = String(v||'').trim(); if(!t) return null;
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return t;
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(m){ const a = m[3].length===2 ? '20'+m[3] : m[3]; return a+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  return undefined;     // preenchido, mas em formato que nao entendi
+}
+function esLojaCanon(txt){
+  const n = esNorm(txt);
+  return STORES.find(l => esNorm(l) === n) || null;
+}
+const esChave = o => [esNorm(o.nome), o.loja, o.validade||'', (o.custo==null ? '' : Number(o.custo).toFixed(2))].join('|');
+
+function mapProduto(r){
+  const vend = +r.vendido||0, perd = +r.perdido||0, est = +r.estoque||0;
+  return { id:r.id, nome:r.nome, categoria:r.categoria||'', loja:r.loja,
+    custo:r.custo==null?null:+r.custo, preco:r.preco==null?null:+r.preco,
+    estoque:est, estoqueMin:+r.estoque_min||0, vendasMes:+r.vendas_mes||0, validade:r.validade||null,
+    unidade:r.unidade||'un', qtdInicial: r.qtd_inicial==null ? est+vend+perd : +r.qtd_inicial,
+    vendido:vend, perdido:perd, recuperado:+r.recuperado||0, origem:r.origem||'' };
+}
+async function tnCarregarProdutos(){
+  if(!(window.TN && window.TN.sb)) return;
+  const { data, error } = await window.TN.sb.from('produtos').select('*');
+  if(error){ console.warn('produtos', error.message); return; }
+  PRODUCTS.length = 0;
+  (data||[]).forEach(r => PRODUCTS.push(mapProduto(r)));
+  renderAll();
+}
+function esStatus(p){
+  if((+p.estoque||0) <= 0) return {chave:'esgotado', dias:null};
+  const v = computeValidade(p);
+  return {chave: v.status === 'na' ? 'sem' : v.status, dias: v.dias};
+}
+function esFmtData(iso){ return iso ? new Date(iso+'T00:00:00').toLocaleDateString('pt-BR') : '—'; }
+const esSocia = () => (typeof perfil!=='undefined' && perfil==='socia');
+
+function esModal(titulo, corpo, rotuloOk, aoConfirmar){
+  const velho = document.getElementById('es-modal'); if(velho) velho.remove();
+  const div = document.createElement('div');
+  div.id = 'es-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+  div.innerHTML = `<form style="background:var(--surface-card);color:var(--text-primary);max-width:460px;width:100%;padding:20px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.4);">
+    <div class="strong" style="font-size:16px;margin-bottom:10px;">${titulo}</div>
+    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr;">${corpo}</div>
+    <p class="hint" id="es-modal-aviso" style="margin:8px 0 0;color:var(--critical);min-height:14px;"></p>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button type="button" class="btn ghost" id="es-modal-x" style="flex:1;">Cancelar</button>
+      <button type="submit" class="btn primary" style="flex:1;">${rotuloOk}</button></div></form>`;
+  document.body.appendChild(div);
+  const fechar = ()=>{ if(div.parentNode) div.remove(); };
+  div.querySelector('#es-modal-x').onclick = fechar;
+  div.addEventListener('mousedown', e=>{ if(e.target === div) fechar(); });
+  div.querySelector('form').onsubmit = async ev=>{
+    ev.preventDefault();
+    const btn = ev.target.querySelector('button[type=submit]'); btn.disabled = true;
+    let aviso = null;
+    try{ aviso = await aoConfirmar(id => (div.querySelector('#'+id)||{}).value); }
+    catch(e){ aviso = 'Não deu certo: ' + (e && e.message ? e.message : e); }
+    btn.disabled = false;
+    if(aviso){ div.querySelector('#es-modal-aviso').textContent = aviso; return; }
+    fechar();
+  };
+  const primeiro = div.querySelector('input,select'); if(primeiro) primeiro.focus();
+  return fechar;
+}
+const esCampo = (rotulo, html, span2) => `<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;${span2?'grid-column:1/-1;':''}"><span class="hint">${rotulo}</span>${html}</label>`;
+
+/* ---------- baixa: venda ou perda ---------- */
+function esAbrirBaixa(p){
+  const corpo =
+    esCampo('O que aconteceu', `<select id="eb-tipo"><option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
+    esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required>`) +
+    esCampo('Preço de venda por ' + esc(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+  const fechar = esModal('Dar baixa — ' + esc(p.nome) + ' · ' + esc(p.loja), corpo, 'Confirmar baixa', async val=>{
+    const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
+    if(!(q > 0)) return 'Informe a quantidade.';
+    if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
+    const novo = { estoque: esR3(p.estoque - q), atualizado_em: new Date().toISOString() };
+    if(tipo === 'venda'){
+      const preco = esNum(val('eb-preco'));
+      if(preco == null || preco < 0) return 'Informe o preço de venda.';
+      novo.vendido = esR3(p.vendido + q);
+      novo.recuperado = esR2(p.recuperado + q*preco);
+    }else{
+      novo.perdido = esR3(p.perdido + q);
+    }
+    const { error } = await window.TN.sb.from('produtos').update(novo).eq('id', p.id);
+    if(error) return 'Não consegui gravar: ' + error.message;
+    await tnCarregarProdutos();
+    return null;
+  });
+  const sel = document.getElementById('eb-tipo');
+  if(sel) sel.onchange = ()=>{ const pr = document.getElementById('eb-preco'); if(pr) pr.parentNode.style.opacity = sel.value==='venda' ? '1' : '.4'; };
 }
 
-/* ============ RENDER: VALIDADE ============ */
-function renderValidade(){
-  let prods = filteredProducts().map(p=>({p, v: computeValidade(p)})).filter(r=>r.v.status!=='na');
-  const counts = {vencido:0, critico:0, atencao:0, ok:0};
-  prods.forEach(r=>counts[r.v.status]++);
-  document.getElementById('validade-kpis').innerHTML = `
-    <div class="card stat-tile accent-critical"><div class="label">Vencidos</div><div class="value">${counts.vencido}</div></div>
-    <div class="card stat-tile accent-critical"><div class="label">Críticos (≤15 dias)</div><div class="value">${counts.critico}</div></div>
-    <div class="card stat-tile accent-warning"><div class="label">Atenção (16–45 dias)</div><div class="value">${counts.atencao}</div></div>
-    <div class="card stat-tile accent-good"><div class="label">Dentro do prazo</div><div class="value">${counts.ok}</div></div>
-  `;
-  prods.sort((a,b)=>a.v.dias-b.v.dias);
-  const statusMap = {vencido:{label:'Vencido',badge:'critical'}, critico:{label:'Crítico',badge:'critical'}, atencao:{label:'Atenção',badge:'warning'}, ok:{label:'Ok',badge:'good'}};
-  document.getElementById('tbl-validade').innerHTML = `
-    <thead><tr><th>Produto</th><th>Loja</th><th>Validade</th><th>Dias</th><th>Status</th></tr></thead>
-    <tbody>${prods.map(({p,v})=>{
-      const st = statusMap[v.status];
-      const diasLabel = v.dias<0 ? `${Math.abs(v.dias)} dias atrás` : `${v.dias} dias`;
-      return `<tr>
-        <td class="strong">${esc(p.nome)}</td>
-        <td>${esc(p.loja)}</td>
-        <td>${new Date(p.validade+'T00:00:00').toLocaleDateString('pt-BR')}</td>
-        <td>${diasLabel}</td>
-        <td><span class="badge ${badgeClass(st.badge)}"><span class="dot"></span>${st.label}</span></td>
-      </tr>`;
-    }).join('')}</tbody>
-  `;
+/* ---------- corrigir lote ---------- */
+function esAbrirEditar(p){
+  const lojas = [...new Set(lojasAtivas().concat([p.loja]))];
+  const corpo =
+    esCampo('Produto', `<input type="text" id="ee-nome" value="${esc(p.nome)}" required>`, true) +
+    esCampo('Categoria', `<input type="text" id="ee-cat" value="${esc(p.categoria)}">`) +
+    esCampo('Loja', `<select id="ee-loja">${lojas.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`) +
+    esCampo('Unidade', `<select id="ee-un">${['un','kg','g','pct','L'].map(u=>`<option ${u===p.unidade?'selected':''}>${u}</option>`).join('')}</select>`) +
+    esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
+    esCampo('Validade', `<input type="date" id="ee-val" value="${p.validade||''}">`) +
+    esCampo('Origem', `<input type="text" id="ee-origem" value="${esc(p.origem)}">`) +
+    esCampo('Custo por unidade (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
+    esCampo('Preço de venda por unidade (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+  esModal('Corrigir lote', corpo, 'Salvar', async val=>{
+    const nome = String(val('ee-nome')||'').trim(); if(!nome) return 'O produto não pode ficar sem nome.';
+    const est = esNum(val('ee-qtd')); if(est == null || est < 0) return 'Informe a quantidade em estoque.';
+    const validade = esData(val('ee-val')); if(validade === undefined) return 'Validade em formato que não entendi.';
+    const novo = { nome, categoria: String(val('ee-cat')||'').trim() || null, loja: val('ee-loja'), unidade: val('ee-un'),
+      estoque: esR3(est), qtd_inicial: esR3(est + p.vendido + p.perdido),   // vendido e perdido ficam como estavam
+      validade, origem: String(val('ee-origem')||'').trim() || null,
+      custo: esNum(val('ee-custo')), preco: esNum(val('ee-preco')), atualizado_em: new Date().toISOString() };
+    const { error } = await window.TN.sb.from('produtos').update(novo).eq('id', p.id);
+    if(error) return 'Não consegui gravar: ' + error.message;
+    await tnCarregarProdutos();
+    return null;
+  });
+}
+async function esExcluir(p){
+  if(!confirm('Tem certeza que deseja excluir este lote?\n\n' + p.nome + ' — ' + p.loja + ' (' + esQtd(p.estoque, p.unidade) + ')\n\nO histórico de vendas e perdas dele sai junto.')) return;
+  const { error } = await window.TN.sb.from('produtos').delete().eq('id', p.id).select();
+  if(error){ alert('Não consegui excluir: ' + error.message); return; }
+  await tnCarregarProdutos();
+}
+
+/* ---------- lancar lote ---------- */
+async function esLancar(d){
+  const igual = PRODUCTS.find(p => esChave(p) === esChave(d));
+  if(igual){
+    if(!confirm('Já existe um lote igual (mesmo produto, loja, validade e custo): ' + esQtd(igual.estoque, igual.unidade) + ' em estoque.\n\nSomar ' + esQtd(d.qtd, d.unidade) + ' a ele?\n\nOK soma ao lote existente. Cancelar não lança nada.')) return false;
+    const { error } = await window.TN.sb.from('produtos').update({
+      qtd_inicial: esR3(igual.qtdInicial + d.qtd), estoque: esR3(igual.estoque + d.qtd), atualizado_em: new Date().toISOString() }).eq('id', igual.id);
+    if(error){ alert('Não consegui gravar: ' + error.message); return false; }
+    await tnCarregarProdutos(); return true;
+  }
+  const { error } = await window.TN.sb.from('produtos').insert({
+    nome:d.nome, categoria:d.categoria||null, loja:d.loja, unidade:d.unidade, qtd_inicial:esR3(d.qtd), estoque:esR3(d.qtd),
+    vendido:0, perdido:0, recuperado:0, validade:d.validade, custo:d.custo, preco:d.preco, origem:d.origem||null });
+  if(error){ alert('Não consegui gravar: ' + error.message); return false; }
+  await tnCarregarProdutos(); return true;
+}
+
+/* ---------- importar planilha ---------- */
+function esColuna(r, ...nomes){
+  const mapa = {}; Object.keys(r).forEach(k => mapa[esNorm(k).replace(/\(.*\)/,'').trim()] = r[k]);
+  for(const n of nomes){ if(mapa[n] !== undefined && mapa[n] !== '') return mapa[n]; }
+  return '';
+}
+async function esImportar(texto){
+  const rows = parseCSV(texto);
+  const ativas = lojasAtivas();
+  const novos = new Map(), erros = []; let pulados = 0;
+  rows.forEach((r, i) => {
+    const linha = i + 2;
+    const nome = String(esColuna(r,'produto','nome')||'').trim();
+    if(!nome && !esColuna(r,'quantidade','estoque','qtd')) return;          // linha em branco
+    const loja = esLojaCanon(esColuna(r,'loja'));
+    const qtd = esNum(esColuna(r,'quantidade','estoque','qtd'));
+    const validade = esData(esColuna(r,'validade'));
+    const custo = esNum(esColuna(r,'custo','custo unitario'));
+    const preco = esNum(esColuna(r,'preco','preco venda','preco de venda'));
+    if(!nome) return erros.push('linha ' + linha + ': sem nome de produto');
+    if(!loja || ativas.indexOf(loja) === -1) return erros.push('linha ' + linha + ' (' + nome + '): loja "' + esColuna(r,'loja') + '" não reconhecida');
+    if(qtd == null || qtd <= 0) return erros.push('linha ' + linha + ' (' + nome + '): quantidade inválida');
+    if(validade === undefined) return erros.push('linha ' + linha + ' (' + nome + '): validade em formato que não entendi');
+    const un = String(esColuna(r,'unidade','un')||'un').trim() || 'un';
+    const d = { nome, categoria:String(esColuna(r,'categoria')||'').trim(), loja, unidade:un, qtd, validade, custo, preco,
+                origem:String(esColuna(r,'origem')||'').trim() };
+    const k = esChave(d);
+    if(PRODUCTS.some(p => esChave(p) === k)){ pulados++; return; }           // ja lancado antes
+    if(novos.has(k)) novos.get(k).qtd += qtd; else novos.set(k, d);
+  });
+  const lista = [...novos.values()];
+  if(!lista.length){ alert('Nenhum lote novo para lançar.' + (pulados ? '\n' + pulados + ' linha(s) já existiam.' : '') + (erros.length ? '\n\nProblemas:\n' + erros.slice(0,8).join('\n') : '')); return; }
+  const capital = lista.reduce((a,d)=> a + d.qtd*(d.custo||0), 0);
+  const potencial = lista.reduce((a,d)=> a + d.qtd*(d.preco||0), 0);
+  const msg = lista.length + ' lote(s) novos para lançar.\nCapital investido: ' + BRL(capital) + '\nPotencial de venda: ' + BRL(potencial) +
+    (pulados ? '\n\n' + pulados + ' linha(s) já existiam e foram puladas.' : '') +
+    (erros.length ? '\n\n' + erros.length + ' linha(s) com problema, não entram:\n' + erros.slice(0,8).join('\n') + (erros.length>8?'\n...':'') : '') + '\n\nLançar?';
+  if(!confirm(msg)) return;
+  const regs = lista.map(d => ({ nome:d.nome, categoria:d.categoria||null, loja:d.loja, unidade:d.unidade, qtd_inicial:esR3(d.qtd), estoque:esR3(d.qtd),
+    vendido:0, perdido:0, recuperado:0, validade:d.validade, custo:d.custo, preco:d.preco, origem:d.origem||null }));
+  for(let i=0; i<regs.length; i+=200){
+    const { error } = await window.TN.sb.from('produtos').insert(regs.slice(i, i+200));
+    if(error){ alert('Parei no lote ' + (i+1) + ': ' + error.message + '\nOs anteriores já foram gravados. Ao importar de novo, eles são pulados.'); await tnCarregarProdutos(); return; }
+  }
+  await tnCarregarProdutos();
+  avisoSucesso(lista.length + ' lote(s) importado(s)', 'Capital investido ' + BRL(capital));
+}
+
+let esLigado = false;
+function esLigarUmaVez(){
+  if(esLigado) return; esLigado = true;
+  const f = document.getElementById('form-estoque');
+  const val = id => (document.getElementById(id)||{}).value;
+  const previa = ()=>{
+    const q = esNum(val('es-qtd')), c = esNum(val('es-custo')), pv = esNum(val('es-preco'));
+    const el = document.getElementById('es-previa'); if(!el) return;
+    if(q > 0 && (c != null || pv != null)){
+      const cap = q*(c||0), pot = q*(pv||0);
+      el.textContent = 'Capital investido ' + BRL(cap) + (pv != null ? ' · potencial de venda ' + BRL(pot) + (c ? ' · margem ' + pct((pv-c)/pv*100) : '') : '');
+    }else el.textContent = '';
+  };
+  ['es-qtd','es-custo','es-preco'].forEach(id => { const e = document.getElementById(id); if(e) e.oninput = previa; });
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    const nome = String(val('es-nome')||'').trim();
+    const qtd = esNum(val('es-qtd'));
+    const validade = esData(val('es-validade'));
+    if(!nome) return alert('Informe o produto.');
+    if(!(qtd > 0)) return alert('Informe a quantidade.');
+    if(validade === undefined) return alert('Validade em formato que não entendi.');
+    const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+    const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:val('es-un'),
+      qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim() });
+    btn.disabled = false;
+    if(ok){
+      avisoSucesso('Lote lançado com sucesso', nome + ' · ' + esQtd(qtd, val('es-un')) + ' em ' + val('es-loja'));
+      ['es-nome','es-categoria','es-qtd','es-validade','es-custo','es-preco'].forEach(id => { document.getElementById(id).value = ''; });
+      previa(); document.getElementById('es-nome').focus();
+    }
+  };
+  ['es-busca','es-filtro'].forEach(id => { const e = document.getElementById(id); if(e){ e.oninput = e.onchange = renderEstoque; } });
+  document.getElementById('es-zerados').onchange = renderEstoque;
+  document.getElementById('es-btn-importar').onclick = ()=> document.getElementById('es-file').click();
+  document.getElementById('es-file').onchange = e => {
+    const arq = e.target.files[0]; if(!arq) return;
+    const rd = new FileReader();
+    rd.onload = ()=>{ esImportar(rd.result); e.target.value = ''; };
+    rd.readAsText(arq, 'UTF-8');
+  };
+  document.getElementById('es-btn-modelo').onclick = ()=>{
+    const csv = 'produto;categoria;loja;unidade;quantidade;validade;custo;preco;origem\nChá de hibisco;Chás;Ouro Verde;kg;12,5;2027-03-31;18,40;32,00;Toledo\n';
+    const url = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'}));
+    const a = document.createElement('a'); a.href = url; a.download = 'modelo-estoque.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+  document.getElementById('tbl-estoque').addEventListener('click', e => {
+    const b = e.target.closest('[data-es]'); if(!b) return;
+    const p = PRODUCTS.find(x => x.id === b.dataset.id); if(!p) return;
+    ({baixa:esAbrirBaixa, editar:esAbrirEditar, excluir:esExcluir})[b.dataset.es](p);
+  });
+}
+
+/* ============ RENDER: ESTOQUE E VALIDADE ============ */
+function renderEstoque(){
+  esLigarUmaVez();
+  const socia = esSocia();
+  const card = document.getElementById('est-lancar-card'); if(card) card.style.display = socia ? '' : 'none';
+  const lojaSel = document.getElementById('es-loja');
+  if(lojaSel){ const atual = lojaSel.value; lojaSel.innerHTML = lojasAtivas().map(l=>`<option ${l===atual?'selected':''}>${esc(l)}</option>`).join(''); }
+  const nomes = document.getElementById('es-nomes');
+  if(nomes) nomes.innerHTML = [...new Set(PRODUCTS.map(p=>p.nome))].sort().map(n=>`<option value="${esc(n)}"></option>`).join('');
+
+  const todos = filteredProducts();
+  const comStatus = todos.map(p => ({p, s: esStatus(p)}));
+  /* KPIs */
+  const c = {vencido:0, critico:0, atencao:0, ok:0, sem:0, esgotado:0};
+  let capital=0, recuperado=0, potencial=0, aCusto=0, risco=0, riscoN=0, perdidoVal=0, semCusto=0;
+  comStatus.forEach(({p,s}) => {
+    c[s.chave]++;
+    capital += (p.qtdInicial||0)*(p.custo||0); recuperado += p.recuperado||0; perdidoVal += (p.perdido||0)*(p.custo||0);
+    if(p.custo == null) semCusto++;
+    if(s.chave !== 'esgotado'){
+      potencial += p.estoque*(p.preco||0); aCusto += p.estoque*(p.custo||0);
+      if(s.chave==='vencido' || s.chave==='critico'){ risco += p.estoque*(p.custo||0); riscoN++; }
+    }
+  });
+  const kpi = document.getElementById('est-kpis');
+  if(socia){
+    const recPct = capital > 0 ? recuperado/capital*100 : null;
+    kpi.innerHTML = `
+      <div class="card stat-tile"><div class="label">Capital investido</div><div class="value">${BRL(capital)}</div><div class="delta">${comStatus.length} lote(s)${semCusto?' · '+semCusto+' sem custo informado':''}</div></div>
+      <div class="card stat-tile accent-good"><div class="label">Já recuperado</div><div class="value">${BRL(recuperado)}</div><div class="delta">${recPct==null?'—':pct(recPct)+' do capital'}${perdidoVal>0?' · perdido '+BRL(perdidoVal):''}</div></div>
+      <div class="card stat-tile"><div class="label">Ainda a recuperar</div><div class="value">${BRL(potencial)}</div><div class="delta">se vender tudo ao preço de venda · a custo ${BRL(aCusto)}</div></div>
+      <div class="card stat-tile accent-critical"><div class="label">Em risco (vencido ou até 15 dias)</div><div class="value">${BRL(risco)}</div><div class="delta">${riscoN} lote(s) · a custo</div></div>`;
+  }else{
+    kpi.innerHTML = `
+      <div class="card stat-tile accent-critical"><div class="label">Vencidos</div><div class="value">${c.vencido}</div></div>
+      <div class="card stat-tile accent-critical"><div class="label">Críticos (até 15 dias)</div><div class="value">${c.critico}</div></div>
+      <div class="card stat-tile accent-warning"><div class="label">Atenção (16 a 45 dias)</div><div class="value">${c.atencao}</div></div>
+      <div class="card stat-tile accent-good"><div class="label">Dentro do prazo</div><div class="value">${c.ok + c.sem}</div></div>`;
+  }
+  /* filtros */
+  const busca = esNorm((document.getElementById('es-busca')||{}).value);
+  const filtro = (document.getElementById('es-filtro')||{}).value || '';
+  const zerados = !!(document.getElementById('es-zerados')||{}).checked;
+  let linhas = comStatus.filter(({p,s}) =>
+    (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
+  linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
+  /* tabela */
+  const colVal = socia ? '<th>Custo → preço (un.)</th><th>Capital</th><th>Recuperado</th><th>A recuperar</th><th></th>' : '';
+  let tCap=0, tRec=0, tPot=0;
+  const corpo = linhas.map(({p,s}) => {
+    const cap = (p.qtdInicial||0)*(p.custo||0), pot = p.estoque*(p.preco||0);
+    tCap += cap; tRec += p.recuperado||0; tPot += pot;
+    const dias = s.dias == null ? '—' : (s.dias < 0 ? Math.abs(s.dias) + ' dias atrás' : s.dias + ' dias');
+    const cel = socia ? `
+      <td style="white-space:nowrap;">${p.custo==null?'—':BRL(p.custo)} → ${p.preco==null?'—':BRL(p.preco)}</td>
+      <td>${BRL(cap)}</td><td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} vendidos</div>`:''}</td><td>${BRL(pot)}</td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: venda ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
+        <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir lote" style="padding:2px 6px;">✏️</button>
+        <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : '';
+    return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
+      <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${p.origem?`<div class="hint" style="font-size:11px;">origem ${esc(p.origem)}</div>`:''}</td>
+      <td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}</td>
+      <td>${esFmtData(p.validade)}</td><td>${dias}</td>
+      <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td>${cel}</tr>`;
+  }).join('');
+  const colunas = socia ? 11 : 6;
+  const rodape = (socia && linhas.length) ? `<tr><td colspan="7" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tPot)}</td><td></td></tr>` : '';
+  document.getElementById('tbl-estoque').innerHTML = `
+    <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Validade</th><th>Prazo</th><th>Status</th>${colVal}</tr></thead>
+    <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${PRODUCTS.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
 }
 
 /* ============ RENDER: CLIENTES ============ */
@@ -6780,14 +7072,15 @@ let perfilReal = 'colab';    // papel verdadeiro, vindo do login
 /* Colaboradora ve so o que ela alimenta; sem menu, sem duvida de quem lanca o que */
 /* 'manual' entra aqui porque a consulta de chas e justamente para quem esta
    no balcao atendendo — se ficar so para socia, nao serve para nada. */
-const VIEWS_COLAB = ['desempenho','equipe','instagram','manual'];
+const VIEWS_COLAB = ['desempenho','equipe','instagram','manual','estoque'];
 
 /* Telas que ainda nao tem dado real ficam em marca d'agua para o socio:
    continuam navegaveis, mas ninguem confunde exemplo com numero da loja. */
 function viewTemDados(v){
   const temProdutos = Array.isArray(PRODUCTS) && PRODUCTS.length > 0;
   switch(v){
-    case 'margem': case 'produtos': case 'estoque': case 'validade': return temProdutos;
+    case 'estoque': return true;      // tela de lancamento: precisa abrir vazia
+    case 'margem': case 'produtos': return temProdutos;
     case 'clientes':  return (CLIENTES||[]).length > 0;
     case 'parcerias': return (PARCERIAS||[]).length > 0;
     case 'pedidos':   return (PEDIDOS||[]).length > 0 || (WA_CONVERSAS||[]).length > 0
@@ -8463,14 +8756,6 @@ wireImport('btn-import-produtos','file-produtos','btn-template-produtos',
       vendasMes:num(r['vendas_mes'])||0, validade:r['validade(aaaa-mm-dd)']||r['validade']||null,
     }));
   });
-wireImport('btn-import-estoque','file-estoque','btn-template-estoque',
-  ['nome','loja','estoque','estoque_minimo','vendas_mes'],
-  rows=>{
-    rows.forEach(r=>{
-      const p = PRODUCTS.find(x=>x.nome===r['nome'] && x.loja===r['loja']);
-      if(p){ p.estoque=num(r['estoque'])??p.estoque; p.estoqueMin=num(r['estoque_minimo'])??p.estoqueMin; p.vendasMes=num(r['vendas_mes'])??p.vendasMes; }
-    });
-  });
 wireImport('btn-import-clientes','file-clientes','btn-template-clientes',
   ['nome','loja','telefone','ultima_compra(AAAA-MM-DD)'],
   rows=>{
@@ -8486,8 +8771,7 @@ const VIEW_TITLES = {
   'produtos':['Produtos mais vendidos','Ranking por unidades no mês'],
   'desempenho':['Vendas & caixa diário','Fechamento do dia, meta diária e desempenho da equipe'],
   'margem':['Margem por produto','Prioridade #1: preços e custos corretos'],
-  'estoque':['Estoque & pedidos','Prioridade #2: o que comprar e quando'],
-  'validade':['Validade','Prioridade #3: evitar perda por vencimento'],
+  'estoque':['Estoque e validade','Lotes por loja, vencimento e quanto do capital já voltou'],
   'clientes':['Clientes & CRM','Reativação e histórico de contatos'],
   'equipe':['Equipe: tarefas','Delegue e acompanhe as tarefas do dia a dia'],
   'instagram':['Instagram — pautas','Sugestões de postagem por loja'],
@@ -8521,7 +8805,6 @@ document.querySelectorAll('[data-toggle]').forEach(link=>{
 document.querySelectorAll('.store-chk').forEach(chk=> chk.onchange = ()=>{ salvarPrefs(); renderAll(); });
 { const mt=document.getElementById('marginTarget'); if(mt) mt.onchange = (e)=>{ marginTarget = num(e.target.value) ?? 35; renderAll(); }; }
 document.getElementById('margemStatusFilter').onchange = renderMargem;
-document.getElementById('estoqueStatusFilter').onchange = renderEstoque;
 document.getElementById('tarefaView').onchange = renderTarefas;
 document.getElementById('growReceita').onchange = renderProjecao;
 document.getElementById('growDespesa').onchange = renderProjecao;
@@ -9719,7 +10002,6 @@ function renderAll(){
   renderEquipeFotos();
   renderMargem();
   renderEstoque();
-  renderValidade();
   renderClientes();
   renderFeedbacks();
   renderTarefas();
@@ -9769,7 +10051,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
-  try{ tnReplaceArray(PRODUCTS,res.produtos,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,custo:r.custo==null?null:+r.custo,preco:r.preco==null?null:+r.preco,estoque:+r.estoque,estoqueMin:+r.estoque_min,vendasMes:+r.vendas_mes,validade:r.validade})); }catch(e){}
+  try{ tnReplaceArray(PRODUCTS,res.produtos,mapProduto); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
   try{ tnReplaceArray(DISPONIBILIDADE,res.disponibilidade,r=>({id:r.id,data:r.data,loja:r.loja,saldo_conta:+r.saldo_conta,a_receber_maquininha:+r.a_receber_maquininha||0,especie:+r.especie||0,reserva:+r.reserva||0,origem:r.origem,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}
