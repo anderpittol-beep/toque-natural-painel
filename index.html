@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 17:05";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 17:23";</script>
       </div>
     </div>
 
@@ -843,7 +843,7 @@ window.TN_CONFIG = {
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
               <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
-              <input type="text" id="es-origem" placeholder="Origem (ex.: fornecedor, compra, doação)" required>
+              <input type="hidden" id="es-origem" value="">
               <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0" required>
               <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" required style="grid-column:span 2;">
               <button class="btn primary" type="submit" style="grid-column:span 1;">Lançar</button>
@@ -3880,7 +3880,6 @@ function esLigarUmaVez(){
     if(!mob && !validade) return alert('Informe o vencimento.');
     if(esNum(val('es-custo')) == null) return alert('Informe o custo.');
     if(esNum(val('es-preco')) == null) return alert('Informe o preço de venda.');
-    if(!String(val('es-origem')||'').trim()) return alert('Informe a origem.');
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:esMobilia() ? 'un' : val('es-un'),
       qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim(),
