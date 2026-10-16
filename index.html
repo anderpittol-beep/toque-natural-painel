@@ -842,7 +842,7 @@ window.TN_CONFIG = {
               <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
-              <input type="date" id="es-validade" title="Validade do lote (opcional)">
+              <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote (opcional)</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
               <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo">
               <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0">
               <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" style="grid-column:span 2;">
@@ -3528,7 +3528,8 @@ function mapProduto(r){
     custo:r.custo==null?null:+r.custo, preco:r.preco==null?null:+r.preco,
     estoque:est, estoqueMin:+r.estoque_min||0, vendasMes:+r.vendas_mes||0, validade:r.validade||null,
     unidade:r.unidade||'un', qtdInicial: r.qtd_inicial==null ? est+vend+perd : +r.qtd_inicial,
-    vendido:vend, perdido:perd, recuperado:+r.recuperado||0, origem:r.origem||'', tipo:r.tipo||'mercadoria' };
+    vendido:vend, perdido:perd, recuperado:+r.recuperado||0, origem:r.origem||'', tipo:r.tipo||'mercadoria',
+    criadoEm:r.criado_em||null, atualizadoEm:r.atualizado_em||null };
 }
 async function tnCarregarProdutos(){
   if(!(window.TN && window.TN.sb)) return;
@@ -3545,6 +3546,15 @@ function esStatus(p){
   return {chave: v.status === 'na' ? 'sem' : v.status, dias: v.dias};
 }
 function esFmtData(iso){ return iso ? new Date(iso+'T00:00:00').toLocaleDateString('pt-BR') : '—'; }
+/* Quando o lote entrou: vem do proprio banco (criado_em), nunca digitado. Se foi
+   mexido depois, mostra tambem o ultimo dia de alteracao. */
+function esFmtLancado(p){
+  if(!p.criadoEm) return '<span class="hint">—</span>';
+  const d = x => new Date(x).toLocaleDateString('pt-BR');
+  const c = d(p.criadoEm);
+  const a = p.atualizadoEm ? d(p.atualizadoEm) : null;
+  return '<span style="white-space:nowrap;">' + c + '</span>' + (a && a !== c ? `<div class="hint" style="font-size:11px;white-space:nowrap;">alterado ${a}</div>` : '');
+}
 const esSocia = () => (typeof perfil!=='undefined' && perfil==='socia');
 
 function esModal(titulo, corpo, rotuloOk, aoConfirmar){
@@ -3618,14 +3628,14 @@ function esAbrirEditar(p){
     esCampo('Loja', `<select id="ee-loja">${lojas.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`) +
     esCampo('Unidade', `<select id="ee-un">${['un','kg','g'].concat(['un','kg','g'].includes(p.unidade) ? [] : [p.unidade]).map(u=>`<option ${u===p.unidade?'selected':''}>${esc(u)}</option>`).join('')}</select>`) +
     esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
-    (mob ? '' : esCampo('Validade', `<input type="date" id="ee-val" value="${p.validade||''}">`)) +
+    (mob ? '' : esCampo('Vencimento', `<input type="date" id="ee-val" value="${p.validade||''}">`)) +
     esCampo('Origem', `<input type="text" id="ee-origem" value="${esc(p.origem)}">`) +
     esCampo(mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo por unidade (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
     esCampo(mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
   esModal(mob ? 'Corrigir item' : 'Corrigir lote', corpo, 'Salvar', async val=>{
     const nome = String(val('ee-nome')||'').trim(); if(!nome) return 'O produto não pode ficar sem nome.';
     const est = esNum(val('ee-qtd')); if(est == null || est < 0) return 'Informe a quantidade em estoque.';
-    const validade = mob ? null : esData(val('ee-val')); if(validade === undefined) return 'Validade em formato que não entendi.';
+    const validade = mob ? null : esData(val('ee-val')); if(validade === undefined) return 'Vencimento em formato que não entendi.';
     const novo = { nome, categoria: String(val('ee-cat')||'').trim() || null, loja: val('ee-loja'), unidade: val('ee-un'),
       estoque: esR3(est), qtd_inicial: esR3(est + p.vendido + p.perdido),   // vendido e perdido ficam como estavam
       validade, origem: String(val('ee-origem')||'').trim() || null,
@@ -3676,13 +3686,13 @@ async function esImportar(texto){
     if(!nome && !esColuna(r,'quantidade','estoque','qtd')) return;          // linha em branco
     const loja = esLojaCanon(esColuna(r,'loja'));
     const qtd = esNum(esColuna(r,'quantidade','estoque','qtd'));
-    const validade = esData(esColuna(r,'validade'));
+    const validade = esData(esColuna(r,'vencimento','validade'));
     const custo = esNum(esColuna(r,'custo','custo unitario'));
     const preco = esNum(esColuna(r,'preco','preco venda','preco de venda'));
     if(!nome) return erros.push('linha ' + linha + ': sem nome de produto');
     if(!loja || ativas.indexOf(loja) === -1) return erros.push('linha ' + linha + ' (' + nome + '): loja "' + esColuna(r,'loja') + '" não reconhecida');
     if(qtd == null || qtd <= 0) return erros.push('linha ' + linha + ' (' + nome + '): quantidade inválida');
-    if(validade === undefined) return erros.push('linha ' + linha + ' (' + nome + '): validade em formato que não entendi');
+    if(validade === undefined) return erros.push('linha ' + linha + ' (' + nome + '): vencimento em formato que não entendi');
     const un = String(esColuna(r,'unidade','un')||'un').trim() || 'un';
     const d = { nome, categoria:String(esColuna(r,'categoria')||'').trim(), loja, unidade:un, qtd, validade, custo, preco,
                 origem:String(esColuna(r,'origem')||'').trim() };
@@ -3731,7 +3741,7 @@ function esLigarUmaVez(){
     const validade = esMobilia() ? null : esData(val('es-validade'));
     if(!nome) return alert(esMobilia() ? 'Informe o item.' : 'Informe o produto.');
     if(!(qtd > 0)) return alert('Informe a quantidade.');
-    if(validade === undefined) return alert('Validade em formato que não entendi.');
+    if(validade === undefined) return alert('Vencimento em formato que não entendi.');
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:esMobilia() ? 'un' : val('es-un'),
       qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim(),
@@ -3756,7 +3766,7 @@ function esLigarUmaVez(){
     rd.readAsText(arq, 'UTF-8');
   };
   document.getElementById('es-btn-modelo').onclick = ()=>{
-    const csv = 'produto;categoria;loja;unidade;quantidade;validade;custo;preco;origem\nChá de hibisco;Chás;Ouro Verde;kg;12,5;2027-03-31;18,40;32,00;Toledo\n';
+    const csv = 'produto;categoria;loja;unidade;quantidade;vencimento;custo;preco;origem\nChá de hibisco;Chás;Ouro Verde;kg;12,5;2027-03-31;18,40;32,00;Toledo\n';
     const url = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'}));
     const a = document.createElement('a'); a.href = url; a.download = 'modelo-estoque.csv'; a.click(); URL.revokeObjectURL(url);
   };
@@ -3777,7 +3787,7 @@ function renderEstoque(){
   /* formulario muda de acordo com a aba */
   const card = document.getElementById('est-lancar-card'); if(card) card.style.display = socia ? '' : 'none';
   const mostrar = (id, on) => { const e = document.getElementById(id); if(e) e.style.display = on ? '' : 'none'; };
-  ['es-categoria','es-un','es-validade'].forEach(id => mostrar(id, !mob));
+  ['es-categoria','es-un','es-validade-box'].forEach(id => mostrar(id, !mob));
   document.getElementById('es-resumo-form').textContent = mob ? 'Lançar mobília ou equipamento' : 'Lançar estoque (lote)';
   document.getElementById('es-nome').placeholder = mob ? 'Item (ex.: balcão, prateleira, geladeira) *' : 'Produto *';
   document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (opcional)' : 'Custo por unidade (R$)';
@@ -3826,12 +3836,12 @@ function renderEstoque(){
       return `<tr${s.chave==='vendido'?' style="opacity:.55;"':''}>
         <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${p.origem?`<div class="hint" style="font-size:11px;">${esc(p.origem)}</div>`:''}</td>
         <td>${esc(p.loja)}</td><td class="strong">${esR3(p.estoque).toLocaleString('pt-BR')}</td>
-        <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td>${val}</tr>`;
+        <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${val}</tr>`;
     }).join('');
-    const rodape = (socia && linhas.length) ? `<tr><td colspan="5" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tVenda)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tAval)}</td><td></td></tr>` : '';
+    const rodape = (socia && linhas.length) ? `<tr><td colspan="6" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tVenda)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tAval)}</td><td></td></tr>` : '';
     document.getElementById('tbl-estoque').innerHTML = `
-      <thead><tr><th>Item</th><th>Local</th><th>Quantidade</th><th>Situação</th>${socia?'<th>Valor de venda (un.)</th><th>Valor total</th><th>Já recebido</th><th>Pago ou avaliado</th><th></th>':''}</tr></thead>
-      <tbody>${corpo || `<tr><td colspan="${socia?9:4}" class="hint">${daAba.length ? 'Nenhum item com esse filtro.' : 'Nenhuma mobília lançada ainda. Use “Lançar mobília ou equipamento”.'}</td></tr>`}${rodape}</tbody>`;
+      <thead><tr><th>Item</th><th>Local</th><th>Quantidade</th><th>Situação</th><th>Lançado em</th>${socia?'<th>Valor de venda (un.)</th><th>Valor total</th><th>Já recebido</th><th>Pago ou avaliado</th><th></th>':''}</tr></thead>
+      <tbody>${corpo || `<tr><td colspan="${socia?10:5}" class="hint">${daAba.length ? 'Nenhum item com esse filtro.' : 'Nenhuma mobília lançada ainda. Use “Lançar mobília ou equipamento”.'}</td></tr>`}${rodape}</tbody>`;
     return;
   }
 
@@ -3885,12 +3895,12 @@ function renderEstoque(){
       <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${p.origem?`<div class="hint" style="font-size:11px;">origem ${esc(p.origem)}</div>`:''}</td>
       <td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}</td>
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
-      <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td>${cel}</tr>`;
+      <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
-  const colunas = socia ? 12 : 6;
-  const rodape = (socia && linhas.length) ? `<tr><td colspan="8" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td></td></tr>` : '';
+  const colunas = socia ? 13 : 7;
+  const rodape = (socia && linhas.length) ? `<tr><td colspan="9" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
-    <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Validade</th><th>Prazo</th><th>Status</th>${colVal}</tr></thead>
+    <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Vencimento</th><th>Prazo</th><th>Status</th><th>Lançado em</th>${colVal}</tr></thead>
     <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${daAba.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
 }
 
