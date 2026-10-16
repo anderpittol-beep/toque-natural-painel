@@ -727,7 +727,7 @@ window.TN_CONFIG = {
             <summary>Lançar fechamento do dia</summary>
             <form class="feedback-form" id="form-caixa" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
               <input type="text" id="cx-data" placeholder="Data (dd/mm/aaaa)">
-              <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option><option>Toledo</option></select>
+              <select id="cx-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="cx-vendas" placeholder="Total de vendas do dia (bruto) *" step="0.01" min="0">
               <input type="number" id="cx-inicial" placeholder="Saldo inicial (opcional)" step="0.01" min="0">
               <input type="number" id="cx-entradas" placeholder="Entradas do dia (opcional)" step="0.01" min="0">
@@ -1461,7 +1461,6 @@ let EQUIPE = [
  {nome:"Jandrey",cargo:"Sócio(a)",loja:"Todas"},
  {nome:"Heloisa",cargo:"Colaboradora",loja:"Ouro Verde"},
  {nome:"Tainara",cargo:"Colaboradora",loja:"Itaipulândia"},
- {nome:"Mayara",cargo:"Colaboradora",loja:"Toledo"},
 ];
 
 let FEEDBACKS = [];
@@ -1486,13 +1485,31 @@ let TAREFAS = [
 
 /* Desempenho de vendas por colaboradora — metas MENSAIS por loja (bruto faturado) */
 let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 };
+/* LOJA ENCERRADA — Toledo fechou em 15/10/2026. O historico fica (vendas, caixa,
+   folha), mas dali em diante nao ha meta, nem lancamento de vendas diarias, nem
+   cobranca de posicao de caixa. A meta e uma por loja, sem data, entao a regra
+   vive aqui: a partir do mes do fechamento a meta da loja vale zero. */
+const LOJAS_ENCERRADAS = { 'Toledo': {ano:2026, mes:10, dia:15} };
+function lojaEncerrada(loja, ano, mes){
+  const e = LOJAS_ENCERRADAS[loja];
+  return !!e && (ano*12 + mes) >= (e.ano*12 + e.mes);
+}
+function lojaAtivaHoje(loja){
+  const e = LOJAS_ENCERRADAS[loja];
+  if(!e) return true;
+  return new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()) <= new Date(e.ano, e.mes-1, e.dia);
+}
+const lojasAtivas = () => STORES.filter(lojaAtivaHoje);
+function metaLoja(loja, ano, mes){
+  return lojaEncerrada(loja, ano, mes) ? 0 : (METAS_MENSAIS[loja] || 0);
+}
 const SEMANAS_MES = 4.345; // p/ derivar meta semanal a partir da mensal
 /* Meta do dia = o que ainda falta da meta mensal da loja, dividido pelos dias úteis
    que restam no mês (seg–sáb) contando o próprio dia. Como o realizado entra na conta,
    a meta sobe quando o mês atrasa e cai quando adianta. */
 function metaDoDia(loja, dataBR){
-  const mensal = METAS_MENSAIS[loja] || 0;
   const d = parseBR(dataBR);
+  const mensal = d ? metaLoja(loja, d.getFullYear(), d.getMonth()+1) : 0;
   if(!mensal || !d) return 0;
   const vendidoAntes = vendasCompiladas()
     .filter(v=>{
@@ -1789,7 +1806,7 @@ function gComissao(g){
   if(+g.comissao > 0) return +g.comissao;
   if(g.papel !== 'Colaboradora') return 0;
   const fat = faturamentoLojaMes(+g.ano, +g.mes, g.loja);
-  return comissaoNiveis(fat, gJornada(g), +g.ano, +g.mes, METAS_MENSAIS[g.loja]||0).valor;
+  return comissaoNiveis(fat, gJornada(g), +g.ano, +g.mes, metaLoja(g.loja, +g.ano, +g.mes)).valor;
 }
 const gTotal = g => (g.salario||0)+gComissao(g)+gExtras(g)+(g.encargo||0)+(g.vale||0);
 /* O que vai para a mao da pessoa: salario + comissao + horas extras + vale.
@@ -2665,7 +2682,7 @@ function vendedorasAtuais(){
   return EQUIPE.filter(e=>e.cargo==='Colaboradora' && selStores().includes(e.loja)).map(e=>e.nome);
 }
 function lojaOf(nome){ const e=EQUIPE.find(x=>x.nome===nome); return e?e.loja:''; }
-function metaMensal(nome){ return METAS_MENSAIS[lojaOf(nome)]||0; }
+function metaMensal(nome){ return metaLoja(lojaOf(nome), TODAY.getFullYear(), TODAY.getMonth()+1); }
 /* A foto e guardada pelo primeiro nome, mas o cadastro pode ter o nome
    completo ("Anderson Pittol"), acento ou caixa diferente. Sem essa busca
    tolerante, quem edita o cadastro perde a foto sem entender por que. */
@@ -3124,7 +3141,9 @@ function renderDesempenho(){
       lojasH.forEach(l=>{
         const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
         if(!rec) return;
-        linhas.push({mes:rotulo, loja:l, rec, meta:METAS_MENSAIS[l]||0, colab:colabDe(l),
+        const pr = String(rotulo).split('/');
+        const metaDoRotulo = metaLoja(l, 2000 + (+pr[1]), MES_ABREV.indexOf(pr[0]));
+        linhas.push({mes:rotulo, loja:l, rec, meta:metaDoRotulo, colab:colabDe(l),
                      parcial:(FINANCEIRO.parcialPorMes||{})[rotulo]});
       });
     });
@@ -5123,7 +5142,7 @@ function cenario(meses, rotulo){
     const ano = d.getFullYear(), mes = d.getMonth()+1;
     lojas.forEach(l=>{
       recorrente += compromissoMensal(ano, mes, l);
-      receita    += (METAS_MENSAIS[l]||0);
+      receita    += metaLoja(l, ano, mes);
     });
   }
   const boletos = boletosAteData(limite, lojas);
@@ -5752,7 +5771,7 @@ function renderCaixa(){
   const totFixas = totFixasBase + folhaTotal + provTotal;
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
   /* Meta do mês corrente: quanto foi vendido contra o que estava planejado até aqui */
-  const metaMesLojas = selStores().reduce((a,l)=> a + (METAS_MENSAIS[l]||0), 0);
+  const metaMesLojas = selStores().reduce((a,l)=> a + metaLoja(l, TODAY.getFullYear(), TODAY.getMonth()+1), 0);
   /* Referência é o mês do último dia registrado — senão o mês corrente aparece zerado
      enquanto os lançamentos estão em outro mês. */
   const datasCx = caixa.map(c=>parseBR(c.data)).filter(Boolean).sort((a,b)=>b-a);
@@ -6645,7 +6664,7 @@ function renderGente(){
       const jorn = gJornada(g);
       /* Com a regra por % da meta, so o valor faturado nao diz nada: mostramos
          quanto isso representa da meta da loja naquele mes. */
-      const metaG = METAS_MENSAIS[g.loja] || 0;
+      const metaG = metaLoja(g.loja, +g.ano, +g.mes);
       const pctG = (comissaoPorPercentual(+g.ano, +g.mes) && metaG) ? (fat/metaG*100) : null;
       const fatTxt = BRL(fat) + (pctG!=null ? ' · ' + pctG.toFixed(0) + '% da meta' : '');
       return `<tr>
@@ -8602,6 +8621,13 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     alert('O painel recebe lançamentos a partir de 01/09/2026.\nAté Ago/26 a base é a planilha do Drive.');
     return;
   }
+  const _cxLoja = document.getElementById('cx-loja').value;
+  const _cxD = parseBR(cxData);
+  if(_cxD && lojaEncerrada(_cxLoja, _cxD.getFullYear(), _cxD.getMonth()+1) && !lojaAtivaHoje(_cxLoja) &&
+     _cxD > new Date(LOJAS_ENCERRADAS[_cxLoja].ano, LOJAS_ENCERRADAS[_cxLoja].mes-1, LOJAS_ENCERRADAS[_cxLoja].dia)){
+    alert(_cxLoja + ' encerrou as atividades em ' + String(LOJAS_ENCERRADAS[_cxLoja].dia).padStart(2,'0') + '/' + String(LOJAS_ENCERRADAS[_cxLoja].mes).padStart(2,'0') + '/' + LOJAS_ENCERRADAS[_cxLoja].ano + '. Não há mais lançamento de vendas dessa loja.');
+    return;
+  }
   const cxVendas = num(document.getElementById('cx-vendas').value) || 0;
   if(cxVendas <= 0){
     alert('Informe o total de vendas do dia.\n\nOs campos de saldo (inicial, entradas e saídas) podem ficar em branco.');
@@ -8713,7 +8739,7 @@ function checarLembreteDiario(){
   const hj = hojeBR();
   if(perfil === 'socia'){
     const minha = lojaDoUsuario();
-    const lojasAConferir = minha ? [minha] : STORES;
+    const lojasAConferir = (minha ? [minha] : STORES).filter(lojaAtivaHoje);
     const faltam = lojasAConferir.filter(l => !DISPONIBILIDADE.some(d=>d.loja===l && d.data===hj));
     if(faltam.length){
       mostrarLembrete('Falta lançar a posição de hoje',
@@ -8745,7 +8771,7 @@ function metaPorDiaAtual(){
   const duRest = diasUteisRestantes(TODAY, false);
   return STORES.map(l=>{
     const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
-    const meta = METAS_MENSAIS[l] || 0;
+    const meta = metaLoja(l, TODAY.getFullYear(), TODAY.getMonth()+1);
     const falta = Math.max(0, meta - rec);
     /* O acumulado a recuperar e outra conta: nao e o que falta do mes, e o
        quanto a loja esta atras do esperado para o dia de hoje. */
