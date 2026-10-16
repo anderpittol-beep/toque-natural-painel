@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:25";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:30";</script>
       </div>
     </div>
 
@@ -3648,7 +3648,7 @@ function esAbrirBaixa(p){
     esCampo('O que aconteceu', p.tipo==='mobilia'
       ? `<select id="eb-tipo"><option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option></select>`
       : `<select id="eb-tipo"><option value="transf">Transferência para outra loja</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
-    (p.tipo==='mobilia' ? '' : esCampo('Loja de destino', `<select id="eb-dest">${lojasAtivas().filter(l=>l!==p.loja && l!=='Toledo').map(l=>`<option>${esc(l)}</option>`).join('')}</select>`, true)) +
+    (p.tipo==='mobilia' ? '' : esCampo('Loja de destino', `<select id="eb-dest">${lojasAtivas().filter(l=>l!=='Toledo').map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`, true)) +
     esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
     (p.tipo==='mobilia' ? esCampo('Valor recebido por unidade (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`) : `<div id="eb-calc" class="hint" style="grid-column:1/-1;"></div>`);
   const fechar = esModal((p.tipo==='mobilia' ? 'Registrar venda — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, p.tipo==='mobilia' ? 'Confirmar' : 'Confirmar baixa', async val=>{
