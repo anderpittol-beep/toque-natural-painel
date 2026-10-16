@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:44";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:47";</script>
       </div>
     </div>
 
@@ -4031,7 +4031,7 @@ function renderEstoque(){
       return `<tr data-esr="${g[0]}" style="cursor:pointer;${x.n?'':'opacity:.5;'}"><td class="strong">${g[1]}</td><td>${x.n}</td><td>${tN ? pct(x.n/tN*100) : '—'}</td><td>${BRL(x.cus)}</td><td>${BRL(x.ven)}</td><td>${x.ven > 0 ? pct((x.ven-x.cus)/x.ven*100) : '—'}</td></tr>`; }).join('');
     const tabela = `<table><thead><tr><th>Situação</th><th>Lotes</th><th>% dos lotes</th><th title="Só do que ainda está em estoque">Custo do estoque</th><th title="Só do que ainda está em estoque">Venda total do estoque</th><th>Margem</th></tr></thead>
       <tbody>${lin}<tr><td class="strong">Total</td><td class="strong">${tN}</td><td class="strong">100%</td><td class="strong">${BRL(tC)}</td><td class="strong">${BRL(tV)}</td><td class="strong">${tV > 0 ? pct((tV-tC)/tV*100) : '—'}</td></tr></tbody></table>`;
-    resumo.innerHTML = `<div class="grid grid-4">${caixas}<div class="card stat-tile" data-esr="" style="cursor:pointer;"><div class="label">Total de lotes</div><div class="value">${tN}</div><div class="delta">clique numa caixa para filtrar</div></div></div>
+    resumo.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">${caixas}<div class="card stat-tile" data-esr="" style="cursor:pointer;"><div class="label">Total de lotes</div><div class="value">${tN}</div><div class="delta">clique numa caixa para filtrar</div></div></div>
       <button class="btn ghost" id="es-resumo-btn" type="button" style="padding:3px 10px;font-size:12.5px;margin-top:10px;">${aberto ? '▾ Ocultar resumo com valores' : '▸ Ver resumo com valores'}</button>
       <div id="es-resumo-corpo" style="${aberto ? '' : 'display:none;'}margin-top:10px;">${tabela}</div>`;
     document.getElementById('es-resumo-btn').onclick = ev => { ev.stopPropagation(); const c = document.getElementById('es-resumo-corpo'); const on = c.style.display === 'none'; c.style.display = on ? '' : 'none'; ev.currentTarget.textContent = on ? '▾ Ocultar resumo com valores' : '▸ Ver resumo com valores'; try{ localStorage.setItem('tn_es_resumo', on ? '1' : '0'); }catch(e){} };
