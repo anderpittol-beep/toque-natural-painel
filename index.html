@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:32";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:38";</script>
       </div>
     </div>
 
@@ -4019,18 +4019,15 @@ function renderEstoque(){
       <div class="card stat-tile accent-good"><div class="label">Dentro do prazo</div><div class="value">${c.ok + c.sem}</div></div>`;
   }
   /* resumo por situacao: mesma divisao do filtro, clicando filtra a lista */
-  if(resumo){
+  if(resumo && socia){
     const GR = [['vencido','Vencidos'],['critico','Críticos (até 15 dias)'],['atencao','Atenção (16 a 45 dias)'],['ok','Dentro do prazo'],['sem','Sem validade'],['esgotado','Esgotados']];
     const soma = {}; GR.forEach(g => soma[g[0]] = {n:0, cus:0, ven:0});
     comStatus.forEach(({p,s}) => { const g = soma[s.chave]; if(!g) return; g.n++; g.cus += esValor(p.estoque, p.unidade, p.custo); g.ven += esValor(p.estoque, p.unidade, p.preco); });
     const tN = comStatus.length, tC = GR.reduce((a,g)=>a+soma[g[0]].cus,0), tV = GR.reduce((a,g)=>a+soma[g[0]].ven,0);
-    const lin = GR.map(g => { const x = soma[g[0]];
-      return `<tr data-esr="${g[0]}" style="cursor:pointer;${x.n?'':'opacity:.5;'}"><td class="strong">${g[1]}</td><td>${x.n}</td><td>${tN ? pct(x.n/tN*100) : '—'}</td>` +
-        (socia ? `<td>${BRL(x.cus)}</td><td>${BRL(x.ven)}</td><td>${x.ven > 0 ? pct((x.ven-x.cus)/x.ven*100) : '—'}</td>` : '') + '</tr>'; }).join('');
-    resumo.innerHTML = `<table><thead><tr><th>Situação</th><th>Lotes</th><th>% dos lotes</th>${socia ? '<th title="Só do que ainda está em estoque">Custo do estoque</th><th title="Só do que ainda está em estoque">Venda total do estoque</th><th>Margem</th>' : ''}</tr></thead>
-      <tbody>${lin}<tr><td class="strong">Total</td><td class="strong">${tN}</td><td class="strong">100%</td>${socia ? `<td class="strong">${BRL(tC)}</td><td class="strong">${BRL(tV)}</td><td class="strong">${tV > 0 ? pct((tV-tC)/tV*100) : '—'}</td>` : ''}</tr></tbody></table>
-      <div class="hint" style="font-size:11px;margin-top:4px;">Clique numa situação para filtrar a lista abaixo.</div>`;
-    resumo.onclick = ev => { const tr = ev.target.closest('tr[data-esr]'); if(!tr) return; const f = document.getElementById('es-filtro'); if(f){ f.value = tr.dataset.esr === 'esgotado' ? '' : tr.dataset.esr; const z = document.getElementById('es-zerados'); if(z && tr.dataset.esr === 'esgotado') z.checked = true; renderEstoque(); } };
+    const ACC = {vencido:'accent-critical', critico:'accent-critical', atencao:'accent-warning', ok:'accent-good'};
+    const caixas = GR.filter(g => g[0] !== 'esgotado' || soma.esgotado.n > 0).map(g => `<div class="card stat-tile ${ACC[g[0]]||''}" data-esr="${g[0]}" style="cursor:pointer;"><div class="label">${g[1]}</div><div class="value">${soma[g[0]].n}</div><div class="delta">${tN ? pct(soma[g[0]].n/tN*100) : '—'} dos lotes</div></div>`).join('');
+    resumo.innerHTML = `<div class="grid grid-4">${caixas}<div class="card stat-tile" data-esr="" style="cursor:pointer;"><div class="label">Total de lotes</div><div class="value">${tN}</div><div class="delta">clique numa caixa para filtrar</div></div></div>`;
+    resumo.onclick = ev => { const tr = ev.target.closest('[data-esr]'); if(!tr) return; const f = document.getElementById('es-filtro'); if(f){ f.value = tr.dataset.esr === 'esgotado' ? '' : tr.dataset.esr; const z = document.getElementById('es-zerados'); if(z && tr.dataset.esr === 'esgotado') z.checked = true; renderEstoque(); } };
   }
   const busca = esNorm((document.getElementById('es-busca')||{}).value);
   const filtro = (document.getElementById('es-filtro')||{}).value || '';
