@@ -3702,12 +3702,14 @@ function esLigarUmaVez(){
   const previa = ()=>{
     const q = esNum(val('es-qtd')), c = esNum(val('es-custo')), pv = esNum(val('es-preco'));
     const el = document.getElementById('es-previa'); if(!el) return;
-    if(q > 0 && (c != null || pv != null)){
+    if(q > 0){
       const cap = q*(c||0), pot = q*(pv||0);
-      el.textContent = 'Capital investido ' + BRL(cap) + (pv != null ? ' · potencial de venda ' + BRL(pot) + (c ? ' · margem ' + pct((pv-c)/pv*100) : '') : '');
+      el.innerHTML = 'Custo total <strong>' + BRL(cap) + '</strong>' +
+        (pv != null ? ' · Venda total <strong style="color:var(--good);">' + BRL(pot) + '</strong> (' + esQtd(q, val('es-un')) + ' × ' + BRL(pv) + ')' +
+          (c ? ' · lucro bruto <strong>' + BRL(pot-cap) + '</strong> · margem ' + pct((pv-c)/pv*100) : '') : ' · informe o preço de venda para somar o total');
     }else el.textContent = '';
   };
-  ['es-qtd','es-custo','es-preco'].forEach(id => { const e = document.getElementById(id); if(e) e.oninput = previa; });
+  ['es-qtd','es-custo','es-preco','es-un'].forEach(id => { const e = document.getElementById(id); if(e) e.oninput = e.onchange = previa; });
   f.onsubmit = async ev => {
     ev.preventDefault();
     const nome = String(val('es-nome')||'').trim();
@@ -3794,15 +3796,16 @@ function renderEstoque(){
     (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
   linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
   /* tabela */
-  const colVal = socia ? '<th>Custo → preço (un.)</th><th>Capital</th><th>Recuperado</th><th>A recuperar</th><th></th>' : '';
+  const colVal = socia ? '<th>Custo (un.)</th><th>Preço de venda (un.)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th></th>' : '';
   let tCap=0, tRec=0, tPot=0;
   const corpo = linhas.map(({p,s}) => {
     const cap = (p.qtdInicial||0)*(p.custo||0), pot = p.estoque*(p.preco||0);
     tCap += cap; tRec += p.recuperado||0; tPot += pot;
     const dias = s.dias == null ? '—' : (s.dias < 0 ? Math.abs(s.dias) + ' dias atrás' : s.dias + ' dias');
     const cel = socia ? `
-      <td style="white-space:nowrap;">${p.custo==null?'—':BRL(p.custo)} → ${p.preco==null?'—':BRL(p.preco)}</td>
-      <td>${BRL(cap)}</td><td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} vendidos</div>`:''}</td><td>${BRL(pot)}</td>
+      <td>${p.custo==null?'—':BRL(p.custo)}</td><td class="strong">${p.preco==null?'—':BRL(p.preco)}</td>
+      <td>${BRL(cap)}</td><td class="strong" title="${esQtd(p.estoque,p.unidade)} × ${p.preco==null?'sem preço':BRL(p.preco)}">${p.preco==null?'<em>sem preço</em>':BRL(pot)}</td>
+      <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} vendidos</div>`:''}</td>
       <td style="white-space:nowrap;text-align:right;">
         <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: venda ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
         <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir lote" style="padding:2px 6px;">✏️</button>
@@ -3813,8 +3816,8 @@ function renderEstoque(){
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td>${cel}</tr>`;
   }).join('');
-  const colunas = socia ? 11 : 6;
-  const rodape = (socia && linhas.length) ? `<tr><td colspan="7" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tPot)}</td><td></td></tr>` : '';
+  const colunas = socia ? 12 : 6;
+  const rodape = (socia && linhas.length) ? `<tr><td colspan="8" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
     <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Validade</th><th>Prazo</th><th>Status</th>${colVal}</tr></thead>
     <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${PRODUCTS.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
