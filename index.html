@@ -827,10 +827,14 @@ window.TN_CONFIG = {
       <section class="view" id="view-estoque">
         <h2 class="section-title">Estoque e validade</h2>
         <p class="section-desc">Cada linha é um lote: produto, quantidade, validade e quanto custou. Ordenado do vencimento mais próximo para o mais distante. Vencidos ou a menos de 15 dias pedem ação (promoção, troca ou baixa). Os valores ajudam a medir quanto do capital investido já voltou e quanto ainda dá para recuperar.</p>
+        <div class="toolbar" style="margin-bottom:12px;gap:8px;">
+          <button class="btn primary" type="button" id="es-aba-merc">Mercadoria</button>
+          <button class="btn ghost" type="button" id="es-aba-mob">Mobília e equipamentos</button>
+        </div>
         <div class="grid grid-4" id="est-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;" id="est-lancar-card">
           <details class="add-form">
-            <summary>Lançar estoque (lote)</summary>
+            <summary id="es-resumo-form">Lançar estoque (lote)</summary>
             <form class="feedback-form" id="form-estoque" style="grid-template-columns:repeat(4,1fr);">
               <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
               <datalist id="es-nomes"></datalist>
@@ -845,7 +849,7 @@ window.TN_CONFIG = {
               <button class="btn primary" type="submit" style="grid-column:span 1;">Lançar</button>
               <p class="hint" id="es-previa" style="grid-column:1/-1;margin:0;"></p>
             </form>
-            <div class="import-box" style="margin-top:10px;">
+            <div class="import-box" id="es-import-box" style="margin-top:10px;">
               <button class="btn" id="es-btn-importar" type="button">Importar planilha (CSV)</button>
               <button class="btn ghost" id="es-btn-modelo" type="button">baixar modelo</button>
               <input type="file" id="es-file" accept=".csv">
@@ -854,7 +858,7 @@ window.TN_CONFIG = {
         </div>
         <div class="toolbar" style="margin-bottom:10px;gap:8px;flex-wrap:wrap;">
           <input type="search" id="es-busca" placeholder="Buscar produto" style="min-width:180px;">
-          <div class="filters">
+          <div class="filters" id="es-filtro-box">
             <select id="es-filtro">
               <option value="">Todos os lotes</option>
               <option value="vencido">Vencidos</option>
@@ -864,7 +868,7 @@ window.TN_CONFIG = {
               <option value="sem">Sem validade</option>
             </select>
           </div>
-          <label class="hint" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="es-zerados"> mostrar esgotados</label>
+          <label class="hint" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="es-zerados"> <span id="es-zerados-rot">mostrar esgotados</span></label>
         </div>
         <div class="card"><div style="overflow-x:auto;"><table id="tbl-estoque"></table></div></div>
       </section>
@@ -2036,7 +2040,7 @@ function applyStoreTheme(){
 }
 function filteredProducts(){
   const s = currentStore();
-  return PRODUCTS.filter(p => selStores().includes(p.loja));
+  return PRODUCTS.filter(p => selStores().includes(p.loja) && p.tipo !== 'mobilia');
 }
 function filteredClientes(){
   const s = currentStore();
@@ -3485,9 +3489,9 @@ function renderMargem(){
      ja recuperado     = soma do que foi vendido (valor real da baixa)
      a recuperar       = estoque x preco de venda
      em risco          = estoque vencido ou a ate 15 dias, valorizado a custo */
-const ES_ORDEM = {vencido:0, critico:1, atencao:2, ok:3, sem:4, esgotado:5};
-const ES_ROTULO = {vencido:'Vencido', critico:'Crítico', atencao:'Atenção', ok:'Ok', sem:'Sem validade', esgotado:'Esgotado'};
-const ES_BADGE = {vencido:'critical', critico:'critical', atencao:'warning', ok:'good', sem:'muted', esgotado:'muted'};
+const ES_ORDEM = {vencido:0, critico:1, atencao:2, ok:3, sem:4, avenda:4, esgotado:5, vendido:5};
+const ES_ROTULO = {vencido:'Vencido', critico:'Crítico', atencao:'Atenção', ok:'Ok', sem:'Sem validade', esgotado:'Esgotado', avenda:'À venda', vendido:'Vendido'};
+const ES_BADGE = {vencido:'critical', critico:'critical', atencao:'warning', ok:'good', sem:'muted', esgotado:'muted', avenda:'warning', vendido:'good'};
 const esR2 = v => Math.round((+v||0)*100)/100;
 const esR3 = v => Math.round((+v||0)*1000)/1000;
 const esQtd = (q,u) => esR3(q).toLocaleString('pt-BR', {maximumFractionDigits:3}) + ' ' + (u||'un');
@@ -3510,7 +3514,13 @@ function esLojaCanon(txt){
   const n = esNorm(txt);
   return STORES.find(l => esNorm(l) === n) || null;
 }
-const esChave = o => [esNorm(o.nome), o.loja, o.validade||'', (o.custo==null ? '' : Number(o.custo).toFixed(2))].join('|');
+const esChave = o => [o.tipo||'mercadoria', esNorm(o.nome), o.loja, o.validade||'', (o.custo==null ? '' : Number(o.custo).toFixed(2))].join('|');
+/* Mobiliaria e equipamentos moram na mesma tabela, marcados por tipo, mas nao tem
+   validade e podem estar numa loja encerrada (Toledo). Ficam fora da margem e
+   do ranking de produtos. */
+let esAba = 'mercadoria';
+try{ esAba = localStorage.getItem('tn_es_aba') === 'mobilia' ? 'mobilia' : 'mercadoria'; }catch(e){}
+const esMobilia = () => esAba === 'mobilia';
 
 function mapProduto(r){
   const vend = +r.vendido||0, perd = +r.perdido||0, est = +r.estoque||0;
@@ -3518,7 +3528,7 @@ function mapProduto(r){
     custo:r.custo==null?null:+r.custo, preco:r.preco==null?null:+r.preco,
     estoque:est, estoqueMin:+r.estoque_min||0, vendasMes:+r.vendas_mes||0, validade:r.validade||null,
     unidade:r.unidade||'un', qtdInicial: r.qtd_inicial==null ? est+vend+perd : +r.qtd_inicial,
-    vendido:vend, perdido:perd, recuperado:+r.recuperado||0, origem:r.origem||'' };
+    vendido:vend, perdido:perd, recuperado:+r.recuperado||0, origem:r.origem||'', tipo:r.tipo||'mercadoria' };
 }
 async function tnCarregarProdutos(){
   if(!(window.TN && window.TN.sb)) return;
@@ -3529,6 +3539,7 @@ async function tnCarregarProdutos(){
   renderAll();
 }
 function esStatus(p){
+  if(p.tipo === 'mobilia') return (+p.estoque||0) > 0 ? {chave:'avenda', dias:null} : {chave:'vendido', dias:null};
   if((+p.estoque||0) <= 0) return {chave:'esgotado', dias:null};
   const v = computeValidade(p);
   return {chave: v.status === 'na' ? 'sem' : v.status, dias: v.dias};
@@ -3570,10 +3581,12 @@ const esCampo = (rotulo, html, span2) => `<label style="display:flex;flex-direct
 /* ---------- baixa: venda ou perda ---------- */
 function esAbrirBaixa(p){
   const corpo =
-    esCampo('O que aconteceu', `<select id="eb-tipo"><option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
-    esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required>`) +
-    esCampo('Preço de venda por ' + esc(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
-  const fechar = esModal('Dar baixa — ' + esc(p.nome) + ' · ' + esc(p.loja), corpo, 'Confirmar baixa', async val=>{
+    esCampo('O que aconteceu', p.tipo==='mobilia'
+      ? `<select id="eb-tipo"><option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option></select>`
+      : `<select id="eb-tipo"><option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
+    esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
+    esCampo(p.tipo==='mobilia' ? 'Valor recebido por unidade (R$)' : 'Preço de venda por ' + esc(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+  const fechar = esModal((p.tipo==='mobilia' ? 'Registrar venda — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, p.tipo==='mobilia' ? 'Confirmar' : 'Confirmar baixa', async val=>{
     const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
     if(!(q > 0)) return 'Informe a quantidade.';
     if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
@@ -3597,21 +3610,22 @@ function esAbrirBaixa(p){
 
 /* ---------- corrigir lote ---------- */
 function esAbrirEditar(p){
-  const lojas = [...new Set(lojasAtivas().concat([p.loja]))];
+  const mob = p.tipo === 'mobilia';
+  const lojas = mob ? STORES.slice() : [...new Set(lojasAtivas().concat([p.loja]))];
   const corpo =
-    esCampo('Produto', `<input type="text" id="ee-nome" value="${esc(p.nome)}" required>`, true) +
+    esCampo(mob ? 'Item' : 'Produto', `<input type="text" id="ee-nome" value="${esc(p.nome)}" required>`, true) +
     esCampo('Categoria', `<input type="text" id="ee-cat" value="${esc(p.categoria)}">`) +
     esCampo('Loja', `<select id="ee-loja">${lojas.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`) +
     esCampo('Unidade', `<select id="ee-un">${['un','kg','g','pct','L'].map(u=>`<option ${u===p.unidade?'selected':''}>${u}</option>`).join('')}</select>`) +
     esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
-    esCampo('Validade', `<input type="date" id="ee-val" value="${p.validade||''}">`) +
+    (mob ? '' : esCampo('Validade', `<input type="date" id="ee-val" value="${p.validade||''}">`)) +
     esCampo('Origem', `<input type="text" id="ee-origem" value="${esc(p.origem)}">`) +
-    esCampo('Custo por unidade (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
-    esCampo('Preço de venda por unidade (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
-  esModal('Corrigir lote', corpo, 'Salvar', async val=>{
+    esCampo(mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo por unidade (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
+    esCampo(mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+  esModal(mob ? 'Corrigir item' : 'Corrigir lote', corpo, 'Salvar', async val=>{
     const nome = String(val('ee-nome')||'').trim(); if(!nome) return 'O produto não pode ficar sem nome.';
     const est = esNum(val('ee-qtd')); if(est == null || est < 0) return 'Informe a quantidade em estoque.';
-    const validade = esData(val('ee-val')); if(validade === undefined) return 'Validade em formato que não entendi.';
+    const validade = mob ? null : esData(val('ee-val')); if(validade === undefined) return 'Validade em formato que não entendi.';
     const novo = { nome, categoria: String(val('ee-cat')||'').trim() || null, loja: val('ee-loja'), unidade: val('ee-un'),
       estoque: esR3(est), qtd_inicial: esR3(est + p.vendido + p.perdido),   // vendido e perdido ficam como estavam
       validade, origem: String(val('ee-origem')||'').trim() || null,
@@ -3641,7 +3655,7 @@ async function esLancar(d){
   }
   const { error } = await window.TN.sb.from('produtos').insert({
     nome:d.nome, categoria:d.categoria||null, loja:d.loja, unidade:d.unidade, qtd_inicial:esR3(d.qtd), estoque:esR3(d.qtd),
-    vendido:0, perdido:0, recuperado:0, validade:d.validade, custo:d.custo, preco:d.preco, origem:d.origem||null });
+    vendido:0, perdido:0, recuperado:0, validade:d.validade, custo:d.custo, preco:d.preco, origem:d.origem||null, tipo:d.tipo||'mercadoria' });
   if(error){ alert('Não consegui gravar: ' + error.message); return false; }
   await tnCarregarProdutos(); return true;
 }
@@ -3714,20 +3728,24 @@ function esLigarUmaVez(){
     ev.preventDefault();
     const nome = String(val('es-nome')||'').trim();
     const qtd = esNum(val('es-qtd'));
-    const validade = esData(val('es-validade'));
-    if(!nome) return alert('Informe o produto.');
+    const validade = esMobilia() ? null : esData(val('es-validade'));
+    if(!nome) return alert(esMobilia() ? 'Informe o item.' : 'Informe o produto.');
     if(!(qtd > 0)) return alert('Informe a quantidade.');
     if(validade === undefined) return alert('Validade em formato que não entendi.');
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
-    const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:val('es-un'),
-      qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim() });
+    const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:esMobilia() ? 'un' : val('es-un'),
+      qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim(),
+      tipo: esMobilia() ? 'mobilia' : 'mercadoria' });
     btn.disabled = false;
     if(ok){
-      avisoSucesso('Lote lançado com sucesso', nome + ' · ' + esQtd(qtd, val('es-un')) + ' em ' + val('es-loja'));
+      avisoSucesso(esMobilia() ? 'Item lançado com sucesso' : 'Lote lançado com sucesso', nome + ' · ' + esQtd(qtd, esMobilia() ? 'un' : val('es-un')) + ' em ' + val('es-loja'));
       ['es-nome','es-categoria','es-qtd','es-validade','es-custo','es-preco'].forEach(id => { document.getElementById(id).value = ''; });
       previa(); document.getElementById('es-nome').focus();
     }
   };
+  const trocarAba = aba => { esAba = aba; try{ localStorage.setItem('tn_es_aba', aba); }catch(e){} document.getElementById('es-filtro').value = ''; renderEstoque(); };
+  document.getElementById('es-aba-merc').onclick = ()=> trocarAba('mercadoria');
+  document.getElementById('es-aba-mob').onclick = ()=> trocarAba('mobilia');
   ['es-busca','es-filtro'].forEach(id => { const e = document.getElementById(id); if(e){ e.oninput = e.onchange = renderEstoque; } });
   document.getElementById('es-zerados').onchange = renderEstoque;
   document.getElementById('es-btn-importar').onclick = ()=> document.getElementById('es-file').click();
@@ -3752,16 +3770,72 @@ function esLigarUmaVez(){
 /* ============ RENDER: ESTOQUE E VALIDADE ============ */
 function renderEstoque(){
   esLigarUmaVez();
-  const socia = esSocia();
+  const socia = esSocia(), mob = esMobilia();
+  /* abas */
+  document.getElementById('es-aba-merc').className = 'btn ' + (mob ? 'ghost' : 'primary');
+  document.getElementById('es-aba-mob').className = 'btn ' + (mob ? 'primary' : 'ghost');
+  /* formulario muda de acordo com a aba */
   const card = document.getElementById('est-lancar-card'); if(card) card.style.display = socia ? '' : 'none';
+  const mostrar = (id, on) => { const e = document.getElementById(id); if(e) e.style.display = on ? '' : 'none'; };
+  ['es-categoria','es-un','es-validade'].forEach(id => mostrar(id, !mob));
+  document.getElementById('es-resumo-form').textContent = mob ? 'Lançar mobília ou equipamento' : 'Lançar estoque (lote)';
+  document.getElementById('es-nome').placeholder = mob ? 'Item (ex.: balcão, prateleira, geladeira) *' : 'Produto *';
+  document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (opcional)' : 'Custo por unidade (R$)';
+  document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade (R$)';
+  document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: Toledo)';
+  mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
+  document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
   const lojaSel = document.getElementById('es-loja');
-  if(lojaSel){ const atual = lojaSel.value; lojaSel.innerHTML = lojasAtivas().map(l=>`<option ${l===atual?'selected':''}>${esc(l)}</option>`).join(''); }
+  if(lojaSel){ const atual = lojaSel.value; const lj = mob ? STORES : lojasAtivas(); lojaSel.innerHTML = lj.map(l=>`<option ${l===atual?'selected':''}>${esc(l)}</option>`).join(''); }
   const nomes = document.getElementById('es-nomes');
-  if(nomes) nomes.innerHTML = [...new Set(PRODUCTS.map(p=>p.nome))].sort().map(n=>`<option value="${esc(n)}"></option>`).join('');
+  const daAba = PRODUCTS.filter(p => mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia');
+  if(nomes) nomes.innerHTML = [...new Set(daAba.map(p=>p.nome))].sort().map(n=>`<option value="${esc(n)}"></option>`).join('');
 
-  const todos = filteredProducts();
+  /* itens da aba, nas lojas escolhidas no topo */
+  const todos = PRODUCTS.filter(p => selStores().includes(p.loja) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
   const comStatus = todos.map(p => ({p, s: esStatus(p)}));
-  /* KPIs */
+  const kpi = document.getElementById('est-kpis');
+
+  if(mob){
+    let aVenda=0, valorVenda=0, recebido=0, avaliado=0, vendidos=0;
+    comStatus.forEach(({p,s}) => {
+      recebido += p.recuperado||0; avaliado += (p.qtdInicial||0)*(p.custo||0);
+      if(s.chave === 'avenda'){ aVenda += p.estoque; valorVenda += p.estoque*(p.preco||0); } else vendidos++;
+    });
+    kpi.innerHTML = socia ? `
+      <div class="card stat-tile"><div class="label">Itens à venda</div><div class="value">${esR3(aVenda).toLocaleString('pt-BR')}</div><div class="delta">${comStatus.length - vendidos} linha(s) · ${vendidos} já vendida(s)</div></div>
+      <div class="card stat-tile accent-warning"><div class="label">Valor de venda a receber</div><div class="value">${BRL(valorVenda)}</div><div class="delta">soma de quantidade × valor de venda</div></div>
+      <div class="card stat-tile accent-good"><div class="label">Já recebido</div><div class="value">${BRL(recebido)}</div><div class="delta">${valorVenda+recebido>0 ? pct(recebido/(valorVenda+recebido)*100)+' do total' : '—'}</div></div>
+      <div class="card stat-tile"><div class="label">Valor pago ou avaliado</div><div class="value">${BRL(avaliado)}</div><div class="delta">quando informado</div></div>`
+      : `<div class="card stat-tile"><div class="label">Itens à venda</div><div class="value">${esR3(aVenda).toLocaleString('pt-BR')}</div></div>`;
+    const busca = esNorm((document.getElementById('es-busca')||{}).value);
+    const mostraVend = !!(document.getElementById('es-zerados')||{}).checked;
+    const linhas = comStatus.filter(({p,s}) => (mostraVend || s.chave !== 'vendido') && (!busca || esNorm(p.nome + ' ' + p.categoria + ' ' + p.origem).indexOf(busca) !== -1))
+      .sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || a.p.nome.localeCompare(b.p.nome));
+    let tVenda=0, tRec=0, tAval=0;
+    const corpo = linhas.map(({p,s}) => {
+      const total = p.estoque*(p.preco||0); tVenda += total; tRec += p.recuperado||0; tAval += (p.qtdInicial||0)*(p.custo||0);
+      const val = socia ? `
+        <td>${p.preco==null?'—':BRL(p.preco)}</td><td class="strong" title="${esQtd(p.estoque,'un')} × ${p.preco==null?'sem valor':BRL(p.preco)}">${p.preco==null?'<em>sem valor</em>':BRL(total)}</td>
+        <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esR3(p.vendido).toLocaleString('pt-BR')} vendido(s)</div>`:''}</td>
+        <td>${p.custo==null?'—':BRL((p.qtdInicial||0)*p.custo)}</td>
+        <td style="white-space:nowrap;text-align:right;">
+          <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Registrar venda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>💰</button>
+          <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir item" style="padding:2px 6px;">✏️</button>
+          <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir item" style="padding:2px 6px;">🗑️</button></td>` : '';
+      return `<tr${s.chave==='vendido'?' style="opacity:.55;"':''}>
+        <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${p.origem?`<div class="hint" style="font-size:11px;">${esc(p.origem)}</div>`:''}</td>
+        <td>${esc(p.loja)}</td><td class="strong">${esR3(p.estoque).toLocaleString('pt-BR')}</td>
+        <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td>${val}</tr>`;
+    }).join('');
+    const rodape = (socia && linhas.length) ? `<tr><td colspan="5" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tVenda)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tAval)}</td><td></td></tr>` : '';
+    document.getElementById('tbl-estoque').innerHTML = `
+      <thead><tr><th>Item</th><th>Local</th><th>Quantidade</th><th>Situação</th>${socia?'<th>Valor de venda (un.)</th><th>Valor total</th><th>Já recebido</th><th>Pago ou avaliado</th><th></th>':''}</tr></thead>
+      <tbody>${corpo || `<tr><td colspan="${socia?9:4}" class="hint">${daAba.length ? 'Nenhum item com esse filtro.' : 'Nenhuma mobília lançada ainda. Use “Lançar mobília ou equipamento”.'}</td></tr>`}${rodape}</tbody>`;
+    return;
+  }
+
+  /* ---- mercadoria ---- */
   const c = {vencido:0, critico:0, atencao:0, ok:0, sem:0, esgotado:0};
   let capital=0, recuperado=0, potencial=0, aCusto=0, risco=0, riscoN=0, perdidoVal=0, semCusto=0;
   comStatus.forEach(({p,s}) => {
@@ -3773,7 +3847,6 @@ function renderEstoque(){
       if(s.chave==='vencido' || s.chave==='critico'){ risco += p.estoque*(p.custo||0); riscoN++; }
     }
   });
-  const kpi = document.getElementById('est-kpis');
   if(socia){
     const recPct = capital > 0 ? recuperado/capital*100 : null;
     kpi.innerHTML = `
@@ -3788,14 +3861,12 @@ function renderEstoque(){
       <div class="card stat-tile accent-warning"><div class="label">Atenção (16 a 45 dias)</div><div class="value">${c.atencao}</div></div>
       <div class="card stat-tile accent-good"><div class="label">Dentro do prazo</div><div class="value">${c.ok + c.sem}</div></div>`;
   }
-  /* filtros */
   const busca = esNorm((document.getElementById('es-busca')||{}).value);
   const filtro = (document.getElementById('es-filtro')||{}).value || '';
   const zerados = !!(document.getElementById('es-zerados')||{}).checked;
-  let linhas = comStatus.filter(({p,s}) =>
+  const linhas = comStatus.filter(({p,s}) =>
     (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
   linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
-  /* tabela */
   const colVal = socia ? '<th>Custo (un.)</th><th>Preço de venda (un.)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th></th>' : '';
   let tCap=0, tRec=0, tPot=0;
   const corpo = linhas.map(({p,s}) => {
@@ -3820,7 +3891,7 @@ function renderEstoque(){
   const rodape = (socia && linhas.length) ? `<tr><td colspan="8" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
     <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Validade</th><th>Prazo</th><th>Status</th>${colVal}</tr></thead>
-    <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${PRODUCTS.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
+    <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${daAba.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
 }
 
 /* ============ RENDER: CLIENTES ============ */
