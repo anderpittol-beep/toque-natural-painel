@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 11:57";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:25";</script>
       </div>
     </div>
 
@@ -3609,7 +3609,7 @@ function esFmtLancado(p){
   const a = p.atualizadoEm ? d(p.atualizadoEm) : null;
   return '<span style="white-space:nowrap;">' + c + '</span>' + (a && a !== c ? `<div class="hint" style="font-size:11px;white-space:nowrap;">alterado ${a}</div>` : '');
 }
-const esSocia = () => (typeof perfil!=='undefined' && perfil==='socia');
+const esSocia = () => (typeof perfil!=='undefined' && perfil==='socia' && typeof perfilReal!=='undefined' && perfilReal==='socia');   // só sócio(a)/master vê custos e edita
 
 function esModal(titulo, corpo, rotuloOk, aoConfirmar){
   const velho = document.getElementById('es-modal'); if(velho) velho.remove();
@@ -3899,6 +3899,7 @@ function esLigarUmaVez(){
   document.getElementById('tbl-estoque').addEventListener('click', e => {
     const b = e.target.closest('[data-es]'); if(!b) return;
     const p = PRODUCTS.find(x => x.id === b.dataset.id); if(!p) return;
+    if(perfilReal !== 'socia') return alert('Só sócio(a) ou master pode editar, excluir ou transferir estoque.');
     ({baixa:esAbrirBaixa, editar:esAbrirEditar, excluir:esExcluir})[b.dataset.es](p);
   });
 }
