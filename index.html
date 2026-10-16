@@ -3530,6 +3530,18 @@ const ES_ORDEM = {vencido:0, critico:1, atencao:2, ok:3, sem:4, avenda:4, esgota
 const ES_ROTULO = {vencido:'Vencido', critico:'Crítico', atencao:'Atenção', ok:'Ok', sem:'Sem validade', esgotado:'Esgotado', avenda:'À venda', vendido:'Vendido'};
 const ES_BADGE = {vencido:'critical', critico:'critical', atencao:'warning', ok:'good', sem:'muted', esgotado:'muted', avenda:'warning', vendido:'good'};
 const esR2 = v => Math.round((+v||0)*100)/100;
+/* Custo e preco sao por UNIDADE (un) ou por KG (kg e g). Em g a quantidade e
+   digitada em gramas, entao a conta divide por mil: 2706 g a R$ 59,99/kg =
+   2,706 kg x 59,99. Sem isso, 2706 virava 2706 kg. */
+const esFator = u => u === 'g' ? 0.001 : 1;
+const esValor = (qtd, unidade, valorUn) => (+qtd||0) * esFator(unidade) * (+valorUn||0);
+const esPorQue = u => u === 'un' || !u ? 'por unidade' : 'por kg';
+const esPrecoTxt = (v, u) => v == null ? '—' : BRL(v) + (u === 'un' || !u ? '' : '/kg');
+function esContaTxt(p, valorUn){
+  if(valorUn == null) return 'sem valor';
+  return p.unidade === 'g' ? esQtd(p.estoque,'g') + ' = ' + esR3(p.estoque/1000).toLocaleString('pt-BR') + ' kg × ' + BRL(valorUn) + '/kg'
+                           : esQtd(p.estoque,p.unidade) + ' × ' + BRL(valorUn) + (p.unidade==='kg' ? '/kg' : '');
+}
 const esR3 = v => Math.round((+v||0)*1000)/1000;
 const esQtd = (q,u) => esR3(q).toLocaleString('pt-BR', {maximumFractionDigits:3}) + ' ' + (u||'un');
 const esNorm = t => String(t==null?'':t).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
@@ -3632,7 +3644,7 @@ function esAbrirBaixa(p){
       ? `<select id="eb-tipo"><option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option></select>`
       : `<select id="eb-tipo"><option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
     esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
-    esCampo(p.tipo==='mobilia' ? 'Valor recebido por unidade (R$)' : 'Preço de venda por ' + esc(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+    esCampo(p.tipo==='mobilia' ? 'Valor recebido por unidade (R$)' : 'Preço de venda ' + esPorQue(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
   const fechar = esModal((p.tipo==='mobilia' ? 'Registrar venda — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, p.tipo==='mobilia' ? 'Confirmar' : 'Confirmar baixa', async val=>{
     const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
     if(!(q > 0)) return 'Informe a quantidade.';
@@ -3642,7 +3654,7 @@ function esAbrirBaixa(p){
       const preco = esNum(val('eb-preco'));
       if(preco == null || preco < 0) return 'Informe o preço de venda.';
       novo.vendido = esR3(p.vendido + q);
-      novo.recuperado = esR2(p.recuperado + q*preco);
+      novo.recuperado = esR2(p.recuperado + esValor(q, p.unidade, preco));
     }else{
       novo.perdido = esR3(p.perdido + q);
     }
@@ -3667,8 +3679,8 @@ function esAbrirEditar(p){
     esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
     (mob ? '' : esCampo('Vencimento', `<input type="date" id="ee-val" value="${p.validade||''}">`)) +
     esCampo('Origem', `<input type="text" id="ee-origem" value="${esc(p.origem)}">`) +
-    esCampo(mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo por unidade (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
-    esCampo(mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+    esCampo(mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo por unidade ou por kg (R$)', `<input type="number" id="ee-custo" step="0.01" min="0" value="${p.custo==null?'':p.custo}">`) +
+    esCampo(mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade ou por kg (R$)', `<input type="number" id="ee-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
   esModal(mob ? 'Corrigir item' : 'Corrigir lote', corpo, 'Salvar', async val=>{
     const nome = String(val('ee-nome')||'').trim(); if(!nome) return 'O produto não pode ficar sem nome.';
     const est = esNum(val('ee-qtd')); if(est == null || est < 0) return 'Informe a quantidade em estoque.';
@@ -3742,8 +3754,8 @@ async function esImportar(texto){
   });
   const lista = [...novos.values()];
   if(!lista.length){ alert('Nenhum lote novo para lançar.' + (pulados ? '\n' + pulados + ' linha(s) já existiam.' : '') + (erros.length ? '\n\nProblemas:\n' + erros.slice(0,8).join('\n') : '')); return; }
-  const capital = lista.reduce((a,d)=> a + d.qtd*(d.custo||0), 0);
-  const potencial = lista.reduce((a,d)=> a + d.qtd*(d.preco||0), 0);
+  const capital = lista.reduce((a,d)=> a + esValor(d.qtd, d.unidade, d.custo), 0);
+  const potencial = lista.reduce((a,d)=> a + esValor(d.qtd, d.unidade, d.preco), 0);
   const msg = lista.length + ' lote(s) novos para lançar.\nCapital investido: ' + BRL(capital) + '\nPotencial de venda: ' + BRL(potencial) +
     (pulados ? '\n\n' + pulados + ' linha(s) já existiam e foram puladas.' : '') +
     (erros.length ? '\n\n' + erros.length + ' linha(s) com problema, não entram:\n' + erros.slice(0,8).join('\n') + (erros.length>8?'\n...':'') : '') + '\n\nLançar?';
@@ -3767,20 +3779,22 @@ function esLigarUmaVez(){
     const q = esNum(val('es-qtd')), c = esNum(val('es-custo')), pv = esNum(val('es-preco'));
     const el = document.getElementById('es-previa'); if(!el) return;
     if(q > 0){
-      const cap = q*(c||0), pot = q*(pv||0);
+      const un = val('es-un') || 'un';
+      const cap = esValor(q, un, c), pot = esValor(q, un, pv);
       el.innerHTML = 'Custo total <strong>' + BRL(cap) + '</strong>' +
-        (pv != null ? ' · Venda total <strong style="color:var(--good);">' + BRL(pot) + '</strong> (' + esQtd(q, val('es-un')) + ' × ' + BRL(pv) + ')' +
+        (pv != null ? ' · Venda total <strong style="color:var(--good);">' + BRL(pot) + '</strong> (' + (un === 'g' ? esQtd(q,'g') + ' = ' + esR3(q/1000).toLocaleString('pt-BR') + ' kg' : esQtd(q, un)) + ' × ' + BRL(pv) + (un === 'un' ? '' : '/kg') + ')' +
           (c ? ' · lucro bruto <strong>' + BRL(pot-cap) + '</strong> · margem ' + pct((pv-c)/pv*100) : '') : ' · informe o preço de venda para somar o total');
     }else el.textContent = '';
   };
   const nomeEl = document.getElementById('es-nome');
   let sugAtual = null;
-  const PADRAO = { cat:'Categoria (opcional)', custo:'Custo por unidade (R$)', preco:'Preço de venda por unidade (R$)', origem:'Origem (ex.: Toledo)' };
+  const un0 = () => (document.getElementById('es-un')||{}).value || 'un';
+  const PADRAO = { cat:'Categoria (opcional)', get custo(){ return 'Custo ' + esPorQue(un0()) + ' (R$)'; }, get preco(){ return 'Preço de venda ' + esPorQue(un0()) + ' (R$)'; }, origem:'Origem (ex.: Toledo)' };
   const marcaDagua = sug => {
     const cat = document.getElementById('es-categoria').options[0];
     cat.text = sug && sug.categoria ? 'Sugestão: ' + sug.categoria : PADRAO.cat;
-    document.getElementById('es-custo').placeholder = sug && sug.custo != null ? 'Sugestão: ' + BRL(sug.custo) + ' por unidade' : PADRAO.custo;
-    document.getElementById('es-preco').placeholder = sug && sug.preco != null ? 'Sugestão: ' + BRL(sug.preco) + ' por unidade' : PADRAO.preco;
+    document.getElementById('es-custo').placeholder = sug && sug.custo != null ? 'Sugestão: ' + BRL(sug.custo) + (sug.unidade === 'un' ? ' por unidade' : ' por kg') : PADRAO.custo;
+    document.getElementById('es-preco').placeholder = sug && sug.preco != null ? 'Sugestão: ' + BRL(sug.preco) + (sug.unidade === 'un' ? ' por unidade' : ' por kg') : PADRAO.preco;
     document.getElementById('es-origem').placeholder = sug && sug.origem ? 'Sugestão: ' + sug.origem : PADRAO.origem;
     const linha = document.getElementById('es-sug');
     if(!sug){ linha.style.display = 'none'; linha.innerHTML = ''; return; }
@@ -3811,6 +3825,7 @@ function esLigarUmaVez(){
     if(sugAtual && sugAtual.unidade === 'kg') document.getElementById('es-un').value = 'kg';
   };
   window.esLimparSugestao = ()=> marcaDagua(null);
+  document.getElementById('es-un').addEventListener('change', ()=>{ sugAtual = esMobilia() ? null : esSugestao(nomeEl.value); marcaDagua(sugAtual); });
   nomeEl.addEventListener('change', aoEscolherNome);
   nomeEl.addEventListener('input', aoEscolherNome);      // a cada letra: so mostra sugestao quando o nome fecha com um produto conhecido
   ['es-qtd','es-custo','es-preco','es-un'].forEach(id => { const e = document.getElementById(id); if(e) e.oninput = e.onchange = previa; });
@@ -3870,8 +3885,9 @@ function renderEstoque(){
   ['es-categoria','es-un','es-validade-box'].forEach(id => mostrar(id, !mob));
   document.getElementById('es-resumo-form').textContent = mob ? 'Lançar mobília ou equipamento' : 'Lançar estoque (lote)';
   document.getElementById('es-nome').placeholder = mob ? 'Item (ex.: balcão, prateleira, geladeira) *' : 'Produto *';
-  document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (opcional)' : 'Custo por unidade (R$)';
-  document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda por unidade (R$)';
+  const unSel = (document.getElementById('es-un')||{}).value || 'un';
+  document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (opcional)' : 'Custo ' + esPorQue(unSel) + ' (R$)';
+  document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: Toledo)';
   mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
   document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
@@ -3893,8 +3909,8 @@ function renderEstoque(){
   if(mob){
     let aVenda=0, valorVenda=0, recebido=0, avaliado=0, vendidos=0;
     comStatus.forEach(({p,s}) => {
-      recebido += p.recuperado||0; avaliado += (p.qtdInicial||0)*(p.custo||0);
-      if(s.chave === 'avenda'){ aVenda += p.estoque; valorVenda += p.estoque*(p.preco||0); } else vendidos++;
+      recebido += p.recuperado||0; avaliado += esValor(p.qtdInicial, p.unidade, p.custo);
+      if(s.chave === 'avenda'){ aVenda += p.estoque; valorVenda += esValor(p.estoque, p.unidade, p.preco); } else vendidos++;
     });
     kpi.innerHTML = socia ? `
       <div class="card stat-tile"><div class="label">Itens à venda</div><div class="value">${esR3(aVenda).toLocaleString('pt-BR')}</div><div class="delta">${comStatus.length - vendidos} linha(s) · ${vendidos} já vendida(s)</div></div>
@@ -3908,11 +3924,11 @@ function renderEstoque(){
       .sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || a.p.nome.localeCompare(b.p.nome));
     let tVenda=0, tRec=0, tAval=0;
     const corpo = linhas.map(({p,s}) => {
-      const total = p.estoque*(p.preco||0); tVenda += total; tRec += p.recuperado||0; tAval += (p.qtdInicial||0)*(p.custo||0);
+      const total = esValor(p.estoque, p.unidade, p.preco); tVenda += total; tRec += p.recuperado||0; tAval += esValor(p.qtdInicial, p.unidade, p.custo);
       const val = socia ? `
         <td>${p.preco==null?'—':BRL(p.preco)}</td><td class="strong" title="${esQtd(p.estoque,'un')} × ${p.preco==null?'sem valor':BRL(p.preco)}">${p.preco==null?'<em>sem valor</em>':BRL(total)}</td>
         <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esR3(p.vendido).toLocaleString('pt-BR')} vendido(s)</div>`:''}</td>
-        <td>${p.custo==null?'—':BRL((p.qtdInicial||0)*p.custo)}</td>
+        <td>${p.custo==null?'—':BRL(esValor(p.qtdInicial, p.unidade, p.custo))}</td>
         <td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Registrar venda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>💰</button>
           <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir item" style="padding:2px 6px;">✏️</button>
@@ -3934,11 +3950,11 @@ function renderEstoque(){
   let capital=0, recuperado=0, potencial=0, aCusto=0, risco=0, riscoN=0, perdidoVal=0, semCusto=0;
   comStatus.forEach(({p,s}) => {
     c[s.chave]++;
-    capital += (p.qtdInicial||0)*(p.custo||0); recuperado += p.recuperado||0; perdidoVal += (p.perdido||0)*(p.custo||0);
+    capital += esValor(p.qtdInicial, p.unidade, p.custo); recuperado += p.recuperado||0; perdidoVal += esValor(p.perdido, p.unidade, p.custo);
     if(p.custo == null) semCusto++;
     if(s.chave !== 'esgotado'){
-      potencial += p.estoque*(p.preco||0); aCusto += p.estoque*(p.custo||0);
-      if(s.chave==='vencido' || s.chave==='critico'){ risco += p.estoque*(p.custo||0); riscoN++; }
+      potencial += esValor(p.estoque, p.unidade, p.preco); aCusto += esValor(p.estoque, p.unidade, p.custo);
+      if(s.chave==='vencido' || s.chave==='critico'){ risco += esValor(p.estoque, p.unidade, p.custo); riscoN++; }
     }
   });
   if(socia){
@@ -3961,15 +3977,15 @@ function renderEstoque(){
   const linhas = comStatus.filter(({p,s}) =>
     (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
   linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
-  const colVal = socia ? '<th>Custo (un.)</th><th>Preço de venda (un.)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th></th>' : '';
+  const colVal = socia ? '<th>Custo (un. ou kg)</th><th>Preço de venda (un. ou kg)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th></th>' : '';
   let tCap=0, tRec=0, tPot=0;
   const corpo = linhas.map(({p,s}) => {
-    const cap = (p.qtdInicial||0)*(p.custo||0), pot = p.estoque*(p.preco||0);
+    const cap = esValor(p.qtdInicial, p.unidade, p.custo), pot = esValor(p.estoque, p.unidade, p.preco);
     tCap += cap; tRec += p.recuperado||0; tPot += pot;
     const dias = s.dias == null ? '—' : (s.dias < 0 ? Math.abs(s.dias) + ' dias atrás' : s.dias + ' dias');
     const cel = socia ? `
-      <td>${p.custo==null?'—':BRL(p.custo)}</td><td class="strong">${p.preco==null?'—':BRL(p.preco)}</td>
-      <td>${BRL(cap)}</td><td class="strong" title="${esQtd(p.estoque,p.unidade)} × ${p.preco==null?'sem preço':BRL(p.preco)}">${p.preco==null?'<em>sem preço</em>':BRL(pot)}</td>
+      <td>${esPrecoTxt(p.custo, p.unidade)}</td><td class="strong">${esPrecoTxt(p.preco, p.unidade)}</td>
+      <td title="${esc(esContaTxt(p, p.custo))}">${BRL(cap)}</td><td class="strong" title="${esc(esContaTxt(p, p.preco))}">${p.preco==null?'<em>sem preço</em>':BRL(pot)}</td>
       <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} vendidos</div>`:''}</td>
       <td style="white-space:nowrap;text-align:right;">
         <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: venda ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
@@ -3977,7 +3993,7 @@ function renderEstoque(){
         <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : '';
     return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
       <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${p.origem?`<div class="hint" style="font-size:11px;">origem ${esc(p.origem)}</div>`:''}</td>
-      <td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}</td>
+      <td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}${p.unidade==='g'?`<div class="hint" style="font-size:11px;">${esR3(p.estoque/1000).toLocaleString('pt-BR')} kg</div>`:''}</td>
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
