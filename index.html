@@ -1503,7 +1503,17 @@ let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 
    folha), mas dali em diante nao ha meta, nem lancamento de vendas diarias, nem
    cobranca de posicao de caixa. A meta e uma por loja, sem data, entao a regra
    vive aqui: a partir do mes do fechamento a meta da loja vale zero. */
-const LOJAS_ENCERRADAS = { 'Toledo': {ano:2026, mes:10, dia:15} };
+const LOJAS_ENCERRADAS = { 'Toledo': {ano:2026, mes:10, dia:15, fixas_apos:['escritorio']} };
+/* Despesa e folha se copiam de um mes para o outro. Depois do mes do fechamento,
+   a loja encerrada so herda o que continua por causa do CNPJ e da conta (aqui, o
+   escritorio de contabilidade). Folha nao e herdada: nao ha mais equipe. */
+function herdaPermitida(loja, descricao, ano, mes, tipo){
+  const e = LOJAS_ENCERRADAS[loja];
+  if(!e || (ano*12 + mes) <= (e.ano*12 + e.mes)) return true;
+  if(tipo === 'folha') return false;
+  const n = String(descricao||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  return (e.fixas_apos||[]).some(x => n === x);
+}
 function lojaEncerrada(loja, ano, mes){
   const e = LOJAS_ENCERRADAS[loja];
   return !!e && (ano*12 + mes) >= (e.ano*12 + e.mes);
@@ -5981,6 +5991,7 @@ function fixasDaCompetencia(ano, mes, prof){
   /* a guia muda todo mes: herdar o valor do mes passado faria a folha acreditar
      numa guia que ainda nao foi lancada */
   return fixasDaCompetencia(p.ano, p.mes, prof+1)
+    .filter(d=> herdaPermitida(d.loja, d.descricao, ano, mes, 'fixa'))
     .map(d=> ({...d, id:null, herdada:true, ano, mes, pago:false, pago_em:null,
                valor: ehFgtsDigital(d) ? 0 : d.valor}));
 }
@@ -6867,6 +6878,7 @@ function folhaDaCompetencia(ano, mes, prof){
   if(doMes.length || prof>24) return doMes;
   const p = fxMesAnterior(ano, mes);
   return folhaDaCompetencia(p.ano, p.mes, prof+1)
+    .filter(g=> herdaPermitida(g.loja, g.pessoa, ano, mes, 'folha'))
     .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, comissao_congelada:false, horas_extras:0, pago:false, pago_em:null}));
 }
 async function gtMaterializar(){
