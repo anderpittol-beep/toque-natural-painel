@@ -838,7 +838,7 @@ window.TN_CONFIG = {
             <form class="feedback-form" id="form-estoque" style="grid-template-columns:repeat(4,1fr);">
               <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
               <datalist id="es-nomes"></datalist>
-              <input type="text" id="es-categoria" placeholder="Categoria (opcional)">
+              <select id="es-categoria" title="Categoria do produto"><option value="">Categoria (opcional)</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option></select>
               <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
@@ -3489,6 +3489,12 @@ function renderMargem(){
      ja recuperado     = soma do que foi vendido (valor real da baixa)
      a recuperar       = estoque x preco de venda
      em risco          = estoque vencido ou a ate 15 dias, valorizado a custo */
+/* Categorias fixas: so estas cinco entram, para os relatorios nao se espalharem em
+   "Cha", "Chas", "Chá " e afins. */
+const ES_CATEGORIAS = ['Chá','Tempero','Encapsulado','Farinhas','Grãos'];
+const ES_CAT_ALIAS = {cha:'Chá', chas:'Chá', tempero:'Tempero', temperos:'Tempero', encapsulado:'Encapsulado', encapsulados:'Encapsulado',
+  farinha:'Farinhas', farinhas:'Farinhas', grao:'Grãos', graos:'Grãos'};
+const esCategoria = txt => ES_CAT_ALIAS[esNorm(txt)] || null;
 const ES_ORDEM = {vencido:0, critico:1, atencao:2, ok:3, sem:4, avenda:4, esgotado:5, vendido:5};
 const ES_ROTULO = {vencido:'Vencido', critico:'Crítico', atencao:'Atenção', ok:'Ok', sem:'Sem validade', esgotado:'Esgotado', avenda:'À venda', vendido:'Vendido'};
 const ES_BADGE = {vencido:'critical', critico:'critical', atencao:'warning', ok:'good', sem:'muted', esgotado:'muted', avenda:'warning', vendido:'good'};
@@ -3624,7 +3630,7 @@ function esAbrirEditar(p){
   const lojas = mob ? STORES.slice() : [...new Set(lojasAtivas().concat([p.loja]))];
   const corpo =
     esCampo(mob ? 'Item' : 'Produto', `<input type="text" id="ee-nome" value="${esc(p.nome)}" required>`, true) +
-    esCampo('Categoria', `<input type="text" id="ee-cat" value="${esc(p.categoria)}">`) +
+    esCampo('Categoria', `<select id="ee-cat"><option value=""></option>${ES_CATEGORIAS.concat(p.categoria && !ES_CATEGORIAS.includes(p.categoria) ? [p.categoria] : []).map(c=>`<option ${c===p.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select>`) +
     esCampo('Loja', `<select id="ee-loja">${lojas.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`) +
     esCampo('Unidade', `<select id="ee-un">${['un','kg','g'].concat(['un','kg','g'].includes(p.unidade) ? [] : [p.unidade]).map(u=>`<option ${u===p.unidade?'selected':''}>${esc(u)}</option>`).join('')}</select>`) +
     esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
@@ -3694,7 +3700,10 @@ async function esImportar(texto){
     if(qtd == null || qtd <= 0) return erros.push('linha ' + linha + ' (' + nome + '): quantidade inválida');
     if(validade === undefined) return erros.push('linha ' + linha + ' (' + nome + '): vencimento em formato que não entendi');
     const un = String(esColuna(r,'unidade','un')||'un').trim() || 'un';
-    const d = { nome, categoria:String(esColuna(r,'categoria')||'').trim(), loja, unidade:un, qtd, validade, custo, preco,
+    const catBruta = String(esColuna(r,'categoria')||'').trim();
+    const cat = catBruta ? esCategoria(catBruta) : '';
+    if(catBruta && !cat) return erros.push('linha ' + linha + ' (' + nome + '): categoria "' + catBruta + '" não é uma das opções (' + ES_CATEGORIAS.join(', ') + ')');
+    const d = { nome, categoria:cat, loja, unidade:un, qtd, validade, custo, preco,
                 origem:String(esColuna(r,'origem')||'').trim() };
     const k = esChave(d);
     if(PRODUCTS.some(p => esChave(p) === k)){ pulados++; return; }           // ja lancado antes
@@ -3766,7 +3775,7 @@ function esLigarUmaVez(){
     rd.readAsText(arq, 'UTF-8');
   };
   document.getElementById('es-btn-modelo').onclick = ()=>{
-    const csv = 'produto;categoria;loja;unidade;quantidade;vencimento;custo;preco;origem\nChá de hibisco;Chás;Ouro Verde;kg;12,5;2027-03-31;18,40;32,00;Toledo\n';
+    const csv = 'produto;categoria;loja;unidade;quantidade;vencimento;custo;preco;origem\nHibisco;Chá;Ouro Verde;kg;12,5;2027-03-31;18,40;32,00;Toledo\n';
     const url = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'}));
     const a = document.createElement('a'); a.href = url; a.download = 'modelo-estoque.csv'; a.click(); URL.revokeObjectURL(url);
   };
