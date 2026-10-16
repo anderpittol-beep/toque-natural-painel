@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:38";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:39";</script>
       </div>
     </div>
 
@@ -4026,7 +4026,10 @@ function renderEstoque(){
     const tN = comStatus.length, tC = GR.reduce((a,g)=>a+soma[g[0]].cus,0), tV = GR.reduce((a,g)=>a+soma[g[0]].ven,0);
     const ACC = {vencido:'accent-critical', critico:'accent-critical', atencao:'accent-warning', ok:'accent-good'};
     const caixas = GR.filter(g => g[0] !== 'esgotado' || soma.esgotado.n > 0).map(g => `<div class="card stat-tile ${ACC[g[0]]||''}" data-esr="${g[0]}" style="cursor:pointer;"><div class="label">${g[1]}</div><div class="value">${soma[g[0]].n}</div><div class="delta">${tN ? pct(soma[g[0]].n/tN*100) : '—'} dos lotes</div></div>`).join('');
-    resumo.innerHTML = `<div class="grid grid-4">${caixas}<div class="card stat-tile" data-esr="" style="cursor:pointer;"><div class="label">Total de lotes</div><div class="value">${tN}</div><div class="delta">clique numa caixa para filtrar</div></div></div>`;
+    let aberto = false; try{ aberto = localStorage.getItem('tn_es_resumo') === '1'; }catch(e){}
+    resumo.innerHTML = `<button class="btn ghost" id="es-resumo-btn" type="button" style="padding:3px 10px;font-size:12.5px;">${aberto ? '▾ Ocultar resumo por situação' : '▸ Ver resumo por situação'}</button>
+      <div id="es-resumo-corpo" style="${aberto ? '' : 'display:none;'}margin-top:10px;"><div class="grid grid-4">${caixas}<div class="card stat-tile" data-esr="" style="cursor:pointer;"><div class="label">Total de lotes</div><div class="value">${tN}</div><div class="delta">clique numa caixa para filtrar</div></div></div></div>`;
+    document.getElementById('es-resumo-btn').onclick = ev => { ev.stopPropagation(); const c = document.getElementById('es-resumo-corpo'); const on = c.style.display === 'none'; c.style.display = on ? '' : 'none'; ev.currentTarget.textContent = on ? '▾ Ocultar resumo por situação' : '▸ Ver resumo por situação'; try{ localStorage.setItem('tn_es_resumo', on ? '1' : '0'); }catch(e){} };
     resumo.onclick = ev => { const tr = ev.target.closest('[data-esr]'); if(!tr) return; const f = document.getElementById('es-filtro'); if(f){ f.value = tr.dataset.esr === 'esgotado' ? '' : tr.dataset.esr; const z = document.getElementById('es-zerados'); if(z && tr.dataset.esr === 'esgotado') z.checked = true; renderEstoque(); } };
   }
   const busca = esNorm((document.getElementById('es-busca')||{}).value);
