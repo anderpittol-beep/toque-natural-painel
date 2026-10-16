@@ -841,7 +841,7 @@ window.TN_CONFIG = {
               <input type="text" id="es-categoria" placeholder="Categoria (opcional)">
               <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
-              <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option><option value="pct">pacote</option><option value="L">litro</option></select>
+              <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
               <input type="date" id="es-validade" title="Validade do lote (opcional)">
               <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo">
               <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0">
@@ -3616,7 +3616,7 @@ function esAbrirEditar(p){
     esCampo(mob ? 'Item' : 'Produto', `<input type="text" id="ee-nome" value="${esc(p.nome)}" required>`, true) +
     esCampo('Categoria', `<input type="text" id="ee-cat" value="${esc(p.categoria)}">`) +
     esCampo('Loja', `<select id="ee-loja">${lojas.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>`) +
-    esCampo('Unidade', `<select id="ee-un">${['un','kg','g','pct','L'].map(u=>`<option ${u===p.unidade?'selected':''}>${u}</option>`).join('')}</select>`) +
+    esCampo('Unidade', `<select id="ee-un">${['un','kg','g'].concat(['un','kg','g'].includes(p.unidade) ? [] : [p.unidade]).map(u=>`<option ${u===p.unidade?'selected':''}>${esc(u)}</option>`).join('')}</select>`) +
     esCampo('Quantidade em estoque agora', `<input type="number" id="ee-qtd" step="0.001" min="0" value="${p.estoque}" required>`) +
     (mob ? '' : esCampo('Validade', `<input type="date" id="ee-val" value="${p.validade||''}">`)) +
     esCampo('Origem', `<input type="text" id="ee-origem" value="${esc(p.origem)}">`) +
