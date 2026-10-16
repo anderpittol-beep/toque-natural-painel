@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 16:36";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 17:05";</script>
       </div>
     </div>
 
@@ -843,7 +843,7 @@ window.TN_CONFIG = {
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
               <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
-              <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo" required>
+              <input type="text" id="es-origem" placeholder="Origem (ex.: fornecedor, compra, doação)" required>
               <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0" required>
               <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" required style="grid-column:span 2;">
               <button class="btn primary" type="submit" style="grid-column:span 1;">Lançar</button>
@@ -3827,7 +3827,7 @@ function esLigarUmaVez(){
   const nomeEl = document.getElementById('es-nome');
   let sugAtual = null;
   const un0 = () => (document.getElementById('es-un')||{}).value || 'un';
-  const PADRAO = { cat:'Categoria', get custo(){ return 'Custo ' + esPorQue(un0()) + ' (R$)'; }, get preco(){ return 'Preço de venda ' + esPorQue(un0()) + ' (R$)'; }, origem:'Origem (ex.: Toledo)' };
+  const PADRAO = { cat:'Categoria', get custo(){ return 'Custo ' + esPorQue(un0()) + ' (R$)'; }, get preco(){ return 'Preço de venda ' + esPorQue(un0()) + ' (R$)'; }, origem:'Origem (ex.: fornecedor, compra, doação)' };
   const marcaDagua = sug => {
     const cat = document.getElementById('es-categoria').options[0];
     cat.text = sug && sug.categoria ? 'Sugestão: ' + sug.categoria : PADRAO.cat;
@@ -3888,7 +3888,7 @@ function esLigarUmaVez(){
     btn.disabled = false;
     if(ok){
       avisoSucesso(esMobilia() ? 'Item lançado com sucesso' : 'Lote lançado com sucesso', nome + ' · ' + esQtd(qtd, esMobilia() ? 'un' : val('es-un')) + ' em ' + val('es-loja'));
-      ['es-nome','es-categoria','es-qtd','es-validade','es-custo','es-preco'].forEach(id => { document.getElementById(id).value = ''; });
+      ['es-nome','es-categoria','es-qtd','es-validade','es-custo','es-preco','es-origem'].forEach(id => { document.getElementById(id).value = ''; });
       window.esLimparSugestao(); previa(); document.getElementById('es-nome').focus();
     }
   };
@@ -3933,7 +3933,7 @@ function renderEstoque(){
   const unSel = (document.getElementById('es-un')||{}).value || 'un';
   document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda ' + esPorQue(unSel) + ' (R$)';
-  document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: Toledo)';
+  document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: fornecedor, compra, doação)';
   mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
   document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
   const lojaSel = document.getElementById('es-loja');
