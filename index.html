@@ -838,14 +838,14 @@ window.TN_CONFIG = {
             <form class="feedback-form" id="form-estoque" style="grid-template-columns:repeat(4,1fr);">
               <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
               <datalist id="es-nomes"></datalist>
-              <select id="es-categoria" title="Categoria do produto"><option value="">Categoria (opcional)</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option></select>
+              <select id="es-categoria" title="Categoria do produto"><option value="">Categoria</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option></select>
               <select id="es-loja"><option>Itaipulândia</option><option>Ouro Verde</option></select>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
-              <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote (opcional)</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
-              <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo">
-              <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0">
-              <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" style="grid-column:span 2;">
+              <label id="es-validade-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Vencimento do lote</span><input type="date" id="es-validade" title="Data de vencimento do lote"></label>
+              <input type="text" id="es-origem" placeholder="Origem (ex.: Toledo)" value="Toledo" required>
+              <input type="number" id="es-custo" placeholder="Custo por unidade (R$)" step="0.01" min="0" required>
+              <input type="number" id="es-preco" placeholder="Preço de venda por unidade (R$)" step="0.01" min="0" required style="grid-column:span 2;">
               <button class="btn primary" type="submit" style="grid-column:span 1;">Lançar</button>
               <p class="hint" id="es-previa" style="grid-column:1/-1;margin:0;"></p>
               <p class="hint" id="es-sug" style="grid-column:1/-1;margin:0;display:none;"></p>
@@ -3809,7 +3809,7 @@ function esLigarUmaVez(){
   const nomeEl = document.getElementById('es-nome');
   let sugAtual = null;
   const un0 = () => (document.getElementById('es-un')||{}).value || 'un';
-  const PADRAO = { cat:'Categoria (opcional)', get custo(){ return 'Custo ' + esPorQue(un0()) + ' (R$)'; }, get preco(){ return 'Preço de venda ' + esPorQue(un0()) + ' (R$)'; }, origem:'Origem (ex.: Toledo)' };
+  const PADRAO = { cat:'Categoria', get custo(){ return 'Custo ' + esPorQue(un0()) + ' (R$)'; }, get preco(){ return 'Preço de venda ' + esPorQue(un0()) + ' (R$)'; }, origem:'Origem (ex.: Toledo)' };
   const marcaDagua = sug => {
     const cat = document.getElementById('es-categoria').options[0];
     cat.text = sug && sug.categoria ? 'Sugestão: ' + sug.categoria : PADRAO.cat;
@@ -3857,6 +3857,12 @@ function esLigarUmaVez(){
     if(!nome) return alert(esMobilia() ? 'Informe o item.' : 'Informe o produto.');
     if(!(qtd > 0)) return alert('Informe a quantidade.');
     if(validade === undefined) return alert('Vencimento em formato que não entendi.');
+    const mob = esMobilia();
+    if(!mob && !String(val('es-categoria')||'').trim()) return alert('Escolha a categoria.');
+    if(!mob && !validade) return alert('Informe o vencimento.');
+    if(esNum(val('es-custo')) == null) return alert('Informe o custo.');
+    if(esNum(val('es-preco')) == null) return alert('Informe o preço de venda.');
+    if(!String(val('es-origem')||'').trim()) return alert('Informe a origem.');
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     const ok = await esLancar({ nome, categoria:String(val('es-categoria')||'').trim(), loja:val('es-loja'), unidade:esMobilia() ? 'un' : val('es-un'),
       qtd, validade, custo:esNum(val('es-custo')), preco:esNum(val('es-preco')), origem:String(val('es-origem')||'').trim(),
@@ -3906,7 +3912,7 @@ function renderEstoque(){
   document.getElementById('es-resumo-form').textContent = mob ? 'Lançar mobília ou equipamento' : 'Lançar estoque (lote)';
   document.getElementById('es-nome').placeholder = mob ? 'Item (ex.: balcão, prateleira, geladeira) *' : 'Produto *';
   const unSel = (document.getElementById('es-un')||{}).value || 'un';
-  document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (opcional)' : 'Custo ' + esPorQue(unSel) + ' (R$)';
+  document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: Toledo)';
   mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
