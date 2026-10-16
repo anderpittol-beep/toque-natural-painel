@@ -3642,11 +3642,27 @@ function esAbrirBaixa(p){
   const corpo =
     esCampo('O que aconteceu', p.tipo==='mobilia'
       ? `<select id="eb-tipo"><option value="venda">Vendido</option><option value="perda">Saiu sem venda (doação, descarte)</option></select>`
-      : `<select id="eb-tipo"><option value="venda">Venda</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
+      : `<select id="eb-tipo"><option value="transf">Transferência para outra loja</option><option value="perda">Perda (vencido, quebra, descarte)</option></select>`, true) +
+    (p.tipo==='mobilia' ? '' : esCampo('Loja de destino', `<select id="eb-dest">${lojasAtivas().filter(l=>l!==p.loja && l!=='Toledo').map(l=>`<option>${esc(l)}</option>`).join('')}</select>`, true)) +
     esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
-    esCampo(p.tipo==='mobilia' ? 'Valor recebido por unidade (R$)' : 'Preço de venda ' + esPorQue(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`);
+    (p.tipo==='mobilia' ? esCampo('Valor recebido por unidade (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`) : `<div id="eb-calc" class="hint" style="grid-column:1/-1;"></div>`);
   const fechar = esModal((p.tipo==='mobilia' ? 'Registrar venda — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, p.tipo==='mobilia' ? 'Confirmar' : 'Confirmar baixa', async val=>{
-    const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
+    let tipo = val('eb-tipo'); const q = esNum(val('eb-qtd'));
+    if(tipo === 'transf' && p.tipo !== 'mobilia'){
+      if(!(q > 0)) return 'Informe a quantidade.';
+      if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
+      const dest = val('eb-dest'); if(!dest) return 'Escolha a loja de destino.';
+      const hoje = new Date().toLocaleDateString('pt-BR');
+      const nota = esQtd(q, p.unidade) + ' → ' + dest + ' em ' + hoje;
+      const novoT = { estoque: esR3(p.estoque - q), vendido: esR3(p.vendido + q),
+        recuperado: esR2(p.recuperado + esValor(q, p.unidade, p.custo)),   // sai pelo custo: o capital muda de loja, sem prejuízo
+        origem: [p.origem, 'Transferido: ' + nota].filter(Boolean).join(' | '), atualizado_em: new Date().toISOString() };
+      const { error: eT } = await window.TN.sb.from('produtos').update(novoT).eq('id', p.id);
+      if(eT) return 'Não consegui gravar: ' + eT.message;
+      await tnCarregarProdutos();
+      return null;
+    }
+    if(tipo === 'transf') tipo = 'venda';
     if(!(q > 0)) return 'Informe a quantidade.';
     if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
     const novo = { estoque: esR3(p.estoque - q), atualizado_em: new Date().toISOString() };
@@ -3663,8 +3679,12 @@ function esAbrirBaixa(p){
     await tnCarregarProdutos();
     return null;
   });
+  const qi = document.getElementById('eb-qtd'), calc = document.getElementById('eb-calc');
+  const atualizaCalc = ()=>{ if(!calc) return; const q = esNum(qi.value)||0;
+    calc.innerHTML = q>0 ? `Esta saída vale <strong>${BRL(esValor(q,p.unidade,p.custo))}</strong> a custo e <strong>${p.preco==null?'—':BRL(esValor(q,p.unidade,p.preco))}</strong> a preço de venda. Entra como recuperado pelo custo (sem prejuízo); a venda acontece depois, na loja de destino.` : 'Informe a quantidade para ver o valor da saída.'; };
+  if(qi && calc){ qi.addEventListener('input', atualizaCalc); atualizaCalc(); }
   const sel = document.getElementById('eb-tipo');
-  if(sel) sel.onchange = ()=>{ const pr = document.getElementById('eb-preco'); if(pr) pr.parentNode.style.opacity = sel.value==='venda' ? '1' : '.4'; };
+  if(sel) sel.onchange = ()=>{ const pr = document.getElementById('eb-preco'); if(pr) pr.parentNode.style.opacity = sel.value==='venda' ? '1' : '.4'; const d = document.getElementById('eb-dest'); if(d) d.parentNode.style.opacity = sel.value==='transf' ? '1' : '.4'; };
 }
 
 /* ---------- corrigir lote ---------- */
@@ -3986,9 +4006,9 @@ function renderEstoque(){
     const cel = socia ? `
       <td>${esPrecoTxt(p.custo, p.unidade)}</td><td class="strong">${esPrecoTxt(p.preco, p.unidade)}</td>
       <td title="${esc(esContaTxt(p, p.custo))}">${BRL(cap)}</td><td class="strong" title="${esc(esContaTxt(p, p.preco))}">${p.preco==null?'<em>sem preço</em>':BRL(pot)}</td>
-      <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} vendidos</div>`:''}</td>
+      <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} saíram (transf./venda)</div>`:''}</td>
       <td style="white-space:nowrap;text-align:right;">
-        <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: venda ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
+        <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: transferência ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
         <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir lote" style="padding:2px 6px;">✏️</button>
         <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : '';
     return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
