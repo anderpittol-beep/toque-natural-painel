@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 11:48";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 11:57";</script>
       </div>
     </div>
 
@@ -3537,6 +3537,11 @@ const esFator = u => u === 'g' ? 0.001 : 1;
 const esValor = (qtd, unidade, valorUn) => (+qtd||0) * esFator(unidade) * (+valorUn||0);
 const esPorQue = u => u === 'un' || !u ? 'por unidade' : 'por kg';
 const esPrecoTxt = (v, u) => v == null ? '—' : BRL(v) + (u === 'un' || !u ? '' : '/kg');
+function esMargemTxt(custo, preco){
+  if(custo == null || preco == null || !(preco > 0)) return '—';
+  const m = (preco - custo) / preco * 100, mk = custo > 0 ? (preco - custo) / custo * 100 : null;
+  return '<strong style="color:' + (m < 0 ? 'var(--bad,#b3261e)' : 'var(--good)') + ';">' + pct(m) + '</strong>' + (mk == null ? '' : '<div class="hint" style="font-size:11px;">(+' + pct(mk) + ' sobre o custo)</div>');
+}
 function esContaTxt(p, valorUn){
   if(valorUn == null) return 'sem valor';
   return p.unidade === 'g' ? esQtd(p.estoque,'g') + ' = ' + esR3(p.estoque/1000).toLocaleString('pt-BR') + ' kg × ' + BRL(valorUn) + '/kg'
@@ -4003,16 +4008,17 @@ function renderEstoque(){
   const linhas = comStatus.filter(({p,s}) =>
     (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
   linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
-  const colVal = socia ? '<th>Custo (un. ou kg)</th><th>Preço de venda (un. ou kg)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th></th>' : '';
-  let tCap=0, tRec=0, tPot=0;
+  const colVal = socia ? '<th>Custo (un. ou kg)</th><th>Preço de venda (un. ou kg)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th title="Margem de venda = (preço − custo) ÷ preço">Margem de venda</th><th></th>' : '';
+  let tCap=0, tRec=0, tPot=0, tEC=0;
   const corpo = linhas.map(({p,s}) => {
     const cap = esValor(p.qtdInicial, p.unidade, p.custo), pot = esValor(p.estoque, p.unidade, p.preco);
-    tCap += cap; tRec += p.recuperado||0; tPot += pot;
+    tCap += cap; tRec += p.recuperado||0; tPot += pot; tEC += esValor(p.estoque, p.unidade, p.custo);
     const dias = s.dias == null ? '—' : (s.dias < 0 ? Math.abs(s.dias) + ' dias atrás' : s.dias + ' dias');
     const cel = socia ? `
       <td>${esPrecoTxt(p.custo, p.unidade)}</td><td class="strong">${esPrecoTxt(p.preco, p.unidade)}</td>
       <td title="${esc(esContaTxt(p, p.custo))}">${BRL(cap)}</td><td class="strong" title="${esc(esContaTxt(p, p.preco))}">${p.preco==null?'<em>sem preço</em>':BRL(pot)}</td>
       <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esQtd(p.vendido,p.unidade)} saíram (transf./venda)</div>`:''}</td>
+      <td>${esMargemTxt(p.custo, p.preco)}</td>
       <td style="white-space:nowrap;text-align:right;">
         <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: transferência ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
         <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir lote" style="padding:2px 6px;">✏️</button>
@@ -4024,7 +4030,7 @@ function renderEstoque(){
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
   const colunas = socia ? 13 : 7;
-  const rodape = (socia && linhas.length) ? `<tr><td colspan="9" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td></td></tr>` : '';
+  const rodape = (socia && linhas.length) ? `<tr><td colspan="9" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${esMargemTxt(tEC, tPot)}</td><td></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
     <thead><tr><th>Produto</th><th>Loja</th><th>Quantidade</th><th>Vencimento</th><th>Prazo</th><th>Status</th><th>Lançado em</th>${colVal}</tr></thead>
     <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${daAba.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
