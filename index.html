@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="16/10/2026, 18:47";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/10/2026, 15:03";</script>
       </div>
     </div>
 
@@ -839,7 +839,7 @@ window.TN_CONFIG = {
             <form class="feedback-form" id="form-estoque" style="grid-template-columns:repeat(4,1fr);">
               <input type="text" id="es-nome" list="es-nomes" placeholder="Produto *" required style="grid-column:span 2;" autocomplete="off">
               <datalist id="es-nomes"></datalist>
-              <select id="es-categoria" title="Categoria do produto"><option value="">Categoria</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option></select>
+              <select id="es-categoria" title="Categoria do produto"><option value="">Categoria</option><option>Chá</option><option>Tempero</option><option>Encapsulado</option><option>Farinhas</option><option>Grãos</option><option>Outros</option></select>
               <label id="es-loja-box" style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint" style="font-size:11.5px;">Alocado em (onde fica guardado)</span><select id="es-loja" title="Alocado em: onde o estoque está guardado"><option>Itaipulândia</option><option>Ouro Verde</option></select></label>
               <input type="number" id="es-qtd" placeholder="Quantidade *" step="0.001" min="0" required>
               <select id="es-un" title="Unidade de medida"><option value="un">unidade</option><option value="kg">kg</option><option value="g">g</option></select>
@@ -3493,9 +3493,9 @@ function renderMargem(){
      em risco          = estoque vencido ou a ate 15 dias, valorizado a custo */
 /* Categorias fixas: so estas cinco entram, para os relatorios nao se espalharem em
    "Cha", "Chas", "Chá " e afins. */
-const ES_CATEGORIAS = ['Chá','Tempero','Encapsulado','Farinhas','Grãos'];
+const ES_CATEGORIAS = ['Chá','Tempero','Encapsulado','Farinhas','Grãos','Outros'];
 const ES_CAT_ALIAS = {cha:'Chá', chas:'Chá', tempero:'Tempero', temperos:'Tempero', encapsulado:'Encapsulado', encapsulados:'Encapsulado',
-  farinha:'Farinhas', farinhas:'Farinhas', grao:'Grãos', graos:'Grãos'};
+  farinha:'Farinhas', farinhas:'Farinhas', grao:'Grãos', graos:'Grãos', outro:'Outros', outros:'Outros'};
 const esCategoria = txt => ES_CAT_ALIAS[esNorm(txt)] || null;
 /* Sugestao de categoria so por palavras claras no nome; fora disso nao chuta. */
 function esCategoriaPorNome(nome){
