@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/10/2026, 15:03";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="21/10/2026, 16:54";</script>
       </div>
     </div>
 
@@ -9314,7 +9314,6 @@ function metaPorDiaAtual(){
   const rotulo = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
   const j = (FINANCEIRO.meses||[]).indexOf(rotulo);
   if(j < 0) return [];
-  const duRest = diasUteisRestantes(TODAY, false);
   return STORES.map(l=>{
     const rec = (FINANCEIRO[l] && FINANCEIRO[l].receita && FINANCEIRO[l].receita[j]) || 0;
     const meta = metaLoja(l, TODAY.getFullYear(), TODAY.getMonth()+1);
@@ -9328,6 +9327,9 @@ function metaPorDiaAtual(){
     const vendasMes = dias.reduce((a,c)=> a + (+c.vendas||0), 0);
     const hojeLancado = dias.some(c=> c.data === hojeBR());
     const r = ritmoDoMes(vendasMes, meta, TODAY, new Set(dias.map(c=>c.data)).size, hojeLancado);
+    /* Uma unica regra para todos os avisos: enquanto o fechamento de hoje nao foi lancado, hoje
+       ainda esta pela frente e entra na divisao (senao o valor sobe de mentira). */
+    const duRest = diasUteisRestantes(TODAY, ehDiaUtil(TODAY) && !hojeLancado);
     return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null, ritmo:r};
   }).filter(x=> x.meta > 0);
 }
@@ -9497,8 +9499,7 @@ function dadosMotivacao(){
                               .sort((a,b)=> (parseBR(b.data)||0) - (parseBR(a.data)||0))[0];
     /* de manha o dia de hoje ainda esta inteiro pela frente, entao ele entra na
        divisao. Sem isso, no ultimo dia util do mes nao sobrava dia nenhum. */
-    const diasIncl = diasUteisRestantes(TODAY, true);
-    const metaHoje = (x.falta > 0 && diasIncl > 0) ? x.falta / diasIncl : null;
+    const metaHoje = (x.falta > 0 && x.duRest > 0) ? x.falta / x.duRest : null;
     return {
       loja: x.loja, nome: col ? String(col.nome).split(' ')[0] : '',
       meta: metaHoje, batida: x.falta <= 0, atras: x.falta > 0 && !!(x.ritmo && x.ritmo.dif < 0),
