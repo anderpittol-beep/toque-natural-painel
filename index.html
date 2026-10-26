@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:41";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:47";</script>
       </div>
     </div>
 
@@ -3588,6 +3588,10 @@ const esMobilia = () => esAba === 'mobilia';
 
 /* Transferencias de estoque de Toledo para as lojas: ficam em tabela propria e o lote de Toledo nao muda de dono. */
 let TRANSFERENCIAS = [];
+/* Pagamentos da venda dos moveis de Toledo (data e valor de cada parcela recebida) */
+let MOB_PAGAMENTOS = [];
+const mapMobPag = r => ({ id:r.id, data:r.data, valor:+r.valor||0, comprador:r.comprador||'', obs:r.obs||'', criadoPor:r.criado_por||'' });
+const mobRecebidoTotal = () => MOB_PAGAMENTOS.reduce((a,x) => a + x.valor, 0);
 const mapTransf = r => ({ id:r.id, produtoId:r.produto_id, destino:r.destino, qtd:+r.qtd||0, unidade:r.unidade||'un',
   custo:r.custo==null?null:+r.custo, preco:r.preco==null?null:+r.preco, obs:r.obs||'', criadoPor:r.criado_por||'', criadoEm:r.criado_em||null });
 const esTransfDe = p => TRANSFERENCIAS.filter(t => t.produtoId === p.id).reduce((a,t) => a + t.qtd, 0);
@@ -3605,6 +3609,7 @@ async function tnCarregarProdutos(){
   const { data, error } = await window.TN.sb.from('produtos').select('*');
   if(error){ console.warn('produtos', error.message); return; }
   try{ const rt = await window.TN.sb.from('produto_transferencias').select('*'); if(!rt.error) tnReplaceArray(TRANSFERENCIAS, rt.data||[], mapTransf); }catch(e){}
+  try{ const rp = await window.TN.sb.from('mobilia_pagamentos').select('*'); if(!rp.error) tnReplaceArray(MOB_PAGAMENTOS, rp.data||[], mapMobPag); }catch(e){}
   PRODUCTS.length = 0;
   (data||[]).forEach(r => PRODUCTS.push(mapProduto(r)));
   renderAll();
@@ -3974,9 +3979,43 @@ function renderEstoque(){
     kpi.innerHTML = socia ? `
       <div class="card stat-tile"><div class="label">Itens à venda</div><div class="value">${esR3(aVenda).toLocaleString('pt-BR')}</div><div class="delta">${comStatus.length - vendidos} linha(s) · ${vendidos} já vendida(s)</div></div>
       <div class="card stat-tile accent-warning"><div class="label">Valor de venda a receber</div><div class="value">${BRL(valorVenda)}</div><div class="delta">soma de quantidade × valor de venda</div></div>
-      <div class="card stat-tile accent-good"><div class="label">Já recebido</div><div class="value">${BRL(recebido)}</div><div class="delta">${valorVenda+recebido>0 ? pct(recebido/(valorVenda+recebido)*100)+' do total' : '—'}</div></div>
+      <div class="card stat-tile"><div class="label">Vendido (valor combinado)</div><div class="value">${BRL(recebido)}</div><div class="delta">soma do que foi vendido, a receber ou já pago</div></div>
+      <div class="card stat-tile accent-good"><div class="label">Já recebido</div><div class="value">${BRL(mobRecebidoTotal())}</div><div class="delta">${recebido > 0 ? pct(mobRecebidoTotal() / recebido * 100) + ' do vendido · ' : ''}${MOB_PAGAMENTOS.length} pagamento(s) lançado(s)</div></div>
+      <div class="card stat-tile ${recebido - mobRecebidoTotal() > 0.005 ? 'accent-warning' : 'accent-good'}"><div class="label">A receber</div><div class="value">${BRL(Math.max(0, recebido - mobRecebidoTotal()))}</div><div class="delta">vendido − recebido</div></div>
       <div class="card stat-tile"><div class="label">Valor pago ou avaliado</div><div class="value">${BRL(avaliado)}</div><div class="delta">quando informado</div></div>`
       : `<div class="card stat-tile"><div class="label">Itens à venda</div><div class="value">${esR3(aVenda).toLocaleString('pt-BR')}</div></div>`;
+    if(caixaTol && socia){
+      const vendidoTot = recebido, recTot = mobRecebidoTotal(), falta = Math.max(0, vendidoTot - recTot);
+      const hoje = new Date().toISOString().slice(0, 10);
+      const lin = MOB_PAGAMENTOS.slice().sort((x, y) => String(y.data).localeCompare(String(x.data))).map(x =>
+        `<tr><td>${esc(esFmtData(x.data))}</td><td class="strong">${BRL(x.valor)}</td><td>${esc(x.obs || '')}</td><td style="text-align:right;"><button class="btn ghost" data-mobpag-del="${esc(x.id)}" title="Excluir pagamento" style="padding:2px 6px;">🗑️</button></td></tr>`).join('');
+      caixaTol.innerHTML = `<div class="card" style="padding:14px;">
+        <div class="strong" style="font-size:15px;margin-bottom:2px;">Pagamentos da venda de móveis e equipamentos de Toledo</div>
+        <div class="hint" style="margin-bottom:10px;">Vendido por ${BRL(vendidoTot)} · recebido ${BRL(recTot)}${vendidoTot > 0 ? ' (' + pct(recTot / vendidoTot * 100) + ')' : ''} · <strong>falta receber ${BRL(falta)}</strong></div>
+        <form id="mobpag-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint">Valor pago (R$)</span><input type="number" id="mobpag-valor" step="0.01" min="0.01" required style="width:140px;"></label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint">Data do pagamento</span><input type="date" id="mobpag-data" value="${hoje}" required></label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;flex:1 1 200px;"><span class="hint">Observação (opcional)</span><input type="text" id="mobpag-obs" placeholder="ex.: Pix, 2ª parcela" autocomplete="off"></label>
+          <button class="btn primary" type="submit">Lançar pagamento</button>
+        </form>
+        ${lin ? `<table><thead><tr><th>Data</th><th>Valor</th><th>Observação</th><th></th></tr></thead><tbody>${lin}</tbody></table>` : '<div class="hint">Nenhum pagamento lançado ainda.</div>'}</div>`;
+      const frm = document.getElementById('mobpag-form');
+      frm.onsubmit = async ev => {
+        ev.preventDefault();
+        const valor = esNum(document.getElementById('mobpag-valor').value), data = document.getElementById('mobpag-data').value;
+        if(!(valor > 0) || !data) return alert('Informe o valor e a data do pagamento.');
+        const { error } = await window.TN.sb.from('mobilia_pagamentos').insert({ data, valor: esR2(valor), comprador: 'Joice', obs: document.getElementById('mobpag-obs').value.trim() || null, criado_por: (typeof nomeDoUsuario === 'function' ? nomeDoUsuario() : '') });
+        if(error) return alert('Não consegui lançar o pagamento: ' + error.message);
+        await tnCarregarProdutos();
+        avisoSucesso('Pagamento lançado', BRL(valor) + ' em ' + esFmtData(data));
+      };
+      caixaTol.querySelectorAll('[data-mobpag-del]').forEach(b => b.onclick = async () => {
+        if(!confirm('Excluir este pagamento?')) return;
+        const { error } = await window.TN.sb.from('mobilia_pagamentos').delete().eq('id', b.dataset.mobpagDel);
+        if(error) return alert('Não consegui excluir: ' + error.message);
+        await tnCarregarProdutos();
+      });
+    }
     const busca = esNorm((document.getElementById('es-busca')||{}).value);
     const mostraVend = !!(document.getElementById('es-zerados')||{}).checked;
     const linhas = comStatus.filter(({p,s}) => (mostraVend || s.chave !== 'vendido') && (!busca || esNorm(p.nome + ' ' + p.categoria + ' ' + p.origem).indexOf(busca) !== -1))
@@ -4065,7 +4104,8 @@ function renderEstoque(){
     const R = n => BRL(n);
     const mob = PRODUCTS.filter(p => p.tipo === 'mobilia' && p.loja === 'Toledo');
     const mobPago = soma(mob, p => esValor(p.qtdInicial, p.unidade, p.custo));
-    const mobRecebido = soma(mob, p => p.recuperado || 0);
+    const mobRecebido = soma(mob, p => p.recuperado || 0);          // valor combinado da venda
+    const mobPago$ = mobRecebidoTotal();                              // o que a compradora ja pagou
     const mobAVender = soma(mob, p => esValor(p.estoque, p.unidade, p.preco));
     const totalEstimado = estimado + (mobRecebido - mobPago), totalMinimo = minimo + (mobRecebido - mobPago);
     const tile = (cls, rot, valor, nota) => `<div class="card stat-tile ${cls}" style="min-width:0;"><div class="label">${rot}</div><div class="value" style="font-size:22px;">${valor}</div><div class="delta">${nota}</div></div>`;
@@ -4095,8 +4135,10 @@ function renderEstoque(){
       <div class="strong" style="font-size:12.5px;margin:14px 0 6px;">3. Móveis e equipamentos de Toledo e resultado total da loja</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
         ${tile('', 'Móveis e equipamentos: pago', R(mobPago), `${mob.length} lançamento(s) · preço pago nas compras`)}
-        ${tile('accent-good', 'Móveis e equipamentos: recebido', R(mobRecebido), `venda já feita${mobAVender > 0 ? ' · ainda à venda ' + R(mobAVender) : ''}`)}
-        ${tile(mobRecebido - mobPago < 0 ? 'accent-critical' : 'accent-good', mobRecebido - mobPago < 0 ? 'Prejuízo nos móveis' : 'Resultado nos móveis', R(Math.abs(mobRecebido - mobPago)), `${R(mobRecebido)} recebido − ${R(mobPago)} pago${mobPago > 0 ? ' (' + pct((mobRecebido - mobPago) / mobPago * 100) + ')' : ''}`)}
+        ${tile('accent-good', 'Móveis e equipamentos: vendidos por', R(mobRecebido), `valor combinado${mobAVender > 0 ? ' · ainda à venda ' + R(mobAVender) : ''}`)}
+        ${tile('accent-good', 'Já recebido', R(mobPago$), `${mobRecebido > 0 ? pct(mobPago$ / mobRecebido * 100) + ' do vendido · ' : ''}${MOB_PAGAMENTOS.length} pagamento(s)`)}
+        ${tile(mobRecebido - mobPago$ > 0.005 ? 'accent-warning' : 'accent-good', 'A receber', R(Math.max(0, mobRecebido - mobPago$)), 'vendido − recebido (lance cada pagamento na aba Mobília)')}
+        ${tile(mobRecebido - mobPago < 0 ? 'accent-critical' : 'accent-good', mobRecebido - mobPago < 0 ? 'Prejuízo nos móveis' : 'Resultado nos móveis', R(Math.abs(mobRecebido - mobPago)), `${R(mobRecebido)} vendido − ${R(mobPago)} pago${mobPago > 0 ? ' (' + pct((mobRecebido - mobPago) / mobPago * 100) + ')' : ''}`)}
         ${tile(totalEstimado < 0 ? 'accent-critical' : 'accent-good', totalEstimado < 0 ? 'Prejuízo total estimado de Toledo' : 'Resultado total estimado de Toledo', R(Math.abs(totalEstimado)), `mercadoria (${R(estimado)}) + móveis (${R(mobRecebido - mobPago)}). Falta somar o que ainda resta em Toledo`)}
         ${tile(totalMinimo < 0 ? 'accent-critical' : 'accent-good', totalMinimo < 0 ? 'Prejuízo total mínimo' : 'Resultado total mínimo', R(Math.abs(totalMinimo)), `mercadoria pelo custo (${R(minimo)}) + móveis (${R(mobRecebido - mobPago)})`)}
       </div></div>`;
@@ -10386,7 +10428,7 @@ function tnMapFinanceiro(rows){
 }
 
 async function tnLoadAll(sb){
-  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta','disponibilidade','produto_transferencias'];
+  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta','disponibilidade','produto_transferencias','mobilia_pagamentos'];
   const res={};
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
@@ -10400,6 +10442,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
   try{ tnReplaceArray(TRANSFERENCIAS,res.produto_transferencias||[],mapTransf); }catch(e){}
+  try{ tnReplaceArray(MOB_PAGAMENTOS,res.mobilia_pagamentos||[],mapMobPag); }catch(e){}
   try{ tnReplaceArray(PRODUCTS,res.produtos,mapProduto); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
