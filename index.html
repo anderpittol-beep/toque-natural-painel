@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:20";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:24";</script>
       </div>
     </div>
 
@@ -4182,6 +4182,12 @@ function renderEstoque(){
         ${tile(totalEstimado < 0 ? 'accent-critical' : 'accent-good', totalEstimado < 0 ? 'Prejuízo total estimado de Toledo' : 'Resultado total estimado de Toledo', R(Math.abs(totalEstimado)), `mercadoria (${R(estimado)}) + móveis (${R(mobRecebido - mobPago)}). Falta somar o que ainda resta em Toledo`)}
         ${tile(totalMinimo < 0 ? 'accent-critical' : 'accent-good', totalMinimo < 0 ? 'Prejuízo total mínimo' : 'Resultado total mínimo', R(Math.abs(totalMinimo)), `mercadoria pelo custo (${R(minimo)}) + móveis (${R(mobRecebido - mobPago)})`)}
       </div></div>`;
+    { /* detalhes recolhidos por padrao: o painel unico no topo ja resume tudo */
+      let aberto = false; try{ aberto = localStorage.getItem('tn_es_toledo') === '1'; }catch(e){}
+      const dentro = caixaTol.innerHTML;
+      caixaTol.innerHTML = `<button class="btn ghost" id="es-toledo-btn" type="button" style="padding:3px 10px;font-size:12.5px;">${aberto ? '▾ Ocultar detalhes do estoque de Toledo' : '▸ Ver detalhes do estoque de Toledo'}</button><div id="es-toledo-corpo" style="${aberto ? '' : 'display:none;'}margin-top:10px;">${dentro}</div>`;
+      document.getElementById('es-toledo-btn').onclick = ev => { const c = document.getElementById('es-toledo-corpo'); const on = c.style.display === 'none'; c.style.display = on ? '' : 'none'; ev.currentTarget.textContent = on ? '▾ Ocultar detalhes do estoque de Toledo' : '▸ Ver detalhes do estoque de Toledo'; try{ localStorage.setItem('tn_es_toledo', on ? '1' : '0'); }catch(e){} };
+    }
   }
 
   /* resumo por situacao: mesma divisao do filtro, clicando filtra a lista */
