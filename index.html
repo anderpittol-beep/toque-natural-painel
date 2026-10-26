@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:26";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 20:41";</script>
       </div>
     </div>
 
@@ -3631,10 +3631,12 @@ function esPainelTotal(){
   const restoMerc = soma(merc.filter(p => (+p.estoque || 0) > 0), p => cus(p.estoque, p));
   const mobPago = soma(mob, p => esValor(p.qtdInicial, p.unidade, p.custo));
   const mobVendido = soma(mob, p => p.recuperado || 0), mobRec = mobRecebidoTotal();
-  const mobAReceber = Math.max(0, mobVendido - mobRec), mobPrej = mobPago - mobVendido;
+  const mobAReceber = Math.max(0, mobVendido - mobRec);
+  const mobAVender = soma(mob, p => esValor(p.estoque, p.unidade, p.custo));          // itens ainda a venda, a custo
+  const mobPrej = soma(mob, p => esValor(p.vendido, p.unidade, p.custo)) - mobVendido;  // prejuizo so do que ja foi vendido
   const investido = capMerc + mobPago;
   const recuperado = transfCusto + vendCusto + mobRec;
-  const aRecuperar = restoMerc + mobAReceber;
+  const aRecuperar = restoMerc + mobAReceber + mobAVender;
   const prejuizo = perdMerc + mobPrej;               // o que ja se sabe que foi perdido
   const estimado = (transfVenda - transfCusto) + (vendReceita - vendCusto) - perdMerc - mobPrej;
   const R = BRL, P = v => investido > 0 ? pct(v / investido * 100) : '—';
@@ -3645,7 +3647,7 @@ function esPainelTotal(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
       ${t('', 'Investido (compra)', R(investido), `mercadoria ${R(capMerc)} + móveis ${R(mobPago)}`)}
       ${t('accent-good', 'Já recuperado', R(recuperado), `${P(recuperado)} do investido · mercadoria ${R(transfCusto + vendCusto)} + móveis recebidos ${R(mobRec)}`)}
-      ${t('accent-warning', 'Ainda a recuperar', R(aRecuperar), `${P(aRecuperar)} do investido · mercadoria em estoque ${R(restoMerc)} (a custo) + móveis a receber ${R(mobAReceber)}`)}
+      ${t('accent-warning', 'Ainda a recuperar', R(aRecuperar), `${P(aRecuperar)} do investido · mercadoria em estoque ${R(restoMerc)} (a custo) + móveis a receber ${R(mobAReceber)}${mobAVender > 0 ? ' + móveis ainda à venda ' + R(mobAVender) : ''}`)}
       ${t(prejuizo > 0 ? 'accent-critical' : 'accent-good', prejuizo > 0 ? 'Prejuízo já contabilizado' : 'Resultado já contabilizado', R(Math.abs(prejuizo)), `${P(Math.abs(prejuizo))} do investido · perdas ${R(perdMerc)} + prejuízo nos móveis ${R(mobPrej)}`)}
       ${t(estimado < 0 ? 'accent-critical' : 'accent-good', estimado < 0 ? 'Prejuízo estimado' : 'Resultado estimado', R(Math.abs(estimado)), 'se a mercadoria transferida foi vendida ao preço de venda, sem contar o estoque que resta')}
     </div>
