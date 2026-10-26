@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:13";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:20";</script>
       </div>
     </div>
 
@@ -827,6 +827,7 @@ window.TN_CONFIG = {
       <section class="view" id="view-estoque">
         <h2 class="section-title">Estoque e validade</h2>
         <p class="section-desc">Cada linha é um lote: produto, quantidade, validade e quanto custou. Ordenado do vencimento mais próximo para o mais distante. Vencidos ou a menos de 15 dias pedem ação (promoção, troca ou baixa). Os valores ajudam a medir quanto do capital investido já voltou e quanto ainda dá para recuperar.</p>
+        <div id="est-total" style="margin-bottom:14px;"></div>
         <div class="toolbar" style="margin-bottom:12px;gap:8px;">
           <button class="btn primary" type="button" id="es-aba-merc">Mercadoria</button>
           <button class="btn ghost" type="button" id="es-aba-mob">Mobília e equipamentos</button>
@@ -3614,6 +3615,43 @@ async function tnCarregarProdutos(){
   (data||[]).forEach(r => PRODUCTS.push(mapProduto(r)));
   renderAll();
 }
+
+/* Painel unico: mercadoria + moveis e equipamentos, acima das abas */
+function esPainelTotal(){
+  const box = document.getElementById('est-total'); if(!box) return;
+  if(!esSocia()){ box.innerHTML = ''; return; }
+  const merc = PRODUCTS.filter(p => p.tipo !== 'mobilia'), mob = PRODUCTS.filter(p => p.tipo === 'mobilia');
+  const soma = (a, f) => a.reduce((x, p) => x + f(p), 0);
+  const cus = (q, p) => esValor(q, p.unidade, p.custo);
+  const capMerc = soma(merc, p => cus(p.qtdInicial, p));
+  const transfCusto = TRANSFERENCIAS.reduce((a, t) => a + esValor(t.qtd, t.unidade, t.custo), 0);
+  const transfVenda = TRANSFERENCIAS.reduce((a, t) => a + esValor(t.qtd, t.unidade, t.preco), 0);
+  const vendCusto = soma(merc, p => cus(p.vendido, p)), vendReceita = soma(merc, p => p.recuperado || 0);
+  const perdMerc = soma(merc, p => cus(p.perdido, p));
+  const restoMerc = soma(merc.filter(p => (+p.estoque || 0) > 0), p => cus(p.estoque, p));
+  const mobPago = soma(mob, p => esValor(p.qtdInicial, p.unidade, p.custo));
+  const mobVendido = soma(mob, p => p.recuperado || 0), mobRec = mobRecebidoTotal();
+  const mobAReceber = Math.max(0, mobVendido - mobRec), mobPrej = mobPago - mobVendido;
+  const investido = capMerc + mobPago;
+  const recuperado = transfCusto + vendCusto + mobRec;
+  const aRecuperar = restoMerc + mobAReceber;
+  const prejuizo = perdMerc + mobPrej;               // o que ja se sabe que foi perdido
+  const estimado = (transfVenda - transfCusto) + (vendReceita - vendCusto) - perdMerc - mobPrej;
+  const R = BRL, P = v => investido > 0 ? pct(v / investido * 100) : '—';
+  const t = (cls, rot, val, nota) => `<div class="card stat-tile ${cls}" style="min-width:0;"><div class="label">${rot}</div><div class="value" style="font-size:22px;">${val}</div><div class="delta">${nota}</div></div>`;
+  box.innerHTML = `<div class="card" style="padding:14px;">
+    <div class="strong" style="font-size:15px;margin-bottom:2px;">Toledo — mercadoria + móveis e equipamentos</div>
+    <div class="hint" style="margin-bottom:10px;">Soma dos dois: quanto foi investido, quanto já voltou para o caixa e quanto ainda falta. Mercadoria transferida para as lojas conta como recuperada, a custo; móveis contam só o que já foi pago.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+      ${t('', 'Investido (compra)', R(investido), `mercadoria ${R(capMerc)} + móveis ${R(mobPago)}`)}
+      ${t('accent-good', 'Já recuperado', R(recuperado), `${P(recuperado)} do investido · mercadoria ${R(transfCusto + vendCusto)} + móveis recebidos ${R(mobRec)}`)}
+      ${t('accent-warning', 'Ainda a recuperar', R(aRecuperar), `${P(aRecuperar)} do investido · mercadoria em estoque ${R(restoMerc)} (a custo) + móveis a receber ${R(mobAReceber)}`)}
+      ${t(prejuizo > 0 ? 'accent-critical' : 'accent-good', prejuizo > 0 ? 'Prejuízo já contabilizado' : 'Resultado já contabilizado', R(Math.abs(prejuizo)), `${P(Math.abs(prejuizo))} do investido · perdas ${R(perdMerc)} + prejuízo nos móveis ${R(mobPrej)}`)}
+      ${t(estimado < 0 ? 'accent-critical' : 'accent-good', estimado < 0 ? 'Prejuízo estimado' : 'Resultado estimado', R(Math.abs(estimado)), 'se a mercadoria transferida foi vendida ao preço de venda, sem contar o estoque que resta')}
+    </div>
+    <div class="hint" style="margin-top:6px;">Conferência: ${R(investido)} = ${R(recuperado)} (recuperado) + ${R(aRecuperar)} (a recuperar) + ${R(prejuizo)} (prejuízo)${Math.abs(investido - recuperado - aRecuperar - prejuizo) >= 0.005 ? ' + ' + R(investido - recuperado - aRecuperar - prejuizo) + ' de arredondamento' : ''}.</div>
+  </div>`;
+}
 function esStatus(p){
   if(p.tipo === 'mobilia') return (+p.estoque||0) > 0 ? {chave:'avenda', dias:null} : {chave:'vendido', dias:null};
   if((+p.estoque||0) <= 0) return {chave:'esgotado', dias:null};
@@ -3967,6 +4005,7 @@ function renderEstoque(){
   /* itens da aba, nas lojas escolhidas no topo */
   const todos = PRODUCTS.filter(p => (selStores().includes(p.loja) || esDonoToledo(p) || (p.tipo === 'mobilia' && p.loja === 'Toledo')) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
   const comStatus = todos.map(p => ({p, s: esStatus(p)}));
+  esPainelTotal();
   const kpi = document.getElementById('est-kpis');
   const resumo = document.getElementById('est-resumo'); if(resumo) resumo.innerHTML = '';
   const caixaTol = document.getElementById('est-toledo'); if(caixaTol) caixaTol.innerHTML = '';
