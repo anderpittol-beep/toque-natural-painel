@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:54";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:59";</script>
       </div>
     </div>
 
@@ -3586,6 +3586,11 @@ let esAba = 'mercadoria';
 try{ esAba = localStorage.getItem('tn_es_aba') === 'mobilia' ? 'mobilia' : 'mercadoria'; }catch(e){}
 const esMobilia = () => esAba === 'mobilia';
 
+/* Transferencias de estoque de Toledo para as lojas: ficam em tabela propria e o lote de Toledo nao muda de dono. */
+let TRANSFERENCIAS = [];
+const mapTransf = r => ({ id:r.id, produtoId:r.produto_id, destino:r.destino, qtd:+r.qtd||0, unidade:r.unidade||'un',
+  custo:r.custo==null?null:+r.custo, preco:r.preco==null?null:+r.preco, obs:r.obs||'', criadoPor:r.criado_por||'', criadoEm:r.criado_em||null });
+const esTransfDe = p => TRANSFERENCIAS.filter(t => t.produtoId === p.id).reduce((a,t) => a + t.qtd, 0);
 function mapProduto(r){
   const vend = +r.vendido||0, perd = +r.perdido||0, est = +r.estoque||0;
   return { id:r.id, nome:r.nome, categoria:r.categoria||'', loja:r.loja,
@@ -3599,6 +3604,7 @@ async function tnCarregarProdutos(){
   if(!(window.TN && window.TN.sb)) return;
   const { data, error } = await window.TN.sb.from('produtos').select('*');
   if(error){ console.warn('produtos', error.message); return; }
+  try{ const rt = await window.TN.sb.from('produto_transferencias').select('*'); if(!rt.error) tnReplaceArray(TRANSFERENCIAS, rt.data||[], mapTransf); }catch(e){}
   PRODUCTS.length = 0;
   (data||[]).forEach(r => PRODUCTS.push(mapProduto(r)));
   renderAll();
@@ -3670,19 +3676,14 @@ function esAbrirBaixa(p){
     if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
     const agora = new Date().toISOString();
     if(tipo === 'transf'){
-      /* tira do estoque antigo de Toledo e passa a ser da loja escolhida; o capital so muda de lugar */
+      /* A transferencia fica registrada no proprio lote de Toledo e tira a quantidade do estoque dele.
+         Nao abre item na loja de destino: o inventario de cada loja entra depois, como produto novo. */
       const dest = val('eb-dest'); if(!dest) return 'Escolha a loja de destino.';
-      const hoje = new Date().toLocaleDateString('pt-BR');
-      const alvo = Object.assign({}, p, { loja: dest, origem: dest });
-      const igual = PRODUCTS.find(x => x.id !== p.id && esChave(x) === esChave(alvo));
-            const sb = window.TN.sb;
-      let r;
-      if(igual) r = await sb.from('produtos').update({ qtd_inicial: esR3(igual.qtdInicial + q), estoque: esR3(igual.estoque + q), atualizado_em: agora }).eq('id', igual.id);
-      else r = await sb.from('produtos').insert({ nome:p.nome, categoria:p.categoria||null, loja:dest, unidade:p.unidade, qtd_inicial:esR3(q), estoque:esR3(q),
-        vendido:0, perdido:0, recuperado:0, validade:p.validade, custo:p.custo, preco:p.preco, origem:dest, tipo:p.tipo||'mercadoria' });
-      if(r.error) return 'Não consegui gravar: ' + r.error.message;
-      const r2 = await sb.from('produtos').update({ estoque: esR3(p.estoque - q), qtd_inicial: esR3(Math.max(0, p.qtdInicial - q)), atualizado_em: agora }).eq('id', p.id);
-      if(r2.error) return 'Entrou na loja, mas não consegui tirar do estoque antigo: ' + r2.error.message;
+      const sb = window.TN.sb;
+      const ins = await sb.from('produto_transferencias').insert({ produto_id:p.id, destino:dest, qtd:esR3(q), unidade:p.unidade, custo:p.custo, preco:p.preco, criado_por:(typeof nomeDoUsuario==='function' ? nomeDoUsuario() : '') }).select('id');
+      if(ins.error) return 'Não consegui registrar a transferência: ' + ins.error.message;
+      const r2 = await sb.from('produtos').update({ estoque: esR3(p.estoque - q), atualizado_em: agora }).eq('id', p.id);
+      if(r2.error){ try{ await sb.from('produto_transferencias').delete().eq('id', ins.data && ins.data[0] && ins.data[0].id); }catch(e){} return 'Não consegui tirar do estoque de Toledo: ' + r2.error.message; }
       await tnCarregarProdutos();
       return null;
     }
@@ -3705,7 +3706,7 @@ function esAbrirBaixa(p){
     const tp = (document.getElementById('eb-tipo')||{}).value;
     if(!(q > 0)){ calc.textContent = 'Informe a quantidade para ver o valor da saída.'; return; }
     const cust = BRL(esValor(q,p.unidade,p.custo)), vend = p.preco==null ? '—' : BRL(esValor(q,p.unidade,p.preco));
-    calc.innerHTML = tp === 'transf' ? `Esta saída vale <strong>${cust}</strong> a custo e <strong>${vend}</strong> a preço de venda. O capital passa para a loja de destino, sem prejuízo; a venda acontece depois, lá.`
+    calc.innerHTML = tp === 'transf' ? `Esta saída vale <strong>${cust}</strong> a custo e <strong>${vend}</strong> a preço de venda. Fica registrado como recuperado pela loja de destino (compra contra venda); o item não é criado na loja.`
       : tp === 'perda' ? `Perda de <strong>${cust}</strong> a custo.` : `Custo desta saída: <strong>${cust}</strong>.`; };
   if(qi && calc){ qi.addEventListener('input', atualizaCalc); atualizaCalc(); }
   const sel = document.getElementById('eb-tipo');
@@ -3731,7 +3732,7 @@ function esAbrirEditar(p){
     const est = esNum(val('ee-qtd')); if(est == null || est < 0) return 'Informe a quantidade em estoque.';
     const validade = mob ? null : esData(val('ee-val')); if(validade === undefined) return 'Vencimento em formato que não entendi.';
     const novo = { nome, categoria: String(val('ee-cat')||'').trim() || null, loja: val('ee-loja'), unidade: val('ee-un'),
-      estoque: esR3(est), qtd_inicial: esR3(est + p.vendido + p.perdido),   // vendido e perdido ficam como estavam
+      estoque: esR3(est), qtd_inicial: esR3(est + p.vendido + p.perdido + esTransfDe(p)),   // vendido e perdido ficam como estavam
       validade, origem: String(val('ee-origem')||'').trim() || null,
       custo: esNum(val('ee-custo')), preco: esNum(val('ee-preco')), atualizado_em: new Date().toISOString() };
     const { error } = await window.TN.sb.from('produtos').update(novo).eq('id', p.id);
@@ -4034,6 +4035,10 @@ function renderEstoque(){
     const capital = soma(tol, p => custoQ(p.qtdInicial, p)) + soma(tr, p => custoQ(p.qtdInicial, p));
     const destinos = {};
     tr.forEach(p => { const d = p.origem || p.loja || '?'; const x = destinos[d] || (destinos[d] = {n:0, cus:0, ven:0}); x.n++; x.cus += custoQ(p.qtdInicial, p); x.ven += vendaQ(p.qtdInicial, p); });
+    /* transferencias novas: registradas na tabela, sem item na loja de destino */
+    const prodsPorDest = {};
+    TRANSFERENCIAS.forEach(t => { const d = t.destino || '?'; const x = destinos[d] || (destinos[d] = {n:0, cus:0, ven:0}); x.cus += esValor(t.qtd, t.unidade, t.custo); x.ven += esValor(t.qtd, t.unidade, t.preco); (prodsPorDest[d] = prodsPorDest[d] || new Set()).add(t.produtoId); });
+    Object.keys(prodsPorDest).forEach(d => { destinos[d].n += prodsPorDest[d].size; });
     const transfCusto = soma(Object.values(destinos), x => x.cus);
     const receita = soma(tol, p => p.recuperado || 0);
     const vendidoCusto = soma(tol, p => custoQ(p.vendido, p));
@@ -4119,7 +4124,7 @@ function renderEstoque(){
         <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : '';
     return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
       <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}</td>
-      <td>${esc(esDono(p))}</td><td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}${p.unidade==='g'?`<div class="hint" style="font-size:11px;">${esR3(p.estoque/1000).toLocaleString('pt-BR')} kg</div>`:''}</td>
+      <td>${esc(esDono(p))}</td><td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}${esTransfDe(p) > 0 ? `<div class="hint" style="font-size:11px;">${esQtd(esR3(esTransfDe(p)),p.unidade)} já transferido(s)</div>` : ''}${p.unidade==='g'?`<div class="hint" style="font-size:11px;">${esR3(p.estoque/1000).toLocaleString('pt-BR')} kg</div>`:''}</td>
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
@@ -10361,7 +10366,7 @@ function tnMapFinanceiro(rows){
 }
 
 async function tnLoadAll(sb){
-  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta','disponibilidade'];
+  const tabelas=['financeiro_mensal','despesas_fixas','folha','boletos','metas_mensais','produtos','clientes','crm_contatos','patrimonio','equipe','vendas_diarias','caixa_diario','parcerias','pedidos','feedbacks','tarefas','compras_nf','sync_meta','disponibilidade','produto_transferencias'];
   const res={};
   await Promise.all(tabelas.map(async t=>{ try{ const {data,error}=await sb.from(t).select('*'); res[t]=error?[]:(data||[]); }catch(_){ res[t]=[]; } }));
   try{ tnMapFinanceiro(res.financeiro_mensal); }catch(e){ console.warn('financeiro',e); }
@@ -10374,6 +10379,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
+  try{ tnReplaceArray(TRANSFERENCIAS,res.produto_transferencias||[],mapTransf); }catch(e){}
   try{ tnReplaceArray(PRODUCTS,res.produtos,mapProduto); }catch(e){}
   try{ tnReplaceArray(CLIENTES,res.clientes,r=>({nome:r.nome,loja:r.loja,telefone:r.telefone,ultimaCompra:r.ultima_compra})); }catch(e){}
   try{ tnReplaceArray(CRM_CONTATOS,res.crm_contatos,r=>({cliente:r.cliente,data:r.data,canal:r.canal,acao:r.acao,resultado:r.resultado,proximo:r.proximo})); }catch(e){}
