@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:03";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:13";</script>
       </div>
     </div>
 
@@ -3953,6 +3953,7 @@ function renderEstoque(){
   document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: fornecedor, compra, doação)';
   mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
   document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
+  { const zl = document.getElementById('es-zerados'); const lab = zl && zl.closest('label'); if(lab) lab.style.display = mob ? 'none' : ''; }
   const lojaSel = document.getElementById('es-loja');
   if(lojaSel){ const atual = lojaSel.value; const lj = mob ? STORES : lojasAtivas(); const alvo = (!window.__esLojaInit && lojaDoUsuario() && lj.includes(lojaDoUsuario())) ? lojaDoUsuario() : (atual && lj.includes(atual) ? atual : lj[0]); window.__esLojaInit = true; lojaSel.innerHTML = lj.map(l=>`<option ${l===alvo?'selected':''}>${esc(l)}</option>`).join(''); }
   const nomes = document.getElementById('es-nomes');
@@ -4017,7 +4018,7 @@ function renderEstoque(){
       });
     }
     const busca = esNorm((document.getElementById('es-busca')||{}).value);
-    const mostraVend = !!(document.getElementById('es-zerados')||{}).checked;
+    const mostraVend = true;      // na mobilia o item vendido continua na lista: e dele que sai o valor recebido
     const linhas = comStatus.filter(({p,s}) => (mostraVend || s.chave !== 'vendido') && (!busca || esNorm(p.nome + ' ' + p.categoria + ' ' + p.origem).indexOf(busca) !== -1))
       .sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || a.p.nome.localeCompare(b.p.nome));
     let tVenda=0, tRec=0, tAval=0;
