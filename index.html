@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:47";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:03";</script>
       </div>
     </div>
 
@@ -3964,7 +3964,7 @@ function renderEstoque(){
   }
 
   /* itens da aba, nas lojas escolhidas no topo */
-  const todos = PRODUCTS.filter(p => (selStores().includes(p.loja) || esDonoToledo(p)) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
+  const todos = PRODUCTS.filter(p => (selStores().includes(p.loja) || esDonoToledo(p) || (p.tipo === 'mobilia' && p.loja === 'Toledo')) && (mob ? p.tipo === 'mobilia' : p.tipo !== 'mobilia'));
   const comStatus = todos.map(p => ({p, s: esStatus(p)}));
   const kpi = document.getElementById('est-kpis');
   const resumo = document.getElementById('est-resumo'); if(resumo) resumo.innerHTML = '';
