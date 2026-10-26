@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:59";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:32";</script>
       </div>
     </div>
 
@@ -3667,12 +3667,15 @@ function esAbrirBaixa(p){
   const corpo =
     esCampo('O que aconteceu', `<select id="eb-tipo">${tipos}</select>`, true) +
     (antigo ? esCampo('Loja de destino (o estoque passa a ser dela)', `<select id="eb-dest">${lojasAtivas().map(l=>`<option>${esc(l)}</option>`).join('')}</select>`, true) : '') +
-    esCampo(`Quantidade (há ${esQtd(p.estoque, p.unidade)})`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" required${p.estoque===1?' value="1"':''}>`) +
+    esCampo(`Quantidade em ${p.unidade==='g' ? 'GRAMAS (g)' : p.unidade==='kg' ? 'QUILOS (kg)' : 'unidades'} — há ${esQtd(p.estoque, p.unidade)}`, `<input type="number" id="eb-qtd" step="0.001" min="0" max="${p.estoque}" placeholder="${p.unidade==='g' ? 'ex.: 270 (gramas)' : p.unidade==='kg' ? 'ex.: 1,5 (quilos)' : 'ex.: 2'}" required${p.estoque===1?' value="1"':''}>`) +
+    `<div id="eb-aviso" style="grid-column:1/-1;font-size:12px;font-weight:600;color:var(--critical,#b3261e);display:none;"></div>` +
     (antigo ? '' : esCampo(mob ? 'Valor recebido por unidade (R$)' : 'Preço de venda ' + esPorQue(p.unidade) + ' (R$)', `<input type="number" id="eb-preco" step="0.01" min="0" value="${p.preco==null?'':p.preco}">`)) +
     (mob ? '' : `<div id="eb-calc" class="hint" style="grid-column:1/-1;"></div>`);
   esModal((mob ? 'Registrar venda — ' : antigo ? 'Transferir — ' : 'Dar baixa — ') + esc(p.nome) + ' · ' + esc(p.loja), corpo, mob ? 'Confirmar' : antigo ? 'Confirmar' : 'Confirmar baixa', async val=>{
     const tipo = val('eb-tipo'), q = esNum(val('eb-qtd'));
     if(!(q > 0)) return 'Informe a quantidade.';
+    /* lote em gramas com quantidade minuscula quase sempre e quilo digitado no lugar de grama */
+    if(p.unidade === 'g' && q < 5 && p.estoque >= 20 && !confirm('Este lote está em GRAMAS e você digitou ' + q.toLocaleString('pt-BR') + ' g (menos de 5 gramas).\n\nSe queria ' + esR3(q*1000).toLocaleString('pt-BR') + ' g (' + q.toLocaleString('pt-BR') + ' kg), cancele e digite ' + esR3(q*1000).toLocaleString('pt-BR') + '.\n\nOK confirma ' + q.toLocaleString('pt-BR') + ' g.')) return 'Corrija a quantidade em gramas.';
     if(q > p.estoque + 1e-9) return 'O lote só tem ' + esQtd(p.estoque, p.unidade) + '.';
     const agora = new Date().toISOString();
     if(tipo === 'transf'){
@@ -3704,6 +3707,8 @@ function esAbrirBaixa(p){
   const qi = document.getElementById('eb-qtd'), calc = document.getElementById('eb-calc'), pr0 = document.getElementById('eb-preco');
   const atualizaCalc = ()=>{ if(!calc) return; const q = esNum(qi.value)||0;
     const tp = (document.getElementById('eb-tipo')||{}).value;
+    const av = document.getElementById('eb-aviso');
+    if(av){ const pequeno = p.unidade === 'g' && q > 0 && q < 5 && p.estoque >= 20; av.style.display = pequeno ? '' : 'none'; if(pequeno) av.textContent = 'Atenção: este lote é em gramas e você digitou ' + q.toLocaleString('pt-BR') + ' g. Se queria ' + esR3(q*1000).toLocaleString('pt-BR') + ' g, digite ' + esR3(q*1000).toLocaleString('pt-BR') + '.'; }
     if(!(q > 0)){ calc.textContent = 'Informe a quantidade para ver o valor da saída.'; return; }
     const cust = BRL(esValor(q,p.unidade,p.custo)), vend = p.preco==null ? '—' : BRL(esValor(q,p.unidade,p.preco));
     calc.innerHTML = tp === 'transf' ? `Esta saída vale <strong>${cust}</strong> a custo e <strong>${vend}</strong> a preço de venda. Fica registrado como recuperado pela loja de destino (compra contra venda); o item não é criado na loja.`
