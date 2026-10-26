@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/10/2026, 09:13";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:37";</script>
       </div>
     </div>
 
@@ -832,6 +832,7 @@ window.TN_CONFIG = {
           <button class="btn ghost" type="button" id="es-aba-mob">Mobília e equipamentos</button>
         </div>
         <div class="grid grid-4" id="est-kpis" style="margin-bottom:16px;"></div>
+        <div id="est-toledo" style="margin-bottom:16px;"></div>
         <div id="est-resumo" style="margin-bottom:16px;overflow-x:auto;"></div>
         <div class="card" style="margin-bottom:16px;" id="est-lancar-card">
           <details class="add-form">
@@ -3956,6 +3957,7 @@ function renderEstoque(){
   const comStatus = todos.map(p => ({p, s: esStatus(p)}));
   const kpi = document.getElementById('est-kpis');
   const resumo = document.getElementById('est-resumo'); if(resumo) resumo.innerHTML = '';
+  const caixaTol = document.getElementById('est-toledo'); if(caixaTol) caixaTol.innerHTML = '';
 
   if(mob){
     let aVenda=0, valorVenda=0, recebido=0, avaliado=0, vendidos=0;
@@ -4022,6 +4024,40 @@ function renderEstoque(){
       <div class="card stat-tile accent-warning"><div class="label">Atenção (16 a 45 dias)</div><div class="value">${c.atencao}</div></div>
       <div class="card stat-tile accent-good"><div class="label">Dentro do prazo</div><div class="value">${c.ok + c.sem}</div></div>`;
   }
+  /* Contabilidade do estoque de Toledo (loja encerrada): quanto havia, quanto foi recuperado e quanto virou prejuizo.
+     Lote com origem diferente de Toledo e um lote que saiu de Toledo por transferencia para aquela loja. */
+  if(caixaTol && socia){
+    const todos = PRODUCTS.filter(p => p.tipo !== 'mobilia');
+    const tol = todos.filter(p => esDonoToledo(p)), tr = todos.filter(p => !esDonoToledo(p));
+    const soma = (arr, f) => arr.reduce((a,p) => a + f(p), 0);
+    const custoQ = (q, p) => esValor(q, p.unidade, p.custo), vendaQ = (q, p) => esValor(q, p.unidade, p.preco);
+    const capital = soma(tol, p => custoQ(p.qtdInicial, p)) + soma(tr, p => custoQ(p.qtdInicial, p));
+    const destinos = {};
+    tr.forEach(p => { const d = p.origem || p.loja || '?'; const x = destinos[d] || (destinos[d] = {n:0, cus:0, ven:0}); x.n++; x.cus += custoQ(p.qtdInicial, p); x.ven += vendaQ(p.qtdInicial, p); });
+    const transfCusto = soma(Object.values(destinos), x => x.cus);
+    const receita = soma(tol, p => p.recuperado || 0);
+    const vendidoCusto = soma(tol, p => custoQ(p.vendido, p));
+    const perdido = soma(tol, p => custoQ(p.perdido, p));
+    const restoCusto = soma(tol.filter(p => esStatus(p).chave !== 'esgotado'), p => custoQ(p.estoque, p));
+    const restoVenda = soma(tol.filter(p => esStatus(p).chave !== 'esgotado'), p => vendaQ(p.estoque, p));
+    const recuperado = transfCusto + vendidoCusto;      // saiu de Toledo sem perda (pelo custo)
+    const resultado = (receita - vendidoCusto) - perdido; // ganho ou perda ja realizado
+    const pctRec = capital > 0 ? recuperado / capital * 100 : null, pctPerd = capital > 0 ? perdido / capital * 100 : null;
+    const dst = Object.keys(destinos).sort().map(d => { const x = destinos[d];
+      return `<div class="card stat-tile accent-good"><div class="label">Transferido para ${esc(d)}</div><div class="value">${BRL(x.cus)}</div><div class="delta">a custo · ${x.n} produto(s) · a preço de venda ${BRL(x.ven)}</div></div>`; }).join('');
+    caixaTol.innerHTML = `<div class="card" style="padding:14px;">
+      <div class="strong" style="font-size:15px;margin-bottom:2px;">Estoque de Toledo — recuperação e prejuízo</div>
+      <div class="hint" style="margin-bottom:10px;">Tudo a custo, somando o que havia no encerramento da loja, o que já saiu por transferência ou venda e o que se perdeu.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+        <div class="card stat-tile"><div class="label">Havia em Toledo</div><div class="value">${BRL(capital)}</div><div class="delta">capital a custo</div></div>
+        ${dst}
+        <div class="card stat-tile accent-good"><div class="label">Vendido direto</div><div class="value">${BRL(receita)}</div><div class="delta">receita · custo ${BRL(vendidoCusto)}</div></div>
+        <div class="card stat-tile accent-critical"><div class="label">Perdido</div><div class="value">${BRL(perdido)}</div><div class="delta">${pctPerd==null?'—':pct(pctPerd)+' do capital'} · vencido, quebra ou descarte</div></div>
+        <div class="card stat-tile accent-warning"><div class="label">Ainda em Toledo</div><div class="value">${BRL(restoCusto)}</div><div class="delta">a custo · a preço de venda ${BRL(restoVenda)}</div></div>
+        <div class="card stat-tile ${resultado < 0 ? 'accent-critical' : 'accent-good'}"><div class="label">${resultado < 0 ? 'Prejuízo já realizado' : 'Resultado já realizado'}</div><div class="value">${BRL(Math.abs(resultado))}</div><div class="delta">recuperado ${BRL(recuperado)}${pctRec==null?'':' ('+pct(pctRec)+' do capital)'}</div></div>
+      </div></div>`;
+  }
+
   /* resumo por situacao: mesma divisao do filtro, clicando filtra a lista */
   if(resumo && socia){
     const GR = [['vencido','Vencidos'],['critico','Críticos (até 15 dias)'],['atencao','Atenção (16 a 45 dias)'],['ok','Dentro do prazo'],['sem','Sem validade'],['esgotado','Esgotados']];
