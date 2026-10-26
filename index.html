@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:24";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 16:26";</script>
       </div>
     </div>
 
@@ -4031,7 +4031,7 @@ function renderEstoque(){
         `<tr><td>${esc(esFmtData(x.data))}</td><td class="strong">${BRL(x.valor)}</td><td>${esc(x.obs || '')}</td><td style="text-align:right;"><button class="btn ghost" data-mobpag-del="${esc(x.id)}" title="Excluir pagamento" style="padding:2px 6px;">🗑️</button></td></tr>`).join('');
       caixaTol.innerHTML = `<div class="card" style="padding:14px;">
         <div class="strong" style="font-size:15px;margin-bottom:2px;">Pagamentos da venda de móveis e equipamentos de Toledo</div>
-        <div class="hint" style="margin-bottom:10px;">Vendido por ${BRL(vendidoTot)} · recebido ${BRL(recTot)}${vendidoTot > 0 ? ' (' + pct(recTot / vendidoTot * 100) + ')' : ''} · <strong>falta receber ${BRL(falta)}</strong></div>
+        <div class="hint" style="margin-bottom:10px;">Lance aqui cada pagamento recebido, com o valor e a data. Os totais ficam nos quadros acima.</div>
         <form id="mobpag-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
           <label style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint">Valor pago (R$)</span><input type="number" id="mobpag-valor" step="0.01" min="0.01" required style="width:140px;"></label>
           <label style="display:flex;flex-direction:column;gap:2px;font-size:11.5px;"><span class="hint">Data do pagamento</span><input type="date" id="mobpag-data" value="${hoje}" required></label>
@@ -4100,9 +4100,7 @@ function renderEstoque(){
   if(socia){
     const recPct = capital > 0 ? recuperado/capital*100 : null;
     kpi.innerHTML = `
-      <div class="card stat-tile"><div class="label">Capital investido</div><div class="value">${BRL(capital)}</div><div class="delta">${comStatus.length} lote(s)${semCusto?' · '+semCusto+' sem custo informado':''}</div></div>
-      <div class="card stat-tile accent-good"><div class="label">Já recuperado</div><div class="value">${BRL(recuperado)}</div><div class="delta">${recPct==null?'—':pct(recPct)+' do capital'} · transferido para as lojas + vendido, a custo${perdidoVal>0?' · perdido '+BRL(perdidoVal):''}</div></div>
-      <div class="card stat-tile"><div class="label">Ainda a recuperar</div><div class="value">${BRL(potencial)}</div><div class="delta">se vender tudo ao preço de venda · a custo ${BRL(aCusto)}</div></div>
+      <div class="card stat-tile accent-warning"><div class="label">Estoque a preço de venda</div><div class="value">${BRL(potencial)}</div><div class="delta">se vender tudo ao preço de venda · ${comStatus.length} lote(s)${semCusto?' · '+semCusto+' sem custo informado':''}</div></div>
       <div class="card stat-tile accent-critical"><div class="label">Em risco (vencido ou até 15 dias)</div><div class="value">${BRL(risco)}</div><div class="delta">${riscoN} lote(s) · a custo</div></div>`;
   }else{
     kpi.innerHTML = `
@@ -4156,31 +4154,13 @@ function renderEstoque(){
     caixaTol.innerHTML = `<div class="card" style="padding:14px;">
       <div class="strong" style="font-size:15px;margin-bottom:2px;">Estoque de Toledo — recuperação e prejuízo</div>
       <div class="hint" style="margin-bottom:12px;">Regra: tudo que foi <strong>transferido</strong> para uma loja conta como <strong>recuperado</strong>, porque as lojas não dão baixa da venda. Valores de compra = quantidade × custo; de venda = quantidade × preço de venda.</div>
-      <div class="strong" style="font-size:12.5px;margin-bottom:6px;">1. Para onde foi o capital de Toledo (a custo)</div>
+      <div class="strong" style="font-size:12.5px;margin-bottom:6px;">Para onde foi o capital de Toledo (a custo)</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
         ${tile('', 'Havia em Toledo', R(capital), 'tudo que foi lançado no estoque de Toledo, a custo')}
         ${lojasTit.map(lojaTile).join('')}
         ${vendidoCusto > 0 || receita > 0 ? tile('accent-good', 'Vendido direto em Toledo', R(vendidoCusto), `receita de ${R(receita)}. Venda lançada no próprio lote de Toledo${vendasDiretas.length ? ' (' + esc(vendasDiretas.join(', ')) + ')' : ''}`) : ''}
         ${tile('accent-critical', 'Perdido', R(perdido), (pctPerd==null?'':pct(pctPerd)+' do capital · ') + 'baixa "Perda": vencido, quebra ou descarte')}
         ${tile('accent-warning', 'Ainda em Toledo', R(restoCusto), `a preço de venda ${R(restoVenda)}`)}
-      </div>
-      <div class="hint" style="margin:6px 0 14px;">Conferência: ${R(capital)} = ${lojasTit.map(d => R(destinos[d].cus) + ' (' + esc(d) + ')').join(' + ')} + ${vendidoCusto > 0 ? R(vendidoCusto) + ' (vendido direto) + ' : ''}${R(perdido)} (perdido) + ${R(restoCusto)} (ainda em Toledo)${Math.abs(restoGap) >= 0.005 ? ' + ' + R(restoGap) + ' de arredondamento' : ''}.</div>
-      <div class="strong" style="font-size:12.5px;margin-bottom:6px;">2. Quanto foi recuperado e qual é o resultado</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
-        ${tile('accent-good', 'Recuperado a custo', R(recCusto), `${R(transfCusto)} transferido${vendidoCusto > 0 ? ' + ' + R(vendidoCusto) + ' vendido direto' : ''}${pctRec==null?'':' = ' + pct(pctRec) + ' do capital'}`)}
-        ${tile('accent-good', 'Recuperado a preço de venda', R(recVenda), `${R(transfVenda)} transferido${receita > 0 ? ' + ' + R(receita) + ' vendido direto' : ''}. É o que entra se o transferido foi vendido pelo preço`)}
-        ${tile(minimo < 0 ? 'accent-critical' : 'accent-good', minimo < 0 ? 'Prejuízo mínimo (pelo custo)' : 'Resultado mínimo (pelo custo)', R(Math.abs(minimo)), `só as perdas (${R(perdido)})${receita > 0 ? ' menos o ganho da venda direta (' + R(receita - vendidoCusto) + ')' : ''}. Considera o transferido valendo só o custo`)}
-        ${tile(estimado < 0 ? 'accent-critical' : 'accent-good', estimado < 0 ? 'Prejuízo estimado' : 'Resultado estimado', R(Math.abs(estimado)), `${R(recVenda)} − ${R(recCusto)} − ${R(perdido)} perdido. Considera o transferido vendido ao preço de venda`)}
-      </div>
-      <div class="strong" style="font-size:12.5px;margin:14px 0 6px;">3. Móveis e equipamentos de Toledo e resultado total da loja</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
-        ${tile('', 'Móveis e equipamentos: pago', R(mobPago), `${mob.length} lançamento(s) · preço pago nas compras`)}
-        ${tile('accent-good', 'Móveis e equipamentos: vendidos por', R(mobRecebido), `valor combinado${mobAVender > 0 ? ' · ainda à venda ' + R(mobAVender) : ''}`)}
-        ${tile('accent-good', 'Já recebido', R(mobPago$), `${mobRecebido > 0 ? pct(mobPago$ / mobRecebido * 100) + ' do vendido · ' : ''}${MOB_PAGAMENTOS.length} pagamento(s)`)}
-        ${tile(mobRecebido - mobPago$ > 0.005 ? 'accent-warning' : 'accent-good', 'A receber', R(Math.max(0, mobRecebido - mobPago$)), 'vendido − recebido (lance cada pagamento na aba Mobília)')}
-        ${tile(mobRecebido - mobPago < 0 ? 'accent-critical' : 'accent-good', mobRecebido - mobPago < 0 ? 'Prejuízo nos móveis' : 'Resultado nos móveis', R(Math.abs(mobRecebido - mobPago)), `${R(mobRecebido)} vendido − ${R(mobPago)} pago${mobPago > 0 ? ' (' + pct((mobRecebido - mobPago) / mobPago * 100) + ')' : ''}`)}
-        ${tile(totalEstimado < 0 ? 'accent-critical' : 'accent-good', totalEstimado < 0 ? 'Prejuízo total estimado de Toledo' : 'Resultado total estimado de Toledo', R(Math.abs(totalEstimado)), `mercadoria (${R(estimado)}) + móveis (${R(mobRecebido - mobPago)}). Falta somar o que ainda resta em Toledo`)}
-        ${tile(totalMinimo < 0 ? 'accent-critical' : 'accent-good', totalMinimo < 0 ? 'Prejuízo total mínimo' : 'Resultado total mínimo', R(Math.abs(totalMinimo)), `mercadoria pelo custo (${R(minimo)}) + móveis (${R(mobRecebido - mobPago)})`)}
       </div></div>`;
     { /* detalhes recolhidos por padrao: o painel unico no topo ja resume tudo */
       let aberto = false; try{ aberto = localStorage.getItem('tn_es_toledo') === '1'; }catch(e){}
