@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:34";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 15:41";</script>
       </div>
     </div>
 
@@ -4063,6 +4063,11 @@ function renderEstoque(){
     const minimo = -perdido + (receita - vendidoCusto);     // se o transferido valer so o custo
     const estimado = ganhoSaidas - perdido;                  // se o transferido foi vendido ao preco de venda
     const R = n => BRL(n);
+    const mob = PRODUCTS.filter(p => p.tipo === 'mobilia' && p.loja === 'Toledo');
+    const mobPago = soma(mob, p => esValor(p.qtdInicial, p.unidade, p.custo));
+    const mobRecebido = soma(mob, p => p.recuperado || 0);
+    const mobAVender = soma(mob, p => esValor(p.estoque, p.unidade, p.preco));
+    const totalEstimado = estimado + (mobRecebido - mobPago), totalMinimo = minimo + (mobRecebido - mobPago);
     const tile = (cls, rot, valor, nota) => `<div class="card stat-tile ${cls}" style="min-width:0;"><div class="label">${rot}</div><div class="value" style="font-size:22px;">${valor}</div><div class="delta">${nota}</div></div>`;
     const lojaTile = d => { const x = destinos[d] || {n:0, cus:0, ven:0}; return `<div class="card stat-tile accent-good" style="min-width:0;"><div class="label">Recuperado por ${esc(d)}</div>
         <div style="margin-top:4px;line-height:1.35;"><span class="hint" style="font-size:11px;">Compra (custo)</span> <strong>${R(x.cus)}</strong><br><span class="hint" style="font-size:11px;">Venda (preço)</span> <strong style="color:var(--good);">${R(x.ven)}</strong></div>
@@ -4086,6 +4091,14 @@ function renderEstoque(){
         ${tile('accent-good', 'Recuperado a preço de venda', R(recVenda), `${R(transfVenda)} transferido${receita > 0 ? ' + ' + R(receita) + ' vendido direto' : ''}. É o que entra se o transferido foi vendido pelo preço`)}
         ${tile(minimo < 0 ? 'accent-critical' : 'accent-good', minimo < 0 ? 'Prejuízo mínimo (pelo custo)' : 'Resultado mínimo (pelo custo)', R(Math.abs(minimo)), `só as perdas (${R(perdido)})${receita > 0 ? ' menos o ganho da venda direta (' + R(receita - vendidoCusto) + ')' : ''}. Considera o transferido valendo só o custo`)}
         ${tile(estimado < 0 ? 'accent-critical' : 'accent-good', estimado < 0 ? 'Prejuízo estimado' : 'Resultado estimado', R(Math.abs(estimado)), `${R(recVenda)} − ${R(recCusto)} − ${R(perdido)} perdido. Considera o transferido vendido ao preço de venda`)}
+      </div>
+      <div class="strong" style="font-size:12.5px;margin:14px 0 6px;">3. Móveis e equipamentos de Toledo e resultado total da loja</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+        ${tile('', 'Móveis e equipamentos: pago', R(mobPago), `${mob.length} lançamento(s) · preço pago nas compras`)}
+        ${tile('accent-good', 'Móveis e equipamentos: recebido', R(mobRecebido), `venda já feita${mobAVender > 0 ? ' · ainda à venda ' + R(mobAVender) : ''}`)}
+        ${tile(mobRecebido - mobPago < 0 ? 'accent-critical' : 'accent-good', mobRecebido - mobPago < 0 ? 'Prejuízo nos móveis' : 'Resultado nos móveis', R(Math.abs(mobRecebido - mobPago)), `${R(mobRecebido)} recebido − ${R(mobPago)} pago${mobPago > 0 ? ' (' + pct((mobRecebido - mobPago) / mobPago * 100) + ')' : ''}`)}
+        ${tile(totalEstimado < 0 ? 'accent-critical' : 'accent-good', totalEstimado < 0 ? 'Prejuízo total estimado de Toledo' : 'Resultado total estimado de Toledo', R(Math.abs(totalEstimado)), `mercadoria (${R(estimado)}) + móveis (${R(mobRecebido - mobPago)}). Falta somar o que ainda resta em Toledo`)}
+        ${tile(totalMinimo < 0 ? 'accent-critical' : 'accent-good', totalMinimo < 0 ? 'Prejuízo total mínimo' : 'Resultado total mínimo', R(Math.abs(totalMinimo)), `mercadoria pelo custo (${R(minimo)}) + móveis (${R(mobRecebido - mobPago)})`)}
       </div></div>`;
   }
 
