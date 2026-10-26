@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:37";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 14:44";</script>
       </div>
     </div>
 
@@ -4044,17 +4044,24 @@ function renderEstoque(){
     const resultado = (receita - vendidoCusto) - perdido; // ganho ou perda ja realizado
     const pctRec = capital > 0 ? recuperado / capital * 100 : null, pctPerd = capital > 0 ? perdido / capital * 100 : null;
     const dst = Object.keys(destinos).sort().map(d => { const x = destinos[d];
-      return `<div class="card stat-tile accent-good"><div class="label">Transferido para ${esc(d)}</div><div class="value">${BRL(x.cus)}</div><div class="delta">a custo · ${x.n} produto(s) · a preço de venda ${BRL(x.ven)}</div></div>`; }).join('');
+      const ganho = x.ven - x.cus;
+      return `<div class="card stat-tile accent-good"><div class="label">Recuperado por ${esc(d)}</div>
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;"><div><div class="hint" style="font-size:11px;">Compra (custo)</div><div class="strong" style="font-size:18px;">${BRL(x.cus)}</div></div>
+        <div style="text-align:right;"><div class="hint" style="font-size:11px;">Venda (preço)</div><div class="strong" style="font-size:18px;color:var(--good);">${BRL(x.ven)}</div></div></div>
+        <div class="delta">${x.n} produto(s) transferido(s) · diferença ${BRL(ganho)}${x.cus > 0 ? ' (' + pct(ganho / x.cus * 100) + ' sobre a compra)' : ''}</div></div>`; }).join('');
+    const transfVenda = soma(Object.values(destinos), x => x.ven);
+    const estimado = (transfVenda - transfCusto) + (receita - vendidoCusto) - perdido;   // se o transferido foi vendido ao preco de venda
     caixaTol.innerHTML = `<div class="card" style="padding:14px;">
       <div class="strong" style="font-size:15px;margin-bottom:2px;">Estoque de Toledo — recuperação e prejuízo</div>
-      <div class="hint" style="margin-bottom:10px;">Tudo a custo, somando o que havia no encerramento da loja, o que já saiu por transferência ou venda e o que se perdeu.</div>
+      <div class="hint" style="margin-bottom:10px;">O que havia no encerramento da loja, o que já saiu para cada loja (considerado recuperado, pois as lojas não dão baixa da venda), o que se perdeu e o que ainda resta. Em cada loja: compra (custo) contra venda (preço).</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
         <div class="card stat-tile"><div class="label">Havia em Toledo</div><div class="value">${BRL(capital)}</div><div class="delta">capital a custo</div></div>
         ${dst}
         <div class="card stat-tile accent-good"><div class="label">Vendido direto</div><div class="value">${BRL(receita)}</div><div class="delta">receita · custo ${BRL(vendidoCusto)}</div></div>
         <div class="card stat-tile accent-critical"><div class="label">Perdido</div><div class="value">${BRL(perdido)}</div><div class="delta">${pctPerd==null?'—':pct(pctPerd)+' do capital'} · vencido, quebra ou descarte</div></div>
         <div class="card stat-tile accent-warning"><div class="label">Ainda em Toledo</div><div class="value">${BRL(restoCusto)}</div><div class="delta">a custo · a preço de venda ${BRL(restoVenda)}</div></div>
-        <div class="card stat-tile ${resultado < 0 ? 'accent-critical' : 'accent-good'}"><div class="label">${resultado < 0 ? 'Prejuízo já realizado' : 'Resultado já realizado'}</div><div class="value">${BRL(Math.abs(resultado))}</div><div class="delta">recuperado ${BRL(recuperado)}${pctRec==null?'':' ('+pct(pctRec)+' do capital)'}</div></div>
+        <div class="card stat-tile ${resultado < 0 ? 'accent-critical' : 'accent-good'}"><div class="label">${resultado < 0 ? 'Prejuízo pelo custo' : 'Resultado pelo custo'}</div><div class="value">${BRL(Math.abs(resultado))}</div><div class="delta">só perdas e vendas diretas · recuperado a custo ${BRL(recuperado)}${pctRec==null?'':' ('+pct(pctRec)+' do capital)'}</div></div>
+        <div class="card stat-tile ${estimado < 0 ? 'accent-critical' : 'accent-good'}"><div class="label">${estimado < 0 ? 'Prejuízo estimado' : 'Resultado estimado'}</div><div class="value">${BRL(Math.abs(estimado))}</div><div class="delta">se o transferido foi vendido ao preço de venda (as lojas não dão baixa da venda)</div></div>
       </div></div>`;
   }
 
