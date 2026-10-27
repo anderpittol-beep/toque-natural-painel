@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 20:41";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:25";</script>
       </div>
     </div>
 
@@ -1317,6 +1317,11 @@ window.TN_CONFIG = {
               </select>
               <input type="number" id="pes-pnum" placeholder="Parcela nº" min="1" step="1">
               <input type="number" id="pes-ptot" placeholder="de quantas" min="1" step="1">
+              <select id="pes-rec" title="O que acontece no mês seguinte">
+                <option value="">compra comum (parcelada ou avulsa)</option>
+                <option value="assinatura">assinatura — volta todo mês até cancelar</option>
+                <option value="provisao">provisão — valor estimado, volta todo mês</option>
+              </select>
               <input type="number" id="pes-dia" placeholder="Dia que debita" min="1" max="31" step="1" title="Dia do mês em que a despesa debita na conta">
               <p class="hint" id="pes-previa" style="grid-column:1/-1;margin:0;"></p>
               <button class="btn primary" type="submit" style="grid-column:1/-1;">Lançar despesa</button>
@@ -8795,7 +8800,11 @@ function ligarFormulariosPessoais(){
     const num = val('pes-pnum') ? +val('pes-pnum') : 1;
     const v = pesValorParcela();
     if(!v){ el.textContent = ''; return; }
-    if(n > 1){
+    if(val('pes-rec') === 'assinatura'){
+      el.textContent = 'Vai lançar ' + BRL(v) + ' em ' + pesComp() + ' como ASSINATURA: volta sozinha todo mês, sem parar, até você cancelar.';
+    }else if(val('pes-rec') === 'provisao'){
+      el.textContent = 'Vai lançar ' + BRL(v) + ' em ' + pesComp() + ' como PROVISÃO: valor estimado que volta todo mês para você conferir.';
+    }else if(n > 1){
       const ultima = pesMesLabel(pesAno, pesMes, n - num);
       el.textContent = 'Vai lançar a parcela ' + num + '/' + n + ' de ' + BRL(v) + ' em ' + pesComp()
         + '. As seguintes aparecem sozinhas ao abrir cada mês, até ' + ultima + '.';
@@ -8803,7 +8812,7 @@ function ligarFormulariosPessoais(){
       el.textContent = 'Vai lançar ' + BRL(v) + ' em ' + pesComp() + ', sem parcela.';
     }
   }
-  ['pes-valor','pes-vmodo','pes-pnum','pes-ptot'].forEach(id=>{
+  ['pes-valor','pes-vmodo','pes-pnum','pes-ptot','pes-rec'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.oninput = el.onchange = pesPrevia;
   });
@@ -8816,6 +8825,11 @@ function ligarFormulariosPessoais(){
                     parcela_num: val('pes-pnum') ? +val('pes-pnum') : null,
                     parcela_total: val('pes-ptot') ? +val('pes-ptot') : null };
     if(temDiaDebito()) dados.dia_debito = val('pes-dia') ? +val('pes-dia') : null;
+    if(val('pes-rec') && temRecorrencia()){
+      dados.recorrencia = val('pes-rec');
+      /* assinatura e provisao voltam todo mes: o numero de parcela so entra se a pessoa quiser marcar um ciclo (ex.: 3/12) */
+      if(val('pes-rec') === 'provisao'){ dados.parcela_num = null; dados.parcela_total = null; }
+    }else if(val('pes-rec')){ return alert('O banco ainda não tem a coluna de recorrência; use a coluna "recorrência" da lista depois de lançar.'); }
     const { error } = await sb().from('pes_lancamentos').insert(dados);
     if(error) return erro(error);
     f.reset(); pesPrevia(); await tnCarregarPessoais();
