@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:25";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:34";</script>
       </div>
     </div>
 
@@ -8034,12 +8034,18 @@ function renderPessoais(){
     const d = new Date(a, m-2, 1);
     const anteriores = itensDoMesTipo(d.getFullYear(), d.getMonth()+1, t, prof+1);
     if(!anteriores.length) return reais;
+    const temReais = reais.length > 0;
     const jaTem = new Set(reais.map(x=> String(x.descricao||'').trim().toLowerCase()));
     anteriores.forEach(x=>{
       const prox = pesProximaParcela(x);
       if(!prox) return;
       const chave = String(x.descricao||'').trim().toLowerCase();
       if(jaTem.has(chave)) return;
+      /* Lancamento antigo (sem marca) e sem parcela, que o mes seguinte ja
+         lancado nao trouxe, foi compra unica: nao pode seguir se arrastando
+         pelos meses projetados (o Curso de R$ 1.497 de Agosto voltava em
+         todo mes). So se repete sozinho quando o mes inteiro e projecao. */
+      if(temReais && !pesRecorrencia(x) && !(+x.parcela_total||0)) return;
       jaTem.add(chave);
       reais.push({...x, ...prox, _herdado: true});
     });
