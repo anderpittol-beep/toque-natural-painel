@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:34";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:49";</script>
       </div>
     </div>
 
@@ -7978,7 +7978,15 @@ function renderPessoais(){
   const porTipo = t => {
     const reais = lancReais.filter(x=>pesTipo(x)===t);
     if(t==='cartao') return reais.concat(cartaoHerdado(reais));
-    if(reais.length) return reais;
+    /* Fixa parcelada em curso (ex.: Fundo Capital 34/60) que o mes ainda nao
+       lancou tem que entrar na conta igual a previsao dos proximos meses —
+       senao o quadro de cima e o card do mes mostram totais diferentes. */
+    if(reais.length){
+      const jaTem = new Set(reais.map(x=> String(x.descricao||'').trim().toLowerCase()));
+      const extras = itensDoMesTipo(pesAno, pesMes, 'fixa').filter(x=> x._herdado && !jaTem.has(String(x.descricao||'').trim().toLowerCase()))
+        .map(x=>({...x, id:null, pago:false, pago_em:null, herdada:true, de:'mês anterior'}));
+      return reais.concat(extras);
+    }
     return herdadasDoTipo(t);
   };
   const lanc = ['cartao','fixa'].reduce((a,t)=>a.concat(porTipo(t)), []);
