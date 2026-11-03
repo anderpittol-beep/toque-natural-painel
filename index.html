@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="26/10/2026, 21:49";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:07";</script>
       </div>
     </div>
 
@@ -6489,7 +6489,13 @@ function renderCaixa(){
      enquanto os lançamentos estão em outro mês. */
   const datasCx = caixa.map(c=>parseBR(c.data)).filter(Boolean).sort((a,b)=>b-a);
   const refMes = datasCx[0] || TODAY;
-  const vendasMes = caixa.filter(c=>{ const d=parseBR(c.data); return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth(); })
+  /* Loja encerrada naquele mes tem meta zero: vender nela nao pode entrar
+     contra a meta das outras (em Out/26 as vendas de Toledo, R$ 1.589,79,
+     faziam o ritmo e o percentual das duas lojas abertas parecerem melhores).
+     Vendendo so ela, a conta segue como estava. */
+  const metaMesRef = l => metaLoja(l, refMes.getFullYear(), refMes.getMonth()+1);
+  const contaNaMeta = c => metaMesLojas <= 0 || metaMesRef(c.loja) > 0;
+  const vendasMes = caixa.filter(c=>{ const d=parseBR(c.data); return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth() && contaNaMeta(c); })
                          .reduce((a,c)=>a+(+c.vendas||0),0);
   const refLabel = MES_ABREV[refMes.getMonth()+1] + '/' + String(refMes.getFullYear()).slice(2);
   const pctMes = metaMesLojas>0 ? vendasMes/metaMesLojas*100 : 0;
