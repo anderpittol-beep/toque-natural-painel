@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:21";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:14";</script>
       </div>
     </div>
 
@@ -6459,13 +6459,18 @@ function renderCaixa(){
   const s = currentStore();
   const inStore = (l)=> selStores().includes(l) || l==='Todas';
   const caixa = CAIXA_DIARIO.filter(x=>inStore(x.loja));
+  /* O filtro "Meses" do topo vale para os quadros e a tabela do caixa:
+     marcou Out, mostra Out. Sem nada marcado, segue o mes do ultimo lancamento. */
+  const rotMes = d => MES_ABREV[d.getMonth()+1] + '/' + String(d.getFullYear()).slice(2);
+  const selSetCx = (Array.isArray(mesesSel) && mesesSel.length) ? new Set(mesesSel) : null;
+  const caixaSel = selSetCx ? caixa.filter(c=>{ const d=parseBR(c.data); return d && selSetCx.has(rotMes(d)); }) : caixa;
   const fixas = fixasDaCompetencia(fxAno, fxMes).filter(x=>inStore(x.loja));
   const boletos = BOLETOS.filter(x=>inStore(x.loja));
   const fech = c => (c.inicial||0)+(c.entradas||0)-(c.saidas||0);
 
   // KPIs
-  const entradasMes = caixa.reduce((a,b)=>a+(b.entradas||0),0);
-  const saidasMes = caixa.reduce((a,b)=>a+(b.saidas||0),0);
+  const entradasMes = caixaSel.reduce((a,b)=>a+(b.entradas||0),0);
+  const saidasMes = caixaSel.reduce((a,b)=>a+(b.saidas||0),0);
   const totFixasBase = fixas.reduce((a,b)=>a+valorFixaNaSoma(b),0);
   // folha (GENTE) entra nas despesas fixas
   /* A folha de um mes sai do caixa no mes SEGUINTE — o pagamento e no dia 05,
@@ -6498,20 +6503,23 @@ function renderCaixa(){
   const totFixas = totFixasBase + folhaTotal + provTotal;
   const socia = (typeof perfil!=='undefined' && perfil==='socia');
   /* Meta do mês corrente: quanto foi vendido contra o que estava planejado até aqui */
-  const metaMesLojas = selStores().reduce((a,l)=> a + metaLoja(l, TODAY.getFullYear(), TODAY.getMonth()+1), 0);
-  /* Referência é o mês do último dia registrado — senão o mês corrente aparece zerado
-     enquanto os lançamentos estão em outro mês. */
-  const datasCx = caixa.map(c=>parseBR(c.data)).filter(Boolean).sort((a,b)=>b-a);
-  const refMes = datasCx[0] || TODAY;
+  /* Meses em foco: os marcados no topo, ou o mes do ultimo dia registrado
+     (senao o mes corrente aparece zerado enquanto os lancamentos estao em outro). */
+  const datasCx = caixaSel.map(c=>parseBR(c.data)).filter(Boolean).sort((a,b)=>b-a);
+  const alvoMeses = selSetCx
+    ? [...selSetCx].map(l=>{ const p=String(l).split('/'); return new Date(2000+(+p[1]), MES_ABREV.indexOf(p[0])-1, 1); })
+        .filter(d=>!isNaN(d)).sort((a,b)=>a-b)
+    : [ new Date((datasCx[0]||TODAY).getFullYear(), (datasCx[0]||TODAY).getMonth(), 1) ];
+  const refMes = alvoMeses.length ? alvoMeses[alvoMeses.length-1] : TODAY;
+  const noAlvo = d => d && alvoMeses.some(a=> a.getFullYear()===d.getFullYear() && a.getMonth()===d.getMonth());
+  const metaMesLojas = alvoMeses.reduce((t,a)=> t + selStores().reduce((x,l)=> x + metaLoja(l, a.getFullYear(), a.getMonth()+1), 0), 0);
   /* Loja encerrada naquele mes tem meta zero: vender nela nao pode entrar
      contra a meta das outras (em Out/26 as vendas de Toledo, R$ 1.589,79,
      faziam o ritmo e o percentual das duas lojas abertas parecerem melhores).
      Vendendo so ela, a conta segue como estava. */
-  const metaMesRef = l => metaLoja(l, refMes.getFullYear(), refMes.getMonth()+1);
-  const contaNaMeta = c => metaMesLojas <= 0 || metaMesRef(c.loja) > 0;
-  const vendasMes = caixa.filter(c=>{ const d=parseBR(c.data); return d && d.getFullYear()===refMes.getFullYear() && d.getMonth()===refMes.getMonth() && contaNaMeta(c); })
-                         .reduce((a,c)=>a+(+c.vendas||0),0);
-  const refLabel = MES_ABREV[refMes.getMonth()+1] + '/' + String(refMes.getFullYear()).slice(2);
+  const contaNaMeta = c => { const d=parseBR(c.data); return metaMesLojas <= 0 || (d && metaLoja(c.loja, d.getFullYear(), d.getMonth()+1) > 0); };
+  const vendasMes = caixa.filter(c=> noAlvo(parseBR(c.data)) && contaNaMeta(c)).reduce((a,c)=>a+(+c.vendas||0),0);
+  const refLabel = alvoMeses.length > 1 ? alvoMeses.map(rotMes).join(' + ') : rotMes(refMes);
   const pctMes = metaMesLojas>0 ? vendasMes/metaMesLojas*100 : 0;
   /* dias do mes de referencia que ja tem fechamento lancado, por loja:
      tres lojas fechando o mesmo dia contam como um dia so */
@@ -6521,14 +6529,14 @@ function renderCaixa(){
   }).map(c=>c.data)).size;
   const hojeStr = hojeBR();
   const hojeLancado = caixa.some(c=>c.data === hojeStr);
-  const ritmo = ritmoDoMes(vendasMes, metaMesLojas, refMes, diasComLancamento, hojeLancado);
+  const ritmo = alvoMeses.length === 1 ? ritmoDoMes(vendasMes, metaMesLojas, refMes, diasComLancamento, hojeLancado) : null;
   if(ritmo && datasCx[0]) ritmo.ultimoDia = datasCx[0].toLocaleDateString('pt-BR');
   document.getElementById('caixadia-kpis').innerHTML = `
     <div class="card stat-tile"><div class="label">Vendas de ${esc(refLabel)}</div><div class="value">${BRL(vendasMes)}</div></div>
     <div class="card stat-tile"><div class="label">Meta de ${esc(refLabel)}</div><div class="value">${BRL(metaMesLojas)}</div></div>
     <div class="card stat-tile" style="color:${pctColor(pctMes)};"><div class="label">% da meta de ${esc(refLabel)}</div><div class="value">${carinhaHTML(pctMes, fracaoMesRef(refMes.getFullYear(), refMes.getMonth()), 20)} ${pctMes.toFixed(0)}%</div></div>
     <div class="card stat-tile"><div class="label">Saídas registradas</div><div class="value">${BRL(saidasMes)}</div></div>
-    ${ritmoTile(ritmo, refLabel)}
+    ${alvoMeses.length>1 ? '<div class="card stat-tile"><div class="label">Ritmo do mês</div><div class="value" style="font-size:17px;">—</div><div class="delta">Marque um único mês para ver o ritmo.</div></div>' : ritmoTile(ritmo, refLabel)}
   `;
   /* Ao lado das fixas, o que mais sai no mês: a nota cheia das compras (afeta o
      lucro) e os boletos efetivamente pagos (afetam o caixa). São coisas
@@ -6679,7 +6687,7 @@ function renderCaixa(){
   if(cardFixas) cardFixas.style.display = socia ? '' : 'none';
 
   // Tabela caixa diário
-  const cxSorted = caixa.slice().sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || a.loja.localeCompare(b.loja));
+  const cxSorted = caixaSel.slice().sort((a,b)=> (parseBR(b.data)||0)-(parseBR(a.data)||0) || a.loja.localeCompare(b.loja));
   /* Sócio corrige o que a colaboradora lançou: o caixa do dia é a base do
      faturamento, então um erro aqui contamina meta, comissão e projeção. */
   const cxPodeEditar = socia;
