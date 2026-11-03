@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:13";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:16";</script>
       </div>
     </div>
 
@@ -715,7 +715,7 @@ window.TN_CONFIG = {
       <!-- DESEMPENHO DE VENDAS -->
       <section class="view" id="view-desempenho">
         <h2 class="section-title">Vendas &amp; caixa diário</h2>
-        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem superou a meta da semana, almoço (até R$ 50,00) para a maior venda do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem superou a meta da semana, almoço (até R$ 50,00) para a maior % da meta no mês, desde que a loja alcance 100% da meta do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="equipe-fotos" id="equipe-fotos" style="margin:0 0 16px;"></div>
         <div class="grid grid-5" id="caixadia-kpis" style="margin-bottom:16px;"></div>
 
@@ -3277,7 +3277,10 @@ function renderDesempenho(){
   const mRef = TODAY.getMonth(), yRef=TODAY.getFullYear();
   const totMes={};
   vendas.forEach(v=>{ const dt=parseBR(v.data); if(dt&&dt.getMonth()===mRef&&dt.getFullYear()===yRef) totMes[v.colab]=(totMes[v.colab]||0)+v.valor; });
-  let premMes=null; nomes.forEach(n=>{ const meta=metaMensal(n); const pct=meta>0?(totMes[n]||0)/meta*100:0; if((totMes[n]||0)>0 && (!premMes||pct>premMes.pct)) premMes={pessoa:n,pct}; });
+  /* O almoco so sai se a loja bateu 100% da meta do mes: a maior % sozinha
+     nao basta. Quem lidera sem ter chegado la aparece como parcial. */
+  let lidMes=null; nomes.forEach(n=>{ const meta=metaMensal(n); const pct=meta>0?(totMes[n]||0)/meta*100:0; if((totMes[n]||0)>0 && (!lidMes||pct>lidMes.pct)) lidMes={pessoa:n,pct}; });
+  const premMes = (lidMes && lidMes.pct >= 100) ? lidMes : null;
   /* Trimestre e ano CIVIS: "3 meses seguidos" corria em janela movel, entao
      Nov-Dez-Jan valia como trimestre e o ano nunca zerava — o premio anual
      somava destaque de 2025 com o de 2026. Agora Jan-Mar, Abr-Jun, Jul-Set,
@@ -3324,7 +3327,7 @@ function renderDesempenho(){
   document.getElementById('premios').innerHTML =
     card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good',
          'data-histsem="1" style="cursor:pointer;" title="Ver o histórico por semana"')
-   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):'Sem vendas no mês','',
+   +card('🍽️','Destaque do mês', premMes&&premMes.pessoa, premMes?(premMes.pct.toFixed(0)+'% da meta mensal — almoço até '+BRL(PREMIO_ALMOCO)):(lidMes?('Precisa de 100% da meta da loja no mês · maior hoje: '+lidMes.pessoa+' com '+lidMes.pct.toFixed(0)+'%'):'Sem vendas no mês'),'',
          'data-histmes="1" style="cursor:pointer;" title="Ver o histórico por mês"')
    +card('🍽️','Destaque do trimestre', premTri&&premTri.pessoa,
          premTri
@@ -3402,15 +3405,15 @@ function renderDesempenho(){
       .filter(x=>x.c).sort((a,b)=> (b.c.ano*100+b.c.mes) - (a.c.ano*100+a.c.mes));
     const rotuloMesAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(anoCivil).slice(2);
     const jaTemAtual = meses.some(x=> x.c.ano===anoCivil && x.c.mes===TODAY.getMonth()+1);
-    const emCurso = (!jaTemAtual && premMes)
+    const emCurso = (!jaTemAtual && lidMes)
       ? linhaHist(esc(rotuloMesAtual) + ' <span class="hint" style="font-weight:400;">· em curso</span>', '',
-                  esc(premMes.pessoa) + ' — ' + premMes.pct.toFixed(0) + '% da meta (parcial)', '')
+                  esc(lidMes.pessoa) + ' — ' + lidMes.pct.toFixed(0) + '% da meta (parcial' + (lidMes.pct >= 100 ? '' : ' · falta chegar a 100%') + ')', '')
       : '';
     const corpo = (emCurso + meses.map(x=> linhaHist('🍽️ ' + esc(x.mes), '',
         esc(x.pessoa) + ' — almoço até ' + BRL(PREMIO_ALMOCO), 'var(--good)')).join(''))
       || vazioHist;
     abrirHistorico('🍽️ Destaque do mês — histórico',
-      'Leva o almoço de até ' + BRL(PREMIO_ALMOCO) + ' quem fecha o mês com a maior % da própria meta.', corpo);
+      'Leva o almoço de até ' + BRL(PREMIO_ALMOCO) + ' quem fecha o mês com a maior % da própria meta, desde que a loja alcance 100% da meta do mês.', corpo);
   };
 
   /* ---- Ano: quantos destaques cada uma teve, ano a ano ---- */
