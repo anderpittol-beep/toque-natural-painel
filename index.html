@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:07";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:13";</script>
       </div>
     </div>
 
@@ -1556,7 +1556,7 @@ function metaDoDia(loja, dataBR){
     })
     .reduce((a,v)=>a+(+v.valor||0),0);
   const falta = Math.max(0, mensal - vendidoAntes);
-  const dias = diasUteisRestantes(d, true);
+  const dias = diasUteisRestantes(d, true, loja);
   return dias ? falta/dias : 0;
 }
 let VENDAS_DIARIAS = [];
@@ -2799,16 +2799,16 @@ function ritmoTile(r, refLabel){
          '<div class="value" style="font-size:17px;color:' + r.cor + ';">' + esc(r.rotulo) + '</div>' +
          destaque + fer + hoje + ate + aviso + '</div>';
 }
-function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado){
+function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado, loja){
   const ano = refMes.getFullYear(), mes = refMes.getMonth();
-  const duMes = diasUteisNoMes(ano, mes);
+  const duMes = diasUteisNoMes(ano, mes, loja);
   const mesCorrente = (ano === TODAY.getFullYear() && mes === TODAY.getMonth());
   /* mes fechado cobra o mes inteiro; mes correndo cobra so ate hoje.
      E o dia de hoje so entra depois que o fechamento e lancado: as meninas
      lancam a noite, entao de manha o dia inteiro de meta era cobrado contra
      zero de venda e o cartao acusava defasagem que nao existia. */
-  let duCorridos = mesCorrente ? (duMes - diasUteisRestantes(TODAY, false)) : duMes;
-  const hojeForaDaConta = mesCorrente && ehDiaUtil(TODAY) && !hojeLancado;
+  let duCorridos = mesCorrente ? (duMes - diasUteisRestantes(TODAY, false, loja)) : duMes;
+  const hojeForaDaConta = mesCorrente && ehDiaUtil(TODAY, loja) && !hojeLancado;
   if(hojeForaDaConta) duCorridos = Math.max(0, duCorridos - 1);
   if(!meta || !duMes || !duCorridos) return null;
   const esperado = meta * duCorridos / duMes;
@@ -2821,7 +2821,7 @@ function ritmoDoMes(vendas, meta, refMes, diasRegistrados, hojeLancado){
   else if(razao >= 0.85){ rotulo = 'Pouco atrás'; cor = 'var(--warning)'; }
   else { rotulo = 'Defasada'; cor = 'var(--critical)'; }
   return {rotulo, cor, esperado, dif, razao, duCorridos, duMes, semLancar, hojeForaDaConta,
-          feriados: feriadosDoMes(ano, mes),
+          feriados: feriadosDoMes(ano, mes, loja),
           pctEsperado: duCorridos / duMes * 100};
 }
 /* Uma unica regra de cor no painel: a mesma do semaforo e da legenda do mural
@@ -3002,6 +3002,11 @@ const FERIADOS_FIXOS = {
   '11-15':'Proclamação da República',  '11-20':'Consciência Negra',
   '12-19':'Emancipação do Paraná',     '12-25':'Natal'
 };
+/* Feriado municipal vale so para a loja da cidade: Itaipulandia fecha em
+   31/10 e Ouro Verde abre. Passe a loja para as contas de dia util dela. */
+const FERIADOS_LOJA = {
+  'Itaipulândia': { '10-31': 'Aniversário de Itaipulândia (municipal)' }
+};
 /* Pascoa pelo algoritmo de Meeus/Jones/Butcher — dela saem carnaval,
    sexta-feira santa e corpus christi, que mudam de data todo ano. */
 function pascoa(ano){
@@ -3025,30 +3030,32 @@ function feriadosMoveis(ano){
   m[chave(desloca(60))]  = 'Corpus Christi';
   return (_feriadosMoveis[ano] = m);
 }
-function feriadoDe(d){
+function feriadoDe(d, loja){
+  const mun = loja && FERIADOS_LOJA[loja] && FERIADOS_LOJA[loja][String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')];
+  if(mun) return mun;
   const fixo = FERIADOS_FIXOS[String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')];
   if(fixo) return fixo;
   const k = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   return feriadosMoveis(d.getFullYear())[k] || null;
 }
 /* dia util = a loja abre: segunda a sabado, fora feriado */
-function ehDiaUtil(d){ return d.getDay() !== 0 && !feriadoDe(d); }
-function diasUteisNoMes(ano,mes){
+function ehDiaUtil(d, loja){ return d.getDay() !== 0 && !feriadoDe(d, loja); }
+function diasUteisNoMes(ano,mes,loja){
   let d=new Date(ano,mes,1), c=0;
-  while(d.getMonth()===mes){ if(ehDiaUtil(d)) c++; d.setDate(d.getDate()+1); }
+  while(d.getMonth()===mes){ if(ehDiaUtil(d,loja)) c++; d.setDate(d.getDate()+1); }
   return c;
 }
-function diasUteisRestantes(ref, incluirRef){
+function diasUteisRestantes(ref, incluirRef, loja){
   const m=ref.getMonth();
   let d=new Date(ref.getFullYear(),m,ref.getDate()+(incluirRef?0:1)), c=0;
-  while(d.getMonth()===m){ if(ehDiaUtil(d)) c++; d.setDate(d.getDate()+1); }
+  while(d.getMonth()===m){ if(ehDiaUtil(d,loja)) c++; d.setDate(d.getDate()+1); }
   return c;
 }
 /* feriados do mes, para o painel poder dizer por que sobrou menos dia util */
-function feriadosDoMes(ano,mes){
+function feriadosDoMes(ano,mes,loja){
   const out=[]; let d=new Date(ano,mes,1);
   while(d.getMonth()===mes){
-    const f=feriadoDe(d);
+    const f=feriadoDe(d, loja);
     if(f && d.getDay()!==0) out.push(d.getDate()+'/'+String(mes+1).padStart(2,'0')+' '+f);
     d.setDate(d.getDate()+1);
   }
@@ -9514,10 +9521,10 @@ function metaPorDiaAtual(){
     });
     const vendasMes = dias.reduce((a,c)=> a + (+c.vendas||0), 0);
     const hojeLancado = dias.some(c=> c.data === hojeBR());
-    const r = ritmoDoMes(vendasMes, meta, TODAY, new Set(dias.map(c=>c.data)).size, hojeLancado);
+    const r = ritmoDoMes(vendasMes, meta, TODAY, new Set(dias.map(c=>c.data)).size, hojeLancado, l);
     /* Uma unica regra para todos os avisos: enquanto o fechamento de hoje nao foi lancado, hoje
        ainda esta pela frente e entra na divisao (senao o valor sobe de mentira). */
-    const duRest = diasUteisRestantes(TODAY, ehDiaUtil(TODAY) && !hojeLancado);
+    const duRest = diasUteisRestantes(TODAY, ehDiaUtil(TODAY, l) && !hojeLancado, l);
     return {loja:l, rec, meta, falta, duRest, porDia: duRest ? falta/duRest : null, ritmo:r};
   }).filter(x=> x.meta > 0);
 }
