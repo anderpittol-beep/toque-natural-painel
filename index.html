@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:29";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:30";</script>
       </div>
     </div>
 
@@ -3290,7 +3290,7 @@ function renderDesempenho(){
   let lidMes=null; nomes.forEach(n=>{ const meta=metaLoja(lojaOf(n), yRef, mRef+1); const pct=meta>0?(totMes[n]||0)/meta*100:0; if((totMes[n]||0)>0 && (!lidMes||pct>lidMes.pct)) lidMes={pessoa:n,pct}; });
   /* Mes ja apurado a mao em HISTORICO_DESTAQUE vale como esta registrado */
   const regMes = HISTORICO_DESTAQUE.find(x=> x.mes === rotMesPrem);
-  const premMes = (lidMes && lidMes.pct >= 100) ? lidMes : (regMes ? {pessoa: regMes.pessoa, pct: null, registrado: true} : null);
+  const premMes = regMes ? {pessoa: regMes.pessoa, pct: null, registrado: true} : ((lidMes && lidMes.pct >= 100) ? lidMes : null);
   /* Trimestre e ano CIVIS: "3 meses seguidos" corria em janela movel, entao
      Nov-Dez-Jan valia como trimestre e o ano nunca zerava — o premio anual
      somava destaque de 2025 com o de 2026. Agora Jan-Mar, Abr-Jun, Jul-Set,
