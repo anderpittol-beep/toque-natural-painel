@@ -218,6 +218,8 @@
      linhas), entao o conteudo dos outros ficava colado no topo com um vazio
      embaixo: centralizado, a faixa fica equilibrada. */
   .stat-tile{padding:11px 13px;display:flex;flex-direction:column;justify-content:center;}
+  /* premios: titulo, nome e detalhe de cada card na mesma linha dos vizinhos */
+  #premios .stat-tile{justify-content:flex-start;}
   .stat-tile .label{font-size:11.5px;color:var(--text-muted);margin-bottom:3px;}
   .stat-tile .value{font-size:21px;font-weight:600;line-height:1.15;}
   .stat-tile .delta{font-size:11.5px;margin-top:3px;line-height:1.4;color:var(--text-secondary);}
@@ -428,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:30";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:40";</script>
       </div>
     </div>
 
@@ -715,7 +717,7 @@ window.TN_CONFIG = {
       <!-- DESEMPENHO DE VENDAS -->
       <section class="view" id="view-desempenho">
         <h2 class="section-title">Vendas &amp; caixa diário</h2>
-        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem superou a meta da semana, almoço (até R$ 50,00) para a maior % da meta no mês, desde que a loja alcance 100% da meta do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
+        <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem alcançar 100% da meta da semana (a maior %), almoço (até R$ 50,00) para a maior % da meta no mês, desde que a loja alcance 100% da meta do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="equipe-fotos" id="equipe-fotos" style="margin:0 0 16px;"></div>
         <div class="grid grid-5" id="caixadia-kpis" style="margin-bottom:16px;"></div>
         <details class="card" id="cx-hist" style="margin-bottom:16px;">
@@ -3275,8 +3277,12 @@ function renderDesempenho(){
   /* Teto de cada premio: fica escrito no card para nao virar conversa depois,
      na hora de apresentar a nota. */
   const PREMIO_CAFE = 25, PREMIO_ALMOCO = 50;
-  let premSemana=null;
-  if(wAtual){ nomes.forEach(n=>{ const meta=metaSem(n); const pct=meta>0?(wAtual.tot[n]||0)/meta*100:0; if((wAtual.tot[n]||0)>0 && (!premSemana||pct>premSemana.pct)) premSemana={pessoa:n,pct,label:wAtual.label}; }); }
+  /* O cafe so sai se a colaboradora bate 100% da meta da semana (meta mensal da
+     loja / 4,345): a maior % sozinha nao basta. Quem lidera sem ter chegado la
+     aparece como parcial. */
+  let lidSem=null;
+  if(wAtual){ nomes.forEach(n=>{ const meta=metaSem(n); const pct=meta>0?(wAtual.tot[n]||0)/meta*100:0; if((wAtual.tot[n]||0)>0 && (!lidSem||pct>lidSem.pct)) lidSem={pessoa:n,pct,label:wAtual.label}; }); }
+  const premSemana = (lidSem && lidSem.pct >= 100) ? lidSem : null;
   // Mês (almoço): maior % da meta mensal
   /* Segue o mes marcado no topo (um so); sem marca, o mes corrente. */
   const selUnico = (typeof mesUnicoSel === 'function') ? mesUnicoSel() : null;
@@ -3335,7 +3341,7 @@ function renderDesempenho(){
       <div class="delta">${esc(detalhe)}</div>
     </div>`;
   document.getElementById('premios').innerHTML =
-    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Maior % da meta ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):'Sem vendas na semana','accent-good',
+    card('☕','Destaque da semana', premSemana&&premSemana.pessoa, premSemana?('Bateu a meta da semana ('+premSemana.pct.toFixed(0)+'%) · '+premSemana.label+' — café até '+BRL(PREMIO_CAFE)):(lidSem?('Precisa de 100% da meta da semana · '+lidSem.label+' · maior hoje: '+lidSem.pessoa+' com '+lidSem.pct.toFixed(0)+'%'):'Sem vendas na semana'),'accent-good',
          'data-histsem="1" style="cursor:pointer;" title="Ver o histórico por semana"')
    +card('🍽️','Destaque de ' + rotMesPrem, premMes&&premMes.pessoa, premMes?((premMes.pct==null?'Registrado no histórico':premMes.pct.toFixed(0)+'% da meta mensal')+' — almoço até '+BRL(PREMIO_ALMOCO)):(lidMes?((mesEmCurso?'Precisa de 100% da meta da loja no mês · maior hoje: ':'Ninguém chegou a 100% da meta da loja · maior no mês: ')+lidMes.pessoa+' com '+lidMes.pct.toFixed(0)+'%'):'Sem vendas no mês'),'',
          'data-histmes="1" style="cursor:pointer;" title="Ver o histórico por mês"')
@@ -3398,14 +3404,14 @@ function renderDesempenho(){
       const outras = nomes.filter(n=>(w.tot[n]||0)>0 && (!melhor || n!==melhor.n))
         .map(n=>{ const m=metaSem(n); return esc(n)+': '+(m>0?((w.tot[n]||0)/m*100).toFixed(0)+'%':BRL(w.tot[n]||0)); });
       return linhaHist(
-        (melhor && !emCurso ? '☕ ' : '') + esc(w.label) + (emCurso?' <span class="hint" style="font-weight:400;">· em curso</span>':''),
+        (melhor && !emCurso && melhor.pct >= 100 ? '☕ ' : '') + esc(w.label) + (emCurso?' <span class="hint" style="font-weight:400;">· em curso</span>':''),
         outras.join(' · '),
-        melhor ? esc(melhor.n) + ' — ' + melhor.pct.toFixed(0) + '% da meta' + (emCurso ? ' (parcial)' : ' · café')
+        melhor ? esc(melhor.n) + ' — ' + melhor.pct.toFixed(0) + '% da meta' + (emCurso ? ' (parcial)' : (melhor.pct >= 100 ? ' · café' : ' · sem café (abaixo de 100%)'))
                : 'sem venda registrada',
-        melhor && !emCurso ? 'var(--good)' : '');
+        melhor && !emCurso && melhor.pct >= 100 ? 'var(--good)' : '');
     }).join('') || vazioHist;
     abrirHistorico('☕ Destaque da semana — histórico',
-      'Leva o café de até ' + BRL(PREMIO_CAFE) + ' quem fecha a semana com a maior % da própria meta.', corpo);
+      'Leva o café de até ' + BRL(PREMIO_CAFE) + ' quem fecha a semana com a maior % da própria meta, desde que chegue a 100% da meta da semana.', corpo);
   };
 
   /* ---- Mes: destaque de cada mes ---- */
