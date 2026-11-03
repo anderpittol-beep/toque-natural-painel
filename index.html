@@ -428,7 +428,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:16";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 17:21";</script>
       </div>
     </div>
 
@@ -718,6 +718,10 @@ window.TN_CONFIG = {
         <p class="section-desc">O dia a dia da venda: fechamento do caixa de cada loja, meta do dia e desempenho das colaboradoras compilado por semana. O painel de reconhecimento premia automaticamente os destaques: café (até R$ 25,00) para quem superou a meta da semana, almoço (até R$ 50,00) para a maior % da meta no mês, desde que a loja alcance 100% da meta do mês, almoço com as sócias para 3 meses seguidos em destaque e bonificação salarial para o melhor desempenho anual.</p>
         <div class="equipe-fotos" id="equipe-fotos" style="margin:0 0 16px;"></div>
         <div class="grid grid-5" id="caixadia-kpis" style="margin-bottom:16px;"></div>
+        <details class="card" id="cx-hist" style="margin-bottom:16px;">
+          <summary class="strong" style="cursor:pointer;">Histórico de alterações do caixa <span class="hint" style="font-weight:400;">· quem mudou e o valor anterior</span></summary>
+          <div id="cx-hist-corpo" class="hint" style="margin-top:10px;">Abra para carregar.</div>
+        </details>
 
         <div class="card" >
           <h3 style="font-size:14px;margin:0 0 4px 0;">Caixa diário — fechamento &amp; meta do dia</h3>
@@ -10933,6 +10937,30 @@ async function tnInsert(tabela,row){ try{ if(window.TN&&window.TN.sb){ const {er
 
 ligarFormulariosPessoais();
 tnInitApp();
+
+/* Historico do caixa: o banco grava, a cada edicao ou exclusao de um
+   fechamento, quem mexeu e como estava antes (tabela caixa_diario_historico). */
+(function(){
+  const det = document.getElementById('cx-hist'); if(!det) return;
+  const campos = [['vendas','Vendas'],['entradas','Entradas'],['saidas','Saídas'],['saldo_inicial','Saldo inicial'],['saldo_final','Saldo final'],['saldo_conta','Saldo conta']];
+  const fmt = v => (v==null||v==='') ? '—' : (isNaN(+v) ? esc(String(v)) : BRL(+v));
+  async function carregar(){
+    const cx = document.getElementById('cx-hist-corpo');
+    cx.textContent = 'Carregando…';
+    const r = await window.TN.sb.from('caixa_diario_historico').select('*').order('alterado_em',{ascending:false}).limit(60);
+    if(r.error){ cx.innerHTML = 'O histórico ainda não está ativado no banco (rodar o arquivo historico-caixa.sql no Supabase).'; return; }
+    if(!r.data.length){ cx.textContent = 'Nenhuma alteração registrada desde que o histórico foi ativado.'; return; }
+    cx.innerHTML = r.data.map(h=>{
+      const quando = new Date(h.alterado_em).toLocaleString('pt-BR');
+      const a = h.antes||{}, d = h.depois||{};
+      const mud = h.acao==='excluiu'
+        ? 'Fechamento excluído (vendas era ' + fmt(a.vendas) + ')'
+        : campos.filter(([k])=> String(a[k]) !== String(d[k])).map(([k,n])=> n + ': ' + fmt(a[k]) + ' → ' + fmt(d[k])).join(' · ') || 'outro campo alterado';
+      return '<div style="padding:7px 0;border-top:1px solid var(--border,#0002);"><b>' + esc(h.loja||'') + ' · ' + esc(h.data||'') + '</b> <span class="hint">— ' + esc(h.acao) + ' por ' + esc(h.alterado_por||'?') + ' em ' + esc(quando) + '</span><div>' + mud + '</div></div>';
+    }).join('');
+  }
+  det.addEventListener('toggle', ()=>{ if(det.open) carregar(); });
+})();
 </script>
 </body>
 </html>
