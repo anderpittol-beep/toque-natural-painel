@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 15:25";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 15:37";</script>
       </div>
     </div>
 
@@ -3652,6 +3652,16 @@ async function tnCarregarProdutos(){
   renderAll();
 }
 
+/* Quem pode lancar lote e dar baixa/transferir no estoque: socio(a) sempre; colaboradora so se o
+   e-mail dela estiver na lista "estoque_operadores" (config_painel, JSON com e-mails). Custos
+   e precos continuam so para socio(a). */
+let ESTOQUE_OPERADORES = [];
+function esOpera(){
+  if(esSocia()) return true;
+  const e = String((typeof TN_EMAIL !== 'undefined' && TN_EMAIL) || '').trim().toLowerCase();
+  return !!e && ESTOQUE_OPERADORES.indexOf(e) !== -1;
+}
+
 /* Painel unico: mercadoria + moveis e equipamentos, acima das abas */
 function esPainelTotal(){
   const box = document.getElementById('est-total'); if(!box) return;
@@ -3786,7 +3796,7 @@ function esAbrirBaixa(p){
     return null;
   });
   const qi = document.getElementById('eb-qtd'), calc = document.getElementById('eb-calc'), pr0 = document.getElementById('eb-preco');
-  const atualizaCalc = ()=>{ if(!calc) return; const q = esNum(qi.value)||0;
+  const atualizaCalc = ()=>{ if(!calc) return; if(!esSocia()){ calc.textContent = ''; return; } const q = esNum(qi.value)||0;
     const tp = (document.getElementById('eb-tipo')||{}).value;
     const av = document.getElementById('eb-aviso');
     if(av){ const pequeno = p.unidade === 'g' && q > 0 && q < 5 && p.estoque >= 20; av.style.display = pequeno ? '' : 'none'; if(pequeno) av.textContent = 'Atenção: este lote é em gramas e você digitou ' + q.toLocaleString('pt-BR') + ' g. Se queria ' + esR3(q*1000).toLocaleString('pt-BR') + ' g, digite ' + esR3(q*1000).toLocaleString('pt-BR') + '.'; }
@@ -3910,6 +3920,7 @@ function esLigarUmaVez(){
   const previa = ()=>{
     const q = esNum(val('es-qtd')), c = esNum(val('es-custo')), pv = esNum(val('es-preco'));
     const el = document.getElementById('es-previa'); if(!el) return;
+    if(!esSocia()){ el.textContent = ''; return; }    // custo total e margem so para socio(a)
     if(q > 0){
       const un = val('es-un') || 'un';
       const cap = esValor(q, un, c), pot = esValor(q, un, pv);
@@ -4005,7 +4016,7 @@ function esLigarUmaVez(){
   document.getElementById('tbl-estoque').addEventListener('click', e => {
     const b = e.target.closest('[data-es]'); if(!b) return;
     const p = PRODUCTS.find(x => x.id === b.dataset.id); if(!p) return;
-    if(perfilReal !== 'socia') return alert('Só sócio(a) ou master pode editar, excluir ou transferir estoque.');
+    if(b.dataset.es === 'baixa' ? !esOpera() : perfilReal !== 'socia') return alert('Só sócio(a) ou master pode ' + (b.dataset.es === 'baixa' ? 'dar baixa ou transferir estoque.' : 'corrigir ou excluir lote.'));
     ({baixa:esAbrirBaixa, editar:esAbrirEditar, excluir:esExcluir})[b.dataset.es](p);
   });
 }
@@ -4014,11 +4025,13 @@ function esLigarUmaVez(){
 function renderEstoque(){
   esLigarUmaVez();
   const socia = esSocia(), mob = esMobilia();
+  /* colaboradora liberada em "estoque_operadores" lanca lote e da baixa/transfere, sem ver custos */
+  const opera = esOpera();
   /* abas */
   document.getElementById('es-aba-merc').className = 'btn ' + (mob ? 'ghost' : 'primary');
   document.getElementById('es-aba-mob').className = 'btn ' + (mob ? 'primary' : 'ghost');
   /* formulario muda de acordo com a aba */
-  const card = document.getElementById('est-lancar-card'); if(card) card.style.display = socia ? '' : 'none';
+  const card = document.getElementById('est-lancar-card'); if(card) card.style.display = opera ? '' : 'none';
   const mostrar = (id, on) => { const e = document.getElementById(id); if(e) e.style.display = on ? '' : 'none'; };
   ['es-categoria','es-un','es-validade-box'].forEach(id => mostrar(id, !mob));
   document.getElementById('es-resumo-form').textContent = mob ? 'Lançar mobília ou equipamento' : 'Lançar estoque (lote)';
@@ -4027,7 +4040,7 @@ function renderEstoque(){
   document.getElementById('es-custo').placeholder = mob ? 'Valor pago ou avaliação por unidade (R$)' : 'Custo ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-preco').placeholder = mob ? 'Valor de venda por unidade (R$)' : 'Preço de venda ' + esPorQue(unSel) + ' (R$)';
   document.getElementById('es-origem').placeholder = mob ? 'Observação (ex.: estado, cor)' : 'Origem (ex.: fornecedor, compra, doação)';
-  mostrar('es-import-box', !mob); mostrar('es-filtro-box', !mob);
+  mostrar('es-import-box', !mob && socia); mostrar('es-filtro-box', !mob);
   document.getElementById('es-zerados-rot').textContent = mob ? 'mostrar vendidos' : 'mostrar esgotados';
   { const zl = document.getElementById('es-zerados'); const lab = zl && zl.closest('label'); if(lab) lab.style.display = mob ? 'none' : ''; }
   const lojaSel = document.getElementById('es-loja');
@@ -4233,7 +4246,7 @@ function renderEstoque(){
   const linhas = comStatus.filter(({p,s}) =>
     (zerados || s.chave !== 'esgotado') && (!filtro || s.chave === filtro) && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1));
   linhas.sort((a,b) => (ES_ORDEM[a.s.chave]-ES_ORDEM[b.s.chave]) || String(a.p.validade||'9999').localeCompare(String(b.p.validade||'9999')) || a.p.nome.localeCompare(b.p.nome));
-  const colVal = socia ? '<th>Custo (un. ou kg)</th><th>Preço de venda (un. ou kg)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th title="Margem de venda = (preço − custo) ÷ preço">Margem de venda</th><th></th>' : '';
+  const colVal = socia ? '<th>Custo (un. ou kg)</th><th>Preço de venda (un. ou kg)</th><th>Custo total</th><th>Venda total</th><th>Já recuperado</th><th title="Margem de venda = (preço − custo) ÷ preço">Margem de venda</th><th></th>' : (opera ? '<th></th>' : '');
   let tCap=0, tRec=0, tPot=0, tEC=0;
   const corpo = linhas.map(({p,s}) => {
     const cap = esValor(p.qtdInicial, p.unidade, p.custo), pot = esValor(p.estoque, p.unidade, p.preco);
@@ -4247,14 +4260,16 @@ function renderEstoque(){
       <td style="white-space:nowrap;text-align:right;">
         <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: transferência ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button>
         <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir lote" style="padding:2px 6px;">✏️</button>
-        <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : '';
+        <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : (opera ? `
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: transferência ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button></td>` : '');
     return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
       <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}</td>
       <td>${esc(esDono(p))}</td><td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}${esTransfDe(p) > 0 ? `<div class="hint" style="font-size:11px;">${esQtd(esR3(esTransfDe(p)),p.unidade)} já transferido(s)</div>` : ''}${p.unidade==='g'?`<div class="hint" style="font-size:11px;">${esR3(p.estoque/1000).toLocaleString('pt-BR')} kg</div>`:''}</td>
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
-  const colunas = socia ? 13 : 7;
+  const colunas = socia ? 13 : (opera ? 8 : 7);
   const rodape = (socia && linhas.length) ? `<tr><td colspan="10" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${esMargemTxt(tEC, tPot)}</td><td></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
     <thead><tr><th>Produto</th><th>Loja</th><th title="Onde o estoque está guardado (não é estoque daquela loja)">Alocado em</th><th>Quantidade</th><th>Vencimento</th><th>Prazo</th><th>Status</th><th>Lançado em</th>${colVal}</tr></thead>
@@ -4950,6 +4965,10 @@ async function tnCarregarConfig(){
     const {data} = await window.TN.sb.from('config_painel').select('chave,valor');
     (data||[]).forEach(r=>{
       if(r.chave==='ig_padrao_link') IG_PADRAO_LINK = r.valor||'';
+      if(r.chave==='estoque_operadores'){
+        try{ ESTOQUE_OPERADORES = (JSON.parse(r.valor||'[]')||[]).map(x=>String(x).trim().toLowerCase()).filter(Boolean); }catch(_){}
+        try{ renderEstoque(); }catch(_){}
+      }
       if(r.chave==='wa_avisos'){
         try{ const c = JSON.parse(r.valor||'{}');
              WA_AVISOS = { ligado: !!c.ligado, textos: { ...WA_AVISO_PADRAO, ...(c.textos||{}) } }; }
