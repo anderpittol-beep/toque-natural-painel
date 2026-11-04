@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 14:52";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 15:25";</script>
       </div>
     </div>
 
@@ -5855,8 +5855,7 @@ function compromissoMensal(ano, mes, loja){
     if(d.pago) return a;                       // ja saiu do caixa
     return a + (d.loja===loja ? valorFixaNaSoma(d) : (d.loja==='Todas' ? valorFixaNaSoma(d)/STORES.length : 0));
   }, 0);
-  const fc = fxMesAnterior(ano, mes);
-  const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=>g.loja===loja);
+  const doMes = folhaDoCaixa(ano, mes).filter(g=>g.loja===loja);
   const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gAPagar(g)), 0);
   const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0) + gDesconto(g)), 0);
   return fixas + salarios + encargos;
@@ -6361,6 +6360,18 @@ function fxKey(d){ return d.id || ('L:'+d.ano+'-'+d.mes+'-'+d.loja+'-'+d.descric
 function fxCompetencia(){ return MES_ABREV[fxMes] + '/' + String(fxAno).slice(2); }
 function fxGerenciavel(){ return fxAno > FIXAS_CORTE.ano || (fxAno===FIXAS_CORTE.ano && fxMes >= FIXAS_CORTE.mes); }
 function fxMesAnterior(a,m){ return m===1 ? {ano:a-1, mes:12} : {ano:a, mes:m-1}; }
+/* Folha que sai do caixa em um mes: a do mes anterior (pagamento dia 05). Loja que
+   fechou fica de fora dessa regra: a folha do mes do fechamento (rescisoes) e paga
+   no proprio mes, entao entra no mes do fechamento e nao sobra para o seguinte. */
+function lojaFechouEm(loja, ano, mes){
+  const e = LOJAS_ENCERRADAS[loja];
+  return !!e && e.ano === ano && e.mes === mes;
+}
+function folhaDoCaixa(ano, mes){
+  const p = fxMesAnterior(ano, mes);
+  return folhaDaCompetencia(p.ano, p.mes).filter(g=> !lojaFechouEm(g.loja, p.ano, p.mes))
+    .concat(folhaDaCompetencia(ano, mes).filter(g=> lojaFechouEm(g.loja, ano, mes)));
+}
 
 /* Despesas válidas para a competência: as do próprio mês; se ainda não houver
    lançamento nenhum, herda o mês anterior (recorrência). */
@@ -6496,7 +6507,7 @@ function renderCaixa(){
      ficava um mes adiantado em relacao ao pagamento de verdade. */
   const folhaComp = fxMesAnterior(fxAno, fxMes);
   const folhaCompLabel = (MES_ABREV[folhaComp.mes]||folhaComp.mes) + '/' + String(folhaComp.ano).slice(2);
-  const genteList = folhaDaCompetencia(folhaComp.ano, folhaComp.mes).filter(x=>inStore(x.loja));
+  const genteList = folhaDoCaixa(fxAno, fxMes).filter(x=>inStore(x.loja));
   /* Salarios e encargos saem em datas diferentes do mes, entao viram duas
      linhas com check proprio. A soma das duas e a mesma de antes: gTotal menos
      o encargo e exatamente a parte de salario. */
@@ -6631,8 +6642,7 @@ function renderCaixa(){
        de Despesas ja mostra e onde o check grava. Este cartao lia a folha do
        proprio mes, entao marcar pago em Despesas nao mexia aqui — eram dois
        registros diferentes. */
-    const fc = fxMesAnterior(ano, mes);
-    const doMes = folhaDaCompetencia(fc.ano, fc.mes).filter(g=> inStore(g.loja));
+    const doMes = folhaDoCaixa(ano, mes).filter(g=> inStore(g.loja));
     /* Salario e encargo tem checks separados — saem em datas diferentes. Antes
        este cartao descartava a pessoa inteira quando o salario era marcado como
        pago, e levava junto o encargo, que ainda nao tinha sido recolhido. */
