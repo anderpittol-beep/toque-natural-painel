@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 14:48";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 14:52";</script>
       </div>
     </div>
 
@@ -745,6 +745,7 @@ window.TN_CONFIG = {
             </form>
           </details>
           <div style="overflow-x:auto;"><table id="tbl-caixa"></table></div>
+          <div id="acertos-lojas" style="margin-top:14px;"></div>
           <div id="caixa-correcoes" style="display:none;"></div>
         </div>
 
@@ -6764,6 +6765,7 @@ function renderCaixa(){
       </button></td></tr>` : ''}</tbody>`;
 
   cxRenderBoletosBox();       // boletos carregam depois do script: atualiza a lista do fechamento
+  if(!acertosPedido && window.TN && window.TN.sb){ acertosPedido = true; acertosCarregar(); } else renderAcertos();
   const btnTodos = document.getElementById('cx-ver-todos');
   if(btnTodos) btnTodos.onclick = ()=>{ caixaVerTodos = !caixaVerTodos; renderCaixa(); };
 
@@ -9429,6 +9431,61 @@ function cxRenderBoletosBox(){
   box.querySelectorAll('input[data-cxbol]').forEach(i=> i.onchange = cxAtualizaSomaBoletos);
   cxAtualizaSomaBoletos();
 }
+/* Acerto entre lojas: quando um boleto de OUTRA loja sai do caixa do dia, a loja que
+   pagou passa a ter a receber da dona do boleto, ate quitar. Fica so no painel de
+   acertos: nao entra nas vendas, no caixa nem nas despesas de nenhuma das lojas. */
+let ACERTOS = null, ACERTOS_ERRO = '', acertosPedido = false;
+async function acertosCarregar(){
+  try{
+    const {data, error} = await window.TN.sb.from('acertos_lojas').select('*').order('criado_em',{ascending:false});
+    ACERTOS = error ? [] : (data||[]);
+    ACERTOS_ERRO = error ? error.message : '';
+  }catch(e){ ACERTOS = []; ACERTOS_ERRO = String(e); }
+  renderAcertos();
+}
+async function acertosRegistrar(boletos, lojaPagou, dataBr, caixaId){
+  const linhas = boletos.map(b=>({ data: dataBr, loja_pagou: lojaPagou, loja_deve: b.loja, valor: +b.valor||0,
+    descricao: String(b.descricao||'').replace(/\s*·.*$/,'').trim(), boleto_id: b.id||null, caixa_id: caixaId||null, quitado: false }));
+  try{
+    const {error} = await window.TN.sb.from('acertos_lojas').insert(linhas);
+    if(error) throw new Error(error.message);
+  }catch(e){
+    alert('Os boletos foram baixados, mas não consegui gravar o acerto entre lojas: ' + (e.message||e) + '\n\nAnote: ' + lojaPagou + ' pagou ' + linhas.map(l=>l.descricao + ' (' + l.loja_deve + ') ' + BRL(l.valor)).join('; '));
+  }
+  acertosCarregar();
+}
+function renderAcertos(){
+  const box = document.getElementById('acertos-lojas'); if(!box) return;
+  const socia = (typeof perfil!=='undefined' && perfil==='socia');
+  if(!socia || ACERTOS===null || !ACERTOS.length){ box.innerHTML = ''; return; }
+  const abertos = ACERTOS.filter(a=>!a.quitado), quitados = ACERTOS.filter(a=>a.quitado);
+  /* saldo liquido por par de lojas */
+  const par = {};
+  abertos.forEach(a=>{
+    const [x,y] = [a.loja_pagou, a.loja_deve].sort();
+    const k = x + '|' + y;
+    par[k] = (par[k]||0) + (a.loja_pagou===x ? +a.valor : -a.valor);   // positivo: y deve a x
+  });
+  const resumo = Object.entries(par).filter(([,v])=>Math.abs(v)>0.005).map(([k,v])=>{
+    const [x,y] = k.split('|'); return v>0 ? y + ' deve ' + BRL(v) + ' a ' + x : x + ' deve ' + BRL(-v) + ' a ' + y; });
+  box.innerHTML = `<details ${abertos.length?'open':''}><summary class="strong" style="cursor:pointer;">Acertos entre lojas — em aberto: ${BRL(abertos.reduce((a,x)=>a+(+x.valor||0),0))}</summary>
+    <p class="hint" style="margin:6px 0;">Boletos de uma loja pagos no caixa de outra. Não entram nas vendas, no caixa nem nas despesas — só aqui, até quitar.${resumo.length ? '<br><strong>' + resumo.map(esc).join(' · ') + '</strong>' : ''}</p>
+    <table><thead><tr><th>Data</th><th>Quem pagou</th><th>Boleto de</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
+    ${abertos.map(a=>`<tr><td>${esc(a.data)}</td><td>${esc(a.loja_pagou)}</td><td>${esc(a.loja_deve)}</td><td>${esc(a.descricao||'')}</td><td class="strong">${BRL(a.valor)}</td>
+       <td><button class="btn ghost" data-acquitar="${esc(a.id)}" style="padding:2px 8px;">quitar</button></td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nada em aberto.</td></tr>'}
+    </tbody></table>
+    ${quitados.length ? `<p class="hint" style="margin:6px 0 0;">${quitados.length} acerto${quitados.length>1?'s':''} já quitado${quitados.length>1?'s':''}, ${BRL(quitados.reduce((a,x)=>a+(+x.valor||0),0))}.</p>` : ''}
+    ${ACERTOS_ERRO ? `<p class="hint" style="color:var(--critical);">${esc(ACERTOS_ERRO)}</p>` : ''}</details>`;
+  box.querySelectorAll('[data-acquitar]').forEach(b=>{
+    b.onclick = async ()=>{
+      const a = ACERTOS.find(x=>String(x.id)===b.dataset.acquitar); if(!a) return;
+      if(!confirm(a.loja_deve + ' quitou ' + BRL(a.valor) + ' com ' + a.loja_pagou + ' (' + a.descricao + ')?')) return;
+      const {error} = await window.TN.sb.from('acertos_lojas').update({quitado:true, quitado_em:new Date().toISOString()}).eq('id', a.id);
+      if(error){ alert('Não consegui quitar: ' + error.message); return; }
+      acertosCarregar();
+    };
+  });
+}
 (function(){
   const l = document.getElementById('cx-loja'), s = document.getElementById('cx-saidas');
   if(l) l.addEventListener('change', cxRenderBoletosBox);
@@ -9513,6 +9570,8 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   cxReg.criado_em = cxSalvo.criado_em || AGORA_ISO();
   /* baixa dos boletos marcados: ficam como Pago e o texto da baixa fica no dia */
   cxBolMarcados.forEach(b=>{ b.status = 'Pago'; if(b.id) tnUpdate('boletos',{id:b.id},{status:'Pago'}); });
+  const cxOutrasLojas = cxBolMarcados.filter(b=>b.loja!==cxLoja);
+  if(cxOutrasLojas.length) acertosRegistrar(cxOutrasLojas, cxLoja, cxData, cxReg.id);
   const av = document.getElementById('cx-aviso');
   if(av){ av.textContent = '✓ ' + cxData + ' registrado em ' + cxLoja + ' com ' + BRL(cxReg.vendas) + ' de vendas.';
           setTimeout(()=>{ if(av.textContent.startsWith('✓ ' + cxData)) av.textContent=''; }, 8000); }
