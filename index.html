@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 15:37";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 15:58";</script>
       </div>
     </div>
 
@@ -4263,17 +4263,27 @@ function renderEstoque(){
         <button class="btn ghost" data-es="excluir" data-id="${esc(p.id)}" title="Excluir lote" style="padding:2px 6px;">🗑️</button></td>` : (opera ? `
       <td style="white-space:nowrap;text-align:right;">
         <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Dar baixa: transferência ou perda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>➖</button></td>` : '');
-    return `<tr${s.chave==='esgotado'?' style="opacity:.55;"':''}>
-      <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}</td>
+    /* lote zerado: marca d'agua + como foi usado (transferido, perdido, vendido) */
+    const usoTxt = s.chave === 'esgotado' ? [
+      esTransfDe(p) > 0 ? 'transferido ' + esQtd(esR3(esTransfDe(p)), p.unidade) : '',
+      (+p.perdido||0) > 0 ? 'perda ' + esQtd(p.perdido, p.unidade) : '',
+      (+p.vendido||0) > 0 ? 'venda ' + esQtd(p.vendido, p.unidade) : ''].filter(Boolean).join(' · ') : '';
+    return `<tr${s.chave==='esgotado'?' style="opacity:.5;filter:grayscale(.6);"':''}>
+      <td class="strong">${esc(p.nome)}${p.categoria?`<span class="store-tag">${esc(p.categoria)}</span>`:''}${usoTxt?`<div class="hint" style="font-size:11px;font-weight:400;">usado: ${esc(usoTxt)}</div>`:''}</td>
       <td>${esc(esDono(p))}</td><td>${esc(p.loja)}</td><td class="strong">${esQtd(p.estoque,p.unidade)}${esTransfDe(p) > 0 ? `<div class="hint" style="font-size:11px;">${esQtd(esR3(esTransfDe(p)),p.unidade)} já transferido(s)</div>` : ''}${p.unidade==='g'?`<div class="hint" style="font-size:11px;">${esR3(p.estoque/1000).toLocaleString('pt-BR')} kg</div>`:''}</td>
       <td>${esFmtData(p.validade)}</td><td>${dias}</td>
       <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${cel}</tr>`;
   }).join('');
   const colunas = socia ? 13 : (opera ? 8 : 7);
   const rodape = (socia && linhas.length) ? `<tr><td colspan="10" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tCap)}</td><td class="strong">${BRL(tPot)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${esMargemTxt(tEC, tPot)}</td><td></td></tr>` : '';
+  /* lotes zerados ficam ocultos; um clique mostra (esmaecidos) quais ja foram usados */
+  const nUsados = comStatus.filter(({p,s}) => s.chave === 'esgotado' && (!filtro || filtro === 'esgotado') && (!busca || esNorm(p.nome + ' ' + p.categoria).indexOf(busca) !== -1)).length;
+  const verUsados = (nUsados && !mob) ? `<tr><td colspan="${colunas}" style="padding:6px 0;"><button class="btn ghost" id="es-ver-usados" style="padding:3px 10px;font-size:12px;">${zerados ? '▾ ocultar os lotes já usados' : '▸ ver os ' + nUsados + (nUsados===1 ? ' lote já usado (zerado)' : ' lotes já usados (zerados)')}</button></td></tr>` : '';
   document.getElementById('tbl-estoque').innerHTML = `
     <thead><tr><th>Produto</th><th>Loja</th><th title="Onde o estoque está guardado (não é estoque daquela loja)">Alocado em</th><th>Quantidade</th><th>Vencimento</th><th>Prazo</th><th>Status</th><th>Lançado em</th>${colVal}</tr></thead>
-    <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${daAba.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}</tbody>`;
+    <tbody>${corpo || `<tr><td colspan="${colunas}" class="hint">${daAba.length ? 'Nenhum lote com esse filtro.' : 'Nenhum lote lançado ainda. Use “Lançar estoque” ou importe a planilha.'}</td></tr>`}${rodape}${verUsados}</tbody>`;
+  const btnUsados = document.getElementById('es-ver-usados');
+  if(btnUsados) btnUsados.onclick = ()=>{ const z = document.getElementById('es-zerados'); if(z){ z.checked = !z.checked; renderEstoque(); } };
 }
 
 /* ============ RENDER: CLIENTES ============ */
