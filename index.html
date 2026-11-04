@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="03/11/2026, 19:40";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="04/11/2026, 14:48";</script>
       </div>
     </div>
 
@@ -737,6 +737,8 @@ window.TN_CONFIG = {
               <input type="number" id="cx-inicial" placeholder="Saldo inicial (opcional)" step="0.01" min="0">
               <input type="number" id="cx-entradas" placeholder="Entradas do dia (opcional)" step="0.01" min="0">
               <input type="number" id="cx-saidas" placeholder="Saídas / pagamentos (opcional)" step="0.01" min="0">
+              <div id="cx-bol-box" style="grid-column:1/-1;"></div>
+              <input type="text" id="cx-saidas-obs" placeholder="Outras saídas (retirada, conta, compra...) — descreva o que não é boleto" maxlength="300" style="grid-column:1/-1;">
               <button class="btn primary" type="submit" id="cx-registrar" style="grid-column:1/-1;">Registrar dia</button>
               <p class="hint" style="grid-column:1/-1;margin:2px 0 0;">Só o <strong>total de vendas</strong> é obrigatório. Os campos de saldo podem ficar em branco — o painel entende como zero, não precisa inventar valor.</p>
               <p class="hint" id="cx-aviso" style="grid-column:1/-1;margin:2px 0 0;color:var(--good);min-height:15px;"></p>
@@ -1522,6 +1524,8 @@ let METAS_MENSAIS = { "Ouro Verde":25000, "Itaipulândia":30000, "Toledo":10000 
    folha), mas dali em diante nao ha meta, nem lancamento de vendas diarias, nem
    cobranca de posicao de caixa. A meta e uma por loja, sem data, entao a regra
    vive aqui: a partir do mes do fechamento a meta da loja vale zero. */
+/* Saida de caixa acima disso exige descricao no fechamento (conciliacao com banco e boletos). */
+const LIMITE_SAIDA_SEM_DESCRICAO = 100;
 const LOJAS_ENCERRADAS = { 'Toledo': {ano:2026, mes:10, dia:15, fixas_apos:['escritorio']} };
 /* Despesa e folha se copiam de um mes para o outro. Depois do mes do fechamento,
    a loja encerrada so herda o que continua por causa do CNPJ e da conta (aqui, o
@@ -6721,7 +6725,8 @@ function renderCaixa(){
           <td colspan="3" class="hint">recalculado ao salvar</td>
           <td><input type="number" data-ce="inicial" value="${+c.inicial||0}" step="0.01" style="width:100px;"></td>
           <td><input type="number" data-ce="entradas" value="${+c.entradas||0}" step="0.01" style="width:100px;"></td>
-          <td><input type="number" data-ce="saidas" value="${+c.saidas||0}" step="0.01" style="width:96px;"></td>
+          <td><input type="number" data-ce="saidas" value="${+c.saidas||0}" step="0.01" style="width:96px;">
+            <input type="text" data-ce="obs" value="${esc(c.obs||'')}" placeholder="o que foi pago/retirado" maxlength="300" style="width:150px;margin-top:3px;"></td>
           <td class="hint">—</td>
           <td style="white-space:nowrap;">
             <button class="btn primary" data-cxsalvar="${esc(chave)}" style="padding:2px 8px;">salvar</button>
@@ -6746,7 +6751,8 @@ function renderCaixa(){
         <td style="color:${pctColor(pct)};font-weight:600;">${meta>0?carinhaHTML(pct, 1)+' '+pct.toFixed(0)+'%':'<span class="hint">—</span>'}</td>
         <td>${BRL(c.inicial)}</td>
         <td>${BRL(c.entradas)}</td>
-        <td>${BRL(c.saidas)}</td>
+        <td>${BRL(c.saidas)}${c.obs ? `<div class="hint" style="font-size:11px;max-width:190px;white-space:normal;">${esc(c.obs)}</div>`
+            : ((+c.saidas||0) > LIMITE_SAIDA_SEM_DESCRICAO ? `<div class="hint" style="font-size:11px;color:var(--warn,#b7791f);">sem descrição</div>` : '')}</td>
         <td class="strong" style="color:${f>=0?'var(--good)':'var(--critical)'};">${BRL(f)}</td>
         ${cxPodeEditar?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-cxeditar="${esc(chave)}" title="Corrigir este dia" style="padding:2px 6px;">✏️</button>
@@ -6757,6 +6763,7 @@ function renderCaixa(){
         ${caixaVerTodos ? '▾ mostrar só o último dia' : '▸ ver os ' + diasAnteriores + (diasAnteriores===1?' dia anterior':' dias anteriores')}
       </button></td></tr>` : ''}</tbody>`;
 
+  cxRenderBoletosBox();       // boletos carregam depois do script: atualiza a lista do fechamento
   const btnTodos = document.getElementById('cx-ver-todos');
   if(btnTodos) btnTodos.onclick = ()=>{ caixaVerTodos = !caixaVerTodos; renderCaixa(); };
 
@@ -6778,11 +6785,17 @@ function renderCaixa(){
         const v = k => { const el = tr.querySelector('[data-ce="'+k+'"]'); return el ? el.value : ''; };
         const novaData = v('data').trim();
         if(!dataBRNoPainel(novaData)){ alert('Data inválida — use dd/mm/aaaa, a partir de 01/09/2026.'); return; }
+        const novasSaidas = num(v('saidas'))||0, novaObs = v('obs').trim();
+        if(novasSaidas > LIMITE_SAIDA_SEM_DESCRICAO && novaObs.length < 4){
+          alert('As saídas passam de ' + BRL(LIMITE_SAIDA_SEM_DESCRICAO) + ': descreva o que foi pago ou retirado.');
+          const el = tr.querySelector('[data-ce="obs"]'); if(el) el.focus();
+          return;
+        }
         const antes = { data:c.data, loja:c.loja, vendas:+c.vendas||0, inicial:+c.inicial||0,
                         entradas:+c.entradas||0, saidas:+c.saidas||0 };
         Object.assign(c, { data: novaData, loja: v('loja'),
           vendas: num(v('vendas'))||0, inicial: num(v('inicial'))||0,
-          entradas: num(v('entradas'))||0, saidas: num(v('saidas'))||0 });
+          entradas: num(v('entradas'))||0, saidas: novasSaidas, obs: novaObs });
         c.final = c.inicial + c.entradas - c.saidas;
         const depois = { data:c.data, loja:c.loja, vendas:c.vendas, inicial:c.inicial,
                          entradas:c.entradas, saidas:c.saidas };
@@ -6790,7 +6803,7 @@ function renderCaixa(){
         if(c.id){
           c.atualizado_em = AGORA_ISO();
           tnUpdate('caixa_diario', {id: c.id}, { data: c.data, loja: c.loja, vendas: c.vendas,
-            saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saldo_final: c.final,
+            saldo_inicial: c.inicial, entradas: c.entradas, saidas: c.saidas, saidas_obs: c.obs||'', saldo_final: c.final,
             atualizado_em: c.atualizado_em });
         }
         if(mudou) registrarCorrecao('editou', c, antes, depois);
@@ -9381,6 +9394,47 @@ async function cxJaFechado(data, loja){
     return (linhas && linhas.length) ? linhas[0] : null;
   }catch(e){ return null; }
 }
+/* Boletos em aberto da loja escolhida no fechamento: marcar = pago no caixa (baixa ao registrar). */
+function cxBoletosAbertos(){
+  const loja = (document.getElementById('cx-loja')||{}).value;
+  /* inclui boletos a vencer (antecipados) e de outras lojas: Ouro Verde costuma
+     pagar adiantado e tambem boletos de Itaipulandia. Os da loja do dia vem primeiro. */
+  return BOLETOS.filter(b=> b.status==='Pendente')
+    .sort((a,b)=> ((a.loja===loja?0:1) - (b.loja===loja?0:1)) || ((parseBR(a.data)||0) - (parseBR(b.data)||0)) || String(a.descricao).localeCompare(String(b.descricao)));
+}
+function cxBoletosMarcados(){
+  const abertos = cxBoletosAbertos();
+  return [...document.querySelectorAll('#cx-bol-box input[data-cxbol]:checked')]
+    .map(i=> abertos[+i.dataset.cxbol]).filter(Boolean);
+}
+function cxAtualizaSomaBoletos(){
+  const el = document.getElementById('cx-bol-soma'); if(!el) return;
+  const soma = cxBoletosMarcados().reduce((a,b)=>a+(+b.valor||0),0);
+  const sai = num((document.getElementById('cx-saidas')||{}).value) || 0;
+  const dif = Math.round((sai - soma)*100)/100;
+  el.textContent = 'Marcados: ' + BRL(soma) + ' de ' + BRL(sai) + ' de saídas' +
+    (sai > 0 ? (dif > 0.01 ? ' — descreva os ' + BRL(dif) + ' restantes abaixo' : (dif < -0.01 ? ' — boletos passam das saídas em ' + BRL(-dif) : ' — fecha certinho')) : '');
+}
+function cxRenderBoletosBox(){
+  const box = document.getElementById('cx-bol-box'); if(!box) return;
+  const ab = cxBoletosAbertos();
+  const marcados = new Set(cxBoletosMarcados().map(b=>b.id||b.descricao));
+  box.innerHTML = `<div class="hint" style="margin:0 0 4px;"><strong>Boletos pagos no caixa hoje</strong> — marque os que saíram do caixa, mesmo os adiantados (a vencer) ou de outra loja: a baixa (Pago) é dada ao registrar o dia. Obrigatório se as saídas passarem de ${BRL(LIMITE_SAIDA_SEM_DESCRICAO)} (o que não for boleto, descreva abaixo).</div>
+    <div style="max-height:150px;overflow:auto;border:1px solid rgba(0,0,0,0.12);border-radius:6px;padding:4px 8px;">
+    ${ab.length ? ab.map((b,i)=>`<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;padding:2px 0;cursor:pointer;">
+        <input type="checkbox" data-cxbol="${i}" ${marcados.has(b.id||b.descricao)?'checked':''}>
+        <span>${esc(b.data)} · ${esc(String(b.descricao).slice(0,60))} · <strong>${BRL(b.valor)}</strong>${b.loja!==(document.getElementById('cx-loja')||{}).value ? ' <span class="badge b-warning" style="vertical-align:middle;">' + esc(b.loja) + '</span>' : ''}${(parseBR(b.data)||0) > TODAY ? ' <span class="hint">(a vencer)</span>' : ''}</span></label>`).join('')
+      : '<span class="hint">Nenhum boleto em aberto.</span>'}</div>
+    <div class="hint" id="cx-bol-soma" style="margin:3px 0 0;"></div>`;
+  box.querySelectorAll('input[data-cxbol]').forEach(i=> i.onchange = cxAtualizaSomaBoletos);
+  cxAtualizaSomaBoletos();
+}
+(function(){
+  const l = document.getElementById('cx-loja'), s = document.getElementById('cx-saidas');
+  if(l) l.addEventListener('change', cxRenderBoletosBox);
+  if(s) s.addEventListener('input', cxAtualizaSomaBoletos);
+  cxRenderBoletosBox();
+})();
 document.getElementById('form-caixa').addEventListener('submit', async e=>{
   e.preventDefault();
   if(cxGravando) return;              // trava o clique duplo enquanto grava
@@ -9403,6 +9457,28 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     return;
   }
   const cxLoja = document.getElementById('cx-loja').value;
+  /* saida de caixa acima do limite precisa dizer o que foi (fornecedor, retirada...):
+     sem isso a conciliacao com banco e boletos nao fecha */
+  const cxSaidasVal = num(document.getElementById('cx-saidas').value) || 0;
+  const cxObsDigitada = (document.getElementById('cx-saidas-obs').value || '').trim();
+  const cxBolMarcados = cxBoletosMarcados();
+  const cxBolSoma = cxBolMarcados.reduce((a,b)=>a+(+b.valor||0),0);
+  /* o que passa de R$ 100 precisa de explicacao: boleto marcado (ja da baixa) e/ou texto.
+     O que sobra depois dos boletos marcados tem que ser descrito. */
+  if(cxSaidasVal > LIMITE_SAIDA_SEM_DESCRICAO){
+    const sobra = Math.round((cxSaidasVal - cxBolSoma)*100)/100;
+    if(!cxBolMarcados.length && cxObsDigitada.length < 4){
+      alert('As saídas do dia passam de ' + BRL(LIMITE_SAIDA_SEM_DESCRICAO) + '.\n\nMarque os boletos que foram pagos no caixa (a baixa é dada ao registrar) e/ou descreva o que foi pago ou retirado (ex.: "retirada Vanessa").');
+      return;
+    }
+    if(sobra > 0.01 && cxObsDigitada.length < 4){
+      alert('Os boletos marcados somam ' + BRL(cxBolSoma) + ', mas as saídas são ' + BRL(cxSaidasVal) + '.\n\nDescreva os ' + BRL(sobra) + ' restantes (retirada, conta, compra...).');
+      const el = document.getElementById('cx-saidas-obs'); if(el) el.focus();
+      return;
+    }
+    if(sobra < -0.01 && !confirm('Os boletos marcados somam ' + BRL(cxBolSoma) + ', mais que as saídas do dia (' + BRL(cxSaidasVal) + ').\n\nRegistrar mesmo assim?')) return;
+  }
+  const cxObs = [cxBolMarcados.length ? 'Baixa: ' + cxBolMarcados.map(b=>String(b.descricao||'').replace(/\s*·.*$/,'').trim() + (b.loja!==cxLoja ? ' (' + b.loja + ')' : '') + ' ' + BRL(b.valor)).join('; ') : '', cxObsDigitada].filter(Boolean).join(' | ');
   /* o fechamento e um por dia e por loja: avisa antes de duplicar */
   const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja)
              || await cxJaFechado(cxData, cxLoja);
@@ -9415,7 +9491,8 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     vendas: cxVendas,
     inicial: num(document.getElementById('cx-inicial').value)||0,
     entradas: num(document.getElementById('cx-entradas').value)||0,
-    saidas: num(document.getElementById('cx-saidas').value)||0,
+    saidas: cxSaidasVal,
+    obs: cxObs,
     conta: 0,
   };
   CAIXA_DIARIO.push(cxReg);
@@ -9425,7 +9502,7 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   if(btnCx){ btnCx.disabled = true; btnCx.textContent = 'gravando…'; }
   const soltar = ()=>{ cxGravando = false; if(btnCx){ btnCx.disabled = false; btnCx.textContent = 'Registrar dia'; } };
   const cxSalvo = await tnInsertRet('caixa_diario', {data:cxReg.data, loja:cxReg.loja, vendas:cxReg.vendas,
-    saldo_inicial:cxReg.inicial, entradas:cxReg.entradas, saidas:cxReg.saidas, saldo_final:(cxReg.inicial+cxReg.entradas-cxReg.saidas)});
+    saldo_inicial:cxReg.inicial, entradas:cxReg.entradas, saidas:cxReg.saidas, saidas_obs:cxReg.obs, saldo_final:(cxReg.inicial+cxReg.entradas-cxReg.saidas)});
   soltar();
   if(!cxSalvo){
     CAIXA_DIARIO.pop();
@@ -9434,11 +9511,14 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   }
   cxReg.id = cxSalvo.id;
   cxReg.criado_em = cxSalvo.criado_em || AGORA_ISO();
+  /* baixa dos boletos marcados: ficam como Pago e o texto da baixa fica no dia */
+  cxBolMarcados.forEach(b=>{ b.status = 'Pago'; if(b.id) tnUpdate('boletos',{id:b.id},{status:'Pago'}); });
   const av = document.getElementById('cx-aviso');
   if(av){ av.textContent = '✓ ' + cxData + ' registrado em ' + cxLoja + ' com ' + BRL(cxReg.vendas) + ' de vendas.';
           setTimeout(()=>{ if(av.textContent.startsWith('✓ ' + cxData)) av.textContent=''; }, 8000); }
   const _msg = av ? av.textContent : '';
   e.target.reset();
+  cxRenderBoletosBox();               // os boletos baixados saem da lista
   if(av) av.textContent = _msg;      // o reset limpa o aviso; devolve a confirmacao
   cxDataHoje();
   renderCaixa(); renderDesempenho();
@@ -10549,7 +10629,7 @@ async function tnLoadAll(sb){
      subiu pelo painel, e vale para todo mundo que abrir. */
   try{ EQUIPE.forEach(e=>{ if(e && e.foto) FOTOS[e.nome] = e.foto; }); }catch(e){}
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
-  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
+  try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,obs:r.saidas_obs||'',final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
   try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
