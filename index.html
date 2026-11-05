@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:14";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:34";</script>
       </div>
     </div>
 
@@ -7461,7 +7461,8 @@ async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
   if(!herdadas.length) return false;
   const regs = herdadas.map(g=>({ competencia: gtCompetencia(), ano: gtAno, mes: gtMes, pessoa: g.pessoa,
-                 papel: g.papel, loja: g.loja, salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0, vale: +g.vale||0,
+                 papel: g.papel, loja: g.loja, vinculo: g.vinculo || 'CLT',   // sem isto a MEI virava CLT no mes novo e levava desconto de INSS
+                 salario: +g.salario||0, comissao: 0, encargo: +g.encargo||0, vale: +g.vale||0,
                  horas_dia: g.horas_dia==null ? null : +g.horas_dia, horas_extras: 0,
                  origem: 'painel', pago: false, pago_em: null }));
   regs.forEach(r=>GENTE.push(r));
