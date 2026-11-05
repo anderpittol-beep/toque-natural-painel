@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:57";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:59";</script>
       </div>
     </div>
 
@@ -3704,7 +3704,7 @@ function renderInvFiscal(){
   const positivas = todas.filter(r=>(+r.saldo||0) > 0);
   const valCusto = todas.reduce((a,r)=>a+(+r.valor_total||0),0);
   const valVenda = positivas.reduce((a,r)=>a+(r.preco_venda!=null ? (+r.preco_venda||0)*(+r.saldo||0) : 0),0);
-  const valCustoPos = positivas.reduce((a,r)=>a+(+r.custo||0)*(+r.saldo||0),0);
+  const valCustoPos = positivas.reduce((a,r)=>a+(+r.valor_total||0),0);
   const negativas = todas.filter(r=>(+r.saldo||0) < 0);
   const repetidas = todas.filter(r=>rep[r.id] > 1);
   const valRep = repetidas.reduce((a,r)=>a+(+r.valor_total||0),0);
