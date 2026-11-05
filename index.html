@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 14:28";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:14";</script>
       </div>
     </div>
 
@@ -1912,6 +1912,10 @@ function gDesconto(g){
 const gLiquido = g => cent((+g.salario||0) - gDesconto(g));
 /* O campo salario guarda o BRUTO. O que a pessoa recebe e o liquido. */
 const gAPagar = g => cent(gLiquido(g)+gComissao(g)+gExtras(g)+(g.vale||0));
+/* Pagamento parcial: parte do salario que ja saiu (ex.: saque da socia). Nao muda o custo da
+   folha nem o "a pagar" do mes; so reduz o que ainda falta sair do caixa. */
+const gParcial = g => Math.max(0, +g.pago_parcial || 0);
+const gFalta = g => Math.max(0, cent(gAPagar(g) - gParcial(g)));
 /* Encargo = FGTS, 8% do salario BRUTO. O painel guarda o liquido no campo
    salario, e o bruto e sempre um pouco maior (o INSS ja saiu dele), entao o
    FGTS correto cai entre ~8% e ~9,5% do que esta gravado. Fora dessa faixa o
@@ -5953,7 +5957,7 @@ function compromissoMensal(ano, mes, loja){
     return a + (d.loja===loja ? valorFixaNaSoma(d) : (d.loja==='Todas' ? valorFixaNaSoma(d)/STORES.length : 0));
   }, 0);
   const doMes = folhaDoCaixa(ano, mes).filter(g=>g.loja===loja);
-  const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gAPagar(g)), 0);
+  const salarios = doMes.reduce((a,g)=> a + (g.pago ? 0 : gFalta(g)), 0);
   const encargos = doMes.reduce((a,g)=> a + (g.encargo_pago ? 0 : (+g.encargo||0) + gDesconto(g)), 0);
   return fixas + salarios + encargos;
 }
@@ -6743,7 +6747,7 @@ function renderCaixa(){
     /* Salario e encargo tem checks separados — saem em datas diferentes. Antes
        este cartao descartava a pessoa inteira quando o salario era marcado como
        pago, e levava junto o encargo, que ainda nao tinha sido recolhido. */
-    const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : gAPagar(g)), 0);
+    const sal = doMes.reduce((a,g)=> a + ((ehMesBase && g.pago) ? 0 : (ehMesBase ? gFalta(g) : gAPagar(g))), 0);
     const enc = doMes.reduce((a,g)=> a + ((ehMesBase && g.encargo_pago) ? 0 : (+g.encargo||0) + gDesconto(g)), 0);
     const fl = sal + enc;
     /* A retencao de 13o e ferias NAO entra no que vai sair: a socia aplica o
@@ -6988,7 +6992,7 @@ function renderCaixa(){
                </label></td><td></td>`
           : '';
         return guardaFolha(
-          `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}</td>${chk}</tr>`,
+          `<tr><td class="strong">Salário — ${esc(g.pessoa)} <span class="hint">folha de ${esc(folhaCompLabel)}</span></td><td>${esc(l)}</td><td>—</td><td>${BRL(valor)}${gParcial(g)>0?`<div class="hint" style="font-size:11px;">já pago ${BRL(gParcial(g))}${g.pago?'':' · falta '+BRL(gFalta(g))}${g.pago_parcial_obs?' · '+esc(g.pago_parcial_obs):''}</div>`:''}</td>${chk}</tr>`,
           !!g.pago && pagoAntesDeHoje(g.pago_em));
       }).join('')
       + (()=>{
@@ -7451,7 +7455,7 @@ function folhaDaCompetencia(ano, mes, prof){
   const p = fxMesAnterior(ano, mes);
   return folhaDaCompetencia(p.ano, p.mes, prof+1)
     .filter(g=> herdaPermitida(g.loja, g.pessoa, ano, mes, 'folha'))
-    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, comissao_congelada:false, horas_extras:0, pago:false, pago_em:null}));
+    .map(g=> ({...g, id:null, herdada:true, ano, mes, comissao:0, comissao_congelada:false, horas_extras:0, pago:false, pago_em:null, pago_parcial:0, pago_parcial_obs:''}));
 }
 async function gtMaterializar(){
   const herdadas = folhaDaCompetencia(gtAno, gtMes).filter(g=>g.herdada);
@@ -7529,7 +7533,9 @@ function renderGente(){
           <td><input type="number" data-ge="comissao" value="${+g.comissao||0}" step="0.01" title="0 = o painel calcula pela % da meta da loja" style="width:92px;"></td>
           <td><input type="number" data-ge="encargo" value="${+g.encargo||0}" step="0.01" style="width:92px;"></td>
           <td><input type="number" data-ge="vale" value="${+g.vale||0}" step="0.01" style="width:88px;"></td>
-          <td class="strong">—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td class="strong">—</td><td>—</td><td>—</td><td>—</td>
+          <td><input type="number" data-ge="pago_parcial" value="${gParcial(g)||''}" step="0.01" min="0" placeholder="já pago (parcial)" title="Parte do salário que já foi paga ou sacada neste mês" style="width:120px;">
+              <input type="text" data-ge="pago_parcial_obs" value="${esc(g.pago_parcial_obs||'')}" placeholder="obs (ex.: saque 04/11)" maxlength="120" style="width:120px;margin-top:3px;"></td>
           <td style="white-space:nowrap;"><button class="btn primary" data-gsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-gcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
@@ -7567,7 +7573,7 @@ function renderGente(){
         <td>${BRL(p.t13)}</td>
         <td>${BRL(p.fer)}</td>
         <td class="strong">${BRL(gTotal(g)+p.total)}</td>
-        <td class="strong" style="color:var(--good);font-size:14px;white-space:nowrap;">${BRL(gAPagar(g))}</td>
+        <td class="strong" style="color:var(--good);font-size:14px;white-space:nowrap;">${BRL(gAPagar(g))}${gParcial(g)>0?`<div class="hint" style="font-size:11px;font-weight:400;white-space:normal;color:var(--text,inherit);">já pago ${BRL(gParcial(g))}${g.pago?'':' · falta '+BRL(gFalta(g))}${g.pago_parcial_obs?' · '+esc(g.pago_parcial_obs):''}</div>`:''}</td>
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-geditar="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-gexcluir="1" data-gp="${esc(g.pessoa)}" data-gl="${esc(g.loja)}" data-gr="${esc(g.papel)}" title="Excluir" style="padding:2px 6px;">🗑️</button></td>`:''}
@@ -7627,10 +7633,12 @@ function renderGente(){
       const hd = get('horas_dia');
       Object.assign(g, { pessoa:pes, papel:get('papel'), loja:get('loja'),
         salario:num(get('salario'))||0, comissao:num(get('comissao'))||0, encargo:num(get('encargo'))||0, vale:num(get('vale'))||0,
-        horas_dia: hd==='' ? null : (num(hd)||0), horas_extras: num(get('horas_extras'))||0 });
+        horas_dia: hd==='' ? null : (num(hd)||0), horas_extras: num(get('horas_extras'))||0,
+        pago_parcial: Math.max(0, num(get('pago_parcial'))||0), pago_parcial_obs: get('pago_parcial_obs') });
       g.atualizado_em = new Date().toISOString();
       if(g.id) tnUpdate('folha',{id:g.id},{pessoa:g.pessoa,papel:g.papel,loja:g.loja,salario:g.salario,comissao:g.comissao,
-        encargo:g.encargo,vale:g.vale,horas_dia:g.horas_dia,horas_extras:g.horas_extras,atualizado_em:g.atualizado_em});
+        encargo:g.encargo,vale:g.vale,horas_dia:g.horas_dia,horas_extras:g.horas_extras,
+        pago_parcial:g.pago_parcial,pago_parcial_obs:g.pago_parcial_obs||null,atualizado_em:g.atualizado_em});
       folhaEditando=null; renderGente(); renderCaixa();
     };
   });
@@ -10779,7 +10787,7 @@ async function tnLoadAll(sb){
   const compAno = r => { if(r.ano) return +r.ano; const p=String(r.competencia||'').split('/'); return p[1] ? 2000 + (+p[1]) : null; };
   const compMes = r => { if(r.mes) return +r.mes; const p=String(r.competencia||'').split('/'); return p[0] ? MES_ABREV.indexOf(p[0]) || null : null; };
   try{ tnReplaceArray(DESPESAS_FIXAS,res.despesas_fixas,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,venc:r.venc||'',origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em})); }catch(e){}
-  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,vinculo:r.vinculo||'CLT',loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em,encargo_pago:!!r.encargo_pago,encargo_pago_em:r.encargo_pago_em})); }catch(e){}
+  try{ tnReplaceArray(GENTE,res.folha,r=>({id:r.id,ano:compAno(r),mes:compMes(r),competencia:r.competencia,pessoa:r.pessoa,papel:r.papel,vinculo:r.vinculo||'CLT',loja:r.loja,salario:+r.salario,comissao:+r.comissao,encargo:+r.encargo,vale:+r.vale||0,horas_dia:(r.horas_dia==null?null:+r.horas_dia),horas_extras:+r.horas_extras||0,comissao_congelada:!!r.comissao_congelada,atualizado_em:r.atualizado_em||null,origem:r.origem||'',pago:!!r.pago,pago_em:r.pago_em,encargo_pago:!!r.encargo_pago,encargo_pago_em:r.encargo_pago_em,pago_parcial:+r.pago_parcial||0,pago_parcial_obs:r.pago_parcial_obs||''})); }catch(e){}
   try{ tnReplaceArray(BOLETOS,res.boletos,r=>({id:r.id,ano:r.ano,mes:r.mes,data_pgto:r.data_pgto,data:r.data_pgto?dataBR(r.data_pgto):r.competencia,loja:r.loja,descricao:r.descricao,valor:+r.valor,status:r.status,origem:r.origem||'',compra_id:r.compra_id||null})); }catch(e){}
   try{ tnReplaceArray(COMPRAS,res.compras_nf,r=>({id:r.id,data:r.data,ano:r.ano,mes:r.mes,loja:r.loja,fornecedor:r.fornecedor,nf:r.nf,descricao:r.descricao,valor:+r.valor,parcelas:+r.parcelas||1,origem:r.origem||''})); }catch(e){}
   try{ if(res.metas_mensais.length){ res.metas_mensais.forEach(r=>{ METAS_MENSAIS[r.loja]=+r.valor; }); } }catch(e){}
