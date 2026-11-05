@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:34";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:57";</script>
       </div>
     </div>
 
@@ -3667,17 +3667,17 @@ function esOpera(){
   return !!e && ESTOQUE_OPERADORES.indexOf(e) !== -1;
 }
 
-/* ---------- Inventario fiscal (Registro de Inventario do programa fiscal) ----------
-   Fica separado dos lotes: e o que o sistema fiscal da loja diz que existe, ainda sem
-   conferencia fisica. Depois da contagem, a coluna "Contagem fisica" mostra a diferenca. */
-let INV_FISCAL = null, INV_FISCAL_ERRO = '', invFiscalPedido = false, invFiscalBusca = '', invFiscalFiltro = '';
-const INV_TOTAL_RELATORIO = { '2026-11-04': 49622.51 };   // valor total impresso no relatorio
+/* ---------- Inventario fiscal (relatorios do programa fiscal de cada loja) ----------
+   Fica separado dos lotes: e o que o sistema da loja diz que existe. Prioridade da tela:
+   nome, quantidade, custo e preco de venda. A contagem fisica entra depois, coluna propria. */
+let INV_FISCAL = null, INV_FISCAL_ERRO = '', invFiscalPedido = false, invFiscalBusca = '', invFiscalFiltro = '', invFiscalLoja = '';
+const INV_TOTAL_RELATORIO = { 'Ouro Verde|2026-11-04': 49622.51 };   // valor total impresso no relatorio
 const INV_CST = { '090':'Outros', '060':'Substituição', '040':'Isento' };
 async function invFiscalCarregar(){
   try{
     let todos = [], de = 0;
     while(true){
-      const {data, error} = await window.TN.sb.from('inventario_fiscal').select('*').order('ordem').range(de, de + 999);
+      const {data, error} = await window.TN.sb.from('inventario_fiscal').select('*').order('loja').order('ordem').range(de, de + 999);
       if(error){ INV_FISCAL_ERRO = error.message; break; }
       todos = todos.concat(data||[]);
       if(!data || data.length < 1000) break;
@@ -3692,44 +3692,70 @@ function renderInvFiscal(){
   if(!esSocia() || esMobilia() || INV_FISCAL === null || !INV_FISCAL.length){ box.style.display = 'none'; return; }
   box.style.display = '';
   const aberto = !!(box.querySelector('details') && box.querySelector('details').open) || box.dataset.aberto === '1';
-  const dataRef = INV_FISCAL[0].data_ref, loja = INV_FISCAL[0].loja;
+  const lojasInv = [...new Set(INV_FISCAL.map(r=>r.loja))];
+  if(!lojasInv.includes(invFiscalLoja)) invFiscalLoja = lojasInv[0];
+  const todas = INV_FISCAL.filter(r=>r.loja === invFiscalLoja);
+  const loja = invFiscalLoja, dataRef = todas[0].data_ref;
   const dt = String(dataRef).split('-').reverse().join('/');
+  const temPreco = todas.some(r=>r.preco_venda != null);
   /* linha repetida: mesmo codigo, saldo e valor ja listados antes (o relatorio soma todas) */
   const vistos = {}, rep = {};
-  INV_FISCAL.forEach(r=>{ const k = r.codigo + '|' + r.saldo + '|' + r.valor_total; vistos[k] = (vistos[k]||0) + 1; rep[r.id] = vistos[k]; });
-  const total = INV_FISCAL.reduce((a,r)=>a+(+r.valor_total||0),0);
-  const repetidas = INV_FISCAL.filter(r=>rep[r.id] > 1);
+  todas.forEach(r=>{ const k = r.codigo + '|' + r.saldo + '|' + r.valor_total; vistos[k] = (vistos[k]||0) + 1; rep[r.id] = vistos[k]; });
+  const positivas = todas.filter(r=>(+r.saldo||0) > 0);
+  const valCusto = todas.reduce((a,r)=>a+(+r.valor_total||0),0);
+  const valVenda = positivas.reduce((a,r)=>a+(r.preco_venda!=null ? (+r.preco_venda||0)*(+r.saldo||0) : 0),0);
+  const valCustoPos = positivas.reduce((a,r)=>a+(+r.custo||0)*(+r.saldo||0),0);
+  const negativas = todas.filter(r=>(+r.saldo||0) < 0);
+  const repetidas = todas.filter(r=>rep[r.id] > 1);
   const valRep = repetidas.reduce((a,r)=>a+(+r.valor_total||0),0);
-  const distintos = new Set(INV_FISCAL.map(r=>r.codigo)).size;
-  const porCst = {}; INV_FISCAL.forEach(r=>{ porCst[r.cst] = (porCst[r.cst]||0) + (+r.valor_total||0); });
-  const rel = INV_TOTAL_RELATORIO[dataRef];
+  const distintos = new Set(todas.map(r=>r.codigo)).size;
+  const semPreco = todas.filter(r=>!(+r.preco_venda > 0));
+  const porCst = {}; todas.forEach(r=>{ if(r.cst) porCst[r.cst] = (porCst[r.cst]||0) + (+r.valor_total||0); });
+  const rel = INV_TOTAL_RELATORIO[loja + '|' + dataRef];
+  const comContagem = todas.filter(r=>r.contagem_fisica != null).length;
   const busca = esNorm(invFiscalBusca);
-  const lista = INV_FISCAL.filter(r=> (!busca || esNorm(r.produto + ' ' + (r.fornecedor||'') + ' ' + r.codigo).indexOf(busca) !== -1)
-                                   && (!invFiscalFiltro || (invFiscalFiltro === 'rep' ? rep[r.id] > 1 : r.cst === invFiscalFiltro)));
-  const qtd = (r) => (+r.saldo).toLocaleString('pt-BR', {maximumFractionDigits:3}) + ' ' + (r.unidade||'');
-  box.innerHTML = `<details ${aberto?'open':''}><summary class="strong" style="cursor:pointer;">Inventário fiscal — ${esc(loja)} · ${esc(dt)} · ${BRL(total)}</summary>
-    <p class="hint" style="margin:6px 0 10px;">Relatório do programa fiscal (Registro de Inventário), lançado como veio, <strong>sem conferência física</strong>. Fica separado dos lotes do estoque. Depois da contagem, a coluna "Contagem física" mostra a diferença.</p>
+  const lista = todas.filter(r=> (!busca || esNorm(r.produto + ' ' + (r.fornecedor||'') + ' ' + r.codigo).indexOf(busca) !== -1)
+    && (!invFiscalFiltro || (invFiscalFiltro === 'rep' ? rep[r.id] > 1 : invFiscalFiltro === 'neg' ? (+r.saldo||0) < 0 : invFiscalFiltro === 'semp' ? !(+r.preco_venda > 0) : invFiscalFiltro === 'dif' ? (r.contagem_fisica != null && Math.abs((+r.contagem_fisica) - (+r.saldo)) > 0.0005) : r.cst === invFiscalFiltro)));
+  const num = (v)=> (+v).toLocaleString('pt-BR', {maximumFractionDigits:3});
+  const qtd = (r) => num(r.saldo) + (r.unidade ? ' ' + r.unidade : '');
+  const margem = (r) => (+r.preco_venda > 0 && r.custo != null) ? ((+r.preco_venda - +r.custo) / +r.preco_venda * 100) : null;
+  const abas = lojasInv.length > 1 ? `<div style="display:flex;gap:6px;margin:0 0 8px;">${lojasInv.map(l=>`<button class="btn ${l===loja?'primary':'ghost'}" data-invloja="${esc(l)}" style="padding:3px 10px;font-size:12px;">${esc(l)}</button>`).join('')}</div>` : '';
+  box.innerHTML = `<details ${aberto?'open':''}><summary class="strong" style="cursor:pointer;">Inventário fiscal — ${esc(lojasInv.join(' · '))}</summary>
+    <div style="margin-top:8px;">${abas}</div>
+    <p class="hint" style="margin:6px 0 10px;"><strong>${esc(loja)}</strong> · relatório de ${esc(dt)} do programa fiscal, lançado como veio. Fica separado dos lotes do estoque.
+      ${loja==='Itaipulândia' ? '<br>"Saldo" é o <strong>previsto</strong> pelo sistema; "Contagem" é o <strong>realizado</strong> da planilha. Saldo negativo = o sistema vendeu mais do que tinha entrado.' : 'Sem conferência física ainda: a coluna "Contagem" mostra a diferença quando for lançada.'}
+      ${temPreco ? '' : '<br><strong>Este relatório não traz preço de venda.</strong> Falta o relatório com "Custo final" e "Preço à vista" desta loja.'}</p>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:10px;">
-      <div class="card stat-tile"><div class="label">Linhas do relatório</div><div class="value">${INV_FISCAL.length}</div><div class="hint">${distintos} produtos distintos</div></div>
-      <div class="card stat-tile"><div class="label">Valor a custo</div><div class="value">${BRL(total)}</div><div class="hint">${rel!=null ? 'relatório: ' + BRL(rel) + (Math.abs(total-rel)>=0.005 ? ' · dif. ' + BRL(total-rel) + ' (arredondamento)' : '') : ''}</div></div>
-      <div class="card stat-tile"><div class="label">Linhas repetidas</div><div class="value">${repetidas.length}</div><div class="hint">${BRL(valRep)} — conferir na contagem</div></div>
-      <div class="card stat-tile"><div class="label">Por situação fiscal</div><div class="hint">${Object.keys(porCst).sort().map(c=>esc(INV_CST[c]||c) + ' ' + BRL(porCst[c])).join('<br>')}</div></div>
+      <div class="card stat-tile"><div class="label">Produtos</div><div class="value">${distintos}</div><div class="hint">${todas.length} linhas no relatório</div></div>
+      <div class="card stat-tile"><div class="label">Valor a custo (saldo &gt; 0)</div><div class="value">${BRL(valCustoPos)}</div><div class="hint">${rel!=null ? 'relatório: ' + BRL(rel) + ' (total de todas as linhas ' + BRL(valCusto) + (Math.abs(valCusto-rel)>=0.005 ? ', dif. ' + BRL(valCusto-rel) + ' arredondamento' : '') + ')' : 'total com negativos: ' + BRL(valCusto)}</div></div>
+      <div class="card stat-tile"><div class="label">Valor de venda (saldo &gt; 0)</div><div class="value">${temPreco ? BRL(valVenda) : '—'}</div><div class="hint">${temPreco && valCustoPos>0 ? 'margem ' + ((valVenda-valCustoPos)/valVenda*100).toFixed(1).replace('.',',') + '% sobre a venda' : 'preço de venda não informado'}</div></div>
+      ${negativas.length ? `<div class="card stat-tile"><div class="label">Saldo negativo</div><div class="value">${negativas.length}</div><div class="hint">${BRL(negativas.reduce((a,r)=>a+(+r.valor_total||0),0))} a custo</div></div>` : ''}
+      ${repetidas.length ? `<div class="card stat-tile"><div class="label">Linhas repetidas</div><div class="value">${repetidas.length}</div><div class="hint">${BRL(valRep)} — conferir na contagem</div></div>` : ''}
+      ${Object.keys(porCst).length ? `<div class="card stat-tile"><div class="label">Por situação fiscal</div><div class="hint">${Object.keys(porCst).sort().map(c=>esc(INV_CST[c]||c) + ' ' + BRL(porCst[c])).join('<br>')}</div></div>` : ''}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-      <input type="text" id="inv-busca" placeholder="Buscar produto, fornecedor ou código" value="${esc(invFiscalBusca)}" style="min-width:240px;">
-      <select id="inv-filtro"><option value="">Todas as linhas</option><option value="rep" ${invFiscalFiltro==='rep'?'selected':''}>Só as repetidas</option>${Object.keys(porCst).sort().map(c=>`<option value="${esc(c)}" ${invFiscalFiltro===c?'selected':''}>${esc(INV_CST[c]||c)}</option>`).join('')}</select>
-      <span class="hint" style="align-self:center;">${lista.length} linha${lista.length===1?'':'s'} · ${BRL(lista.reduce((a,r)=>a+(+r.valor_total||0),0))}</span>
+      <input type="text" id="inv-busca" placeholder="Buscar produto, marca ou código" value="${esc(invFiscalBusca)}" style="min-width:240px;">
+      <select id="inv-filtro"><option value="">Todas as linhas</option>
+        ${negativas.length?`<option value="neg" ${invFiscalFiltro==='neg'?'selected':''}>Só saldo negativo</option>`:''}
+        ${repetidas.length?`<option value="rep" ${invFiscalFiltro==='rep'?'selected':''}>Só as repetidas</option>`:''}
+        ${semPreco.length&&temPreco?`<option value="semp" ${invFiscalFiltro==='semp'?'selected':''}>Sem preço de venda</option>`:''}
+        ${comContagem?`<option value="dif" ${invFiscalFiltro==='dif'?'selected':''}>Contagem diferente do saldo</option>`:''}
+        ${Object.keys(porCst).sort().map(c=>`<option value="${esc(c)}" ${invFiscalFiltro===c?'selected':''}>${esc(INV_CST[c]||c)}</option>`).join('')}</select>
+      <span class="hint" style="align-self:center;">${lista.length} linha${lista.length===1?'':'s'} · ${BRL(lista.reduce((a,r)=>a+(+r.valor_total||0),0))} a custo</span>
     </div>
-    <div style="overflow-x:auto;max-height:520px;overflow-y:auto;"><table><thead><tr><th>Código</th><th>Produto</th><th>Fornecedor</th><th>Saldo</th><th>Custo (un.)</th><th>Valor total</th><th>Fiscal</th><th>Contagem física</th></tr></thead><tbody>
-    ${lista.map(r=>`<tr${rep[r.id]>1?' style="background:rgba(183,121,31,0.10);"':''}><td>${esc(r.codigo)}</td><td class="strong">${esc(r.produto)}${rep[r.id]>1?` <span class="badge b-warning"><span class="dot"></span>repetida</span>`:''}</td><td>${esc(r.fornecedor||'')}</td>
-      <td>${esc(qtd(r))}</td><td>${BRL(r.custo)}</td><td class="strong">${BRL(r.valor_total)}</td><td>${esc(INV_CST[r.cst]||r.cst||'')}</td>
-      <td>${r.contagem_fisica==null ? '<span class="hint">a conferir</span>' : esc((+r.contagem_fisica).toLocaleString('pt-BR',{maximumFractionDigits:3})) + ((+r.contagem_fisica-+r.saldo)!==0 ? ` <span class="hint">(${(+r.contagem_fisica-+r.saldo)>0?'+':''}${(+r.contagem_fisica-+r.saldo).toLocaleString('pt-BR',{maximumFractionDigits:3})})</span>` : '')}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">Nenhuma linha com esse filtro.</td></tr>'}
+    <div style="overflow-x:auto;max-height:560px;overflow-y:auto;"><table><thead><tr><th>Produto</th><th>Saldo</th><th>Custo (un.)</th><th>Preço de venda</th><th>Margem</th><th>Valor a custo</th><th>Valor de venda</th><th>Contagem</th></tr></thead><tbody>
+    ${lista.map(r=>{ const m = margem(r); const neg = (+r.saldo||0) < 0; const vv = (+r.preco_venda > 0 && (+r.saldo||0) > 0) ? (+r.preco_venda)*(+r.saldo) : null;
+      return `<tr${rep[r.id]>1?' style="background:rgba(183,121,31,0.10);"':''}><td class="strong">${esc(r.produto)}${rep[r.id]>1?` <span class="badge b-warning"><span class="dot"></span>repetida</span>`:''}${neg?` <span class="badge b-critical"><span class="dot"></span>negativo</span>`:''}<div class="hint" style="font-size:11px;font-weight:400;">${esc(r.codigo)}${r.fornecedor?' · '+esc(r.fornecedor):''}</div></td>
+      <td${neg?' style="color:var(--critical);"':''}>${esc(qtd(r))}</td><td>${BRL(r.custo)}</td><td class="strong">${+r.preco_venda>0?BRL(r.preco_venda):'<span class="hint">—</span>'}</td>
+      <td>${m==null?'<span class="hint">—</span>':m.toFixed(0)+'%'}</td><td>${BRL(r.valor_total)}</td><td>${vv==null?'<span class="hint">—</span>':BRL(vv)}</td>
+      <td>${r.contagem_fisica==null ? '<span class="hint">a conferir</span>' : esc(num(r.contagem_fisica)) + ((+r.contagem_fisica-+r.saldo)!==0 ? ` <span class="hint">(${(+r.contagem_fisica-+r.saldo)>0?'+':''}${num(+r.contagem_fisica-+r.saldo)})</span>` : '')}</td></tr>`; }).join('') || '<tr><td colspan="8" class="hint">Nenhuma linha com esse filtro.</td></tr>'}
     </tbody></table></div>
     ${INV_FISCAL_ERRO ? `<p class="hint" style="color:var(--critical);">${esc(INV_FISCAL_ERRO)}</p>` : ''}</details>`;
   const det = box.querySelector('details');
   det.addEventListener('toggle', ()=>{ box.dataset.aberto = det.open ? '1' : '0'; });
-  const b = document.getElementById('inv-busca'), f = document.getElementById('inv-filtro');
-  if(b) b.oninput = ()=>{ invFiscalBusca = b.value; const pos = b.selectionStart; box.dataset.aberto = '1'; renderInvFiscal(); const nb = document.getElementById('inv-busca'); if(nb){ nb.focus(); nb.setSelectionRange(pos,pos); } };
+  box.querySelectorAll('[data-invloja]').forEach(bt=> bt.onclick = ()=>{ invFiscalLoja = bt.dataset.invloja; invFiscalFiltro = ''; box.dataset.aberto = '1'; renderInvFiscal(); });
+  const bsc = document.getElementById('inv-busca'), f = document.getElementById('inv-filtro');
+  if(bsc) bsc.oninput = ()=>{ invFiscalBusca = bsc.value; const pos = bsc.selectionStart; box.dataset.aberto = '1'; renderInvFiscal(); const nb = document.getElementById('inv-busca'); if(nb){ nb.focus(); nb.setSelectionRange(pos,pos); } };
   if(f) f.onchange = ()=>{ invFiscalFiltro = f.value; box.dataset.aberto = '1'; renderInvFiscal(); };
 }
 
