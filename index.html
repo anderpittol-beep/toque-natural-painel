@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:24";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:43";</script>
       </div>
     </div>
 
@@ -3711,12 +3711,13 @@ function renderInvFiscal(){
   const valRep = repetidas.reduce((a,r)=>a+(+r.valor_total||0),0);
   const distintos = new Set(todas.map(r=>r.codigo)).size;
   const semPreco = todas.filter(r=>!(+r.preco_venda > 0));
+  const abaixoCusto = todas.filter(r=>+r.preco_venda > 0 && +r.custo > 0 && +r.preco_venda < +r.custo);
   const porCst = {}; todas.forEach(r=>{ if(r.cst) porCst[r.cst] = (porCst[r.cst]||0) + (+r.valor_total||0); });
   const rel = INV_TOTAL_RELATORIO[loja + '|' + dataRef];
   const comContagem = todas.filter(r=>r.contagem_fisica != null).length;
   const busca = esNorm(invFiscalBusca);
   const lista = todas.filter(r=> (!busca || esNorm(r.produto + ' ' + (r.fornecedor||'') + ' ' + r.codigo).indexOf(busca) !== -1)
-    && (!invFiscalFiltro || (invFiscalFiltro === 'rep' ? rep[r.id] > 1 : invFiscalFiltro === 'neg' ? (+r.saldo||0) < 0 : invFiscalFiltro === 'semp' ? !(+r.preco_venda > 0) : invFiscalFiltro === 'dif' ? (r.contagem_fisica != null && Math.abs((+r.contagem_fisica) - (+r.saldo)) > 0.0005) : r.cst === invFiscalFiltro)));
+    && (!invFiscalFiltro || (invFiscalFiltro === 'rep' ? rep[r.id] > 1 : invFiscalFiltro === 'neg' ? (+r.saldo||0) < 0 : invFiscalFiltro === 'semp' ? !(+r.preco_venda > 0) : invFiscalFiltro === 'abaixo' ? (+r.preco_venda > 0 && +r.custo > 0 && +r.preco_venda < +r.custo) : invFiscalFiltro === 'dif' ? (r.contagem_fisica != null && Math.abs((+r.contagem_fisica) - (+r.saldo)) > 0.0005) : r.cst === invFiscalFiltro)));
   const num = (v)=> (+v).toLocaleString('pt-BR', {maximumFractionDigits:3});
   const qtd = (r) => num(r.saldo) + (r.unidade ? ' ' + r.unidade : '');
   const margem = (r) => (+r.preco_venda > 0 && r.custo != null) ? ((+r.preco_venda - +r.custo) / +r.preco_venda * 100) : null;
@@ -3740,6 +3741,7 @@ function renderInvFiscal(){
         ${negativas.length?`<option value="neg" ${invFiscalFiltro==='neg'?'selected':''}>Só saldo negativo</option>`:''}
         ${repetidas.length?`<option value="rep" ${invFiscalFiltro==='rep'?'selected':''}>Só as repetidas</option>`:''}
         ${semPreco.length&&temPreco?`<option value="semp" ${invFiscalFiltro==='semp'?'selected':''}>Sem preço de venda</option>`:''}
+        ${abaixoCusto.length?`<option value="abaixo" ${invFiscalFiltro==='abaixo'?'selected':''}>Preço abaixo do custo (${abaixoCusto.length})</option>`:''}
         ${comContagem?`<option value="dif" ${invFiscalFiltro==='dif'?'selected':''}>Contagem diferente do saldo</option>`:''}
         ${Object.keys(porCst).sort().map(c=>`<option value="${esc(c)}" ${invFiscalFiltro===c?'selected':''}>${esc(INV_CST[c]||c)}</option>`).join('')}</select>
       <span class="hint" style="align-self:center;">${lista.length} linha${lista.length===1?'':'s'} · ${BRL(lista.reduce((a,r)=>a+(+r.valor_total||0),0))} a custo</span>
