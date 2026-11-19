@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:06";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:24";</script>
       </div>
     </div>
 
@@ -6862,7 +6862,8 @@ function renderCaixa(){
           <td><select data-ce="loja">${lojasCx.map(l=>`<option ${l===c.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td><input type="number" data-ce="vendas" value="${+c.vendas||0}" step="0.01" style="width:106px;"></td>
           <td colspan="3" class="hint">recalculado ao salvar</td>
-          <td><input type="number" data-ce="inicial" value="${+c.inicial||0}" step="0.01" style="width:100px;"></td>
+          <td><input type="number" data-ce="inicial" value="${+c.inicial||0}" step="0.01" style="width:100px;">
+            <div class="hint" data-ce-aviso style="font-size:11px;white-space:normal;max-width:150px;margin-top:3px;"></div></td>
           <td><input type="number" data-ce="entradas" value="${+c.entradas||0}" step="0.01" style="width:100px;"></td>
           <td><input type="number" data-ce="saidas" value="${+c.saidas||0}" step="0.01" style="width:96px;">
             <input type="text" data-ce="obs" value="${esc(c.obs||'')}" placeholder="o que foi pago/retirado" maxlength="300" style="width:150px;margin-top:3px;"></td>
@@ -6918,6 +6919,20 @@ function renderCaixa(){
     document.querySelectorAll('[data-cxcancelar]').forEach(b=>{
       b.onclick = ()=>{ caixaEditando = null; renderCaixa(); };
     });
+    /* aviso ao vivo no lapis: mesma conferencia do formulario de novo fechamento */
+    document.querySelectorAll('[data-ce-aviso]').forEach(av=>{
+      const tr = av.closest('tr'); if(!tr) return;
+      const g = k => { const el = tr.querySelector('[data-ce="'+k+'"]'); return el ? el.value : ''; };
+      const atualiza = ()=>{
+        const ant = cxFinalAnterior(g('loja'), g('data').trim());
+        if(!ant){ av.textContent = ''; return; }
+        const ini = num(g('inicial')) || 0, dif = Math.round((ini - ant.final) * 100) / 100;
+        if(Math.abs(dif) <= 0.009){ av.style.color = 'var(--good)'; av.textContent = '✓ igual ao final de ' + ant.data.slice(0,5) + ' (' + BRL(ant.final) + ')'; }
+        else { av.style.color = 'var(--critical)'; av.textContent = '⚠ ' + ant.data.slice(0,5) + ' terminou em ' + BRL(ant.final) + ' (dif. ' + (dif > 0 ? '+' : '−') + BRL(Math.abs(dif)) + ')'; }
+      };
+      ['inicial','data','loja'].forEach(k=>{ const el = tr.querySelector('[data-ce="'+k+'"]'); if(el){ el.addEventListener('input', atualiza); el.addEventListener('change', atualiza); } });
+      atualiza();
+    });
     document.querySelectorAll('[data-cxsalvar]').forEach(b=>{
       b.onclick = async ()=>{
         const c = acha(b.dataset.cxsalvar);
@@ -6932,6 +6947,12 @@ function renderCaixa(){
           const el = tr.querySelector('[data-ce="obs"]'); if(el) el.focus();
           return;
         }
+        /* saldo inicial diferente do final do dia anterior (so pede confirmacao se mudou em relacao ao que ja estava) */
+        { const ant = cxFinalAnterior(v('loja'), novaData); const ini = num(v('inicial')) || 0;
+          if(ant && Math.abs(ini - ant.final) > 0.009 && Math.abs(ini - (+c.inicial||0)) > 0.009){
+            const dif = Math.round((ini - ant.final) * 100) / 100;
+            if(!confirm('O saldo inicial (' + BRL(ini) + ') é diferente do saldo final do último fechamento de ' + v('loja') + ' (' + ant.data.slice(0,5) + ': ' + BRL(ant.final) + ').\n\nDiferença: ' + (dif > 0 ? '+' : '−') + BRL(Math.abs(dif)) + '.\n\nSe a diferença é real (troco, retirada ou saída sem registro), anote nas saídas ou na descrição. Se foi erro de digitação, cancele e corrija.\n\nSalvar mesmo assim?')) return;
+          } }
         const antes = { data:c.data, loja:c.loja, vendas:+c.vendas||0, inicial:+c.inicial||0,
                         entradas:+c.entradas||0, saidas:+c.saidas||0 };
         Object.assign(c, { data: novaData, loja: v('loja'),
