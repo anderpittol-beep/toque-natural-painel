@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="05/11/2026, 15:59";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:06";</script>
       </div>
     </div>
 
@@ -737,6 +737,7 @@ window.TN_CONFIG = {
               <input type="number" id="cx-inicial" placeholder="Saldo inicial (opcional)" step="0.01" min="0">
               <input type="number" id="cx-entradas" placeholder="Entradas do dia (opcional)" step="0.01" min="0">
               <input type="number" id="cx-saidas" placeholder="Saídas / pagamentos (opcional)" step="0.01" min="0">
+              <p class="hint" id="cx-inicial-aviso" style="grid-column:1/-1;margin:0;min-height:15px;"></p>
               <div id="cx-bol-box" style="grid-column:1/-1;"></div>
               <input type="text" id="cx-saidas-obs" placeholder="Outras saídas (retirada, conta, compra...) — descreva o que não é boleto" maxlength="300" style="grid-column:1/-1;">
               <button class="btn primary" type="submit" id="cx-registrar" style="grid-column:1/-1;">Registrar dia</button>
@@ -6902,6 +6903,7 @@ function renderCaixa(){
       </button></td></tr>` : ''}</tbody>`;
 
   cxRenderBoletosBox();       // boletos carregam depois do script: atualiza a lista do fechamento
+  cxPreencheInicial();        // o caixa tambem carrega depois: preenche o saldo inicial e confere
   if(!acertosPedido && window.TN && window.TN.sb){ acertosPedido = true; acertosCarregar(); } else renderAcertos();
   const btnTodos = document.getElementById('cx-ver-todos');
   if(btnTodos) btnTodos.onclick = ()=>{ caixaVerTodos = !caixaVerTodos; renderCaixa(); };
@@ -9526,6 +9528,40 @@ function cxDataHoje(){
   if(el && !el.value) el.value = TODAY.toLocaleDateString('pt-BR');
 }
 cxDataHoje();
+/* Saldo inicial = saldo final do ultimo fechamento da loja antes da data. O painel preenche
+   sozinho e avisa se o valor digitado for outro (um saldo inicial digitado errado contamina
+   todos os dias seguintes, e o caixa deixa de bater com o sistema da loja). */
+function cxFinalAnterior(loja, dataBr){
+  const alvo = parseBR(dataBr); if(!alvo) return null;
+  let melhor = null, md = null;
+  CAIXA_DIARIO.forEach(c=>{
+    if(c.loja !== loja) return;
+    const d = parseBR(c.data); if(!d || d >= alvo) return;
+    if(!md || d > md){ md = d; melhor = c; }
+  });
+  if(!melhor) return null;
+  return { data: melhor.data, final: Math.round(((+melhor.inicial||0) + (+melhor.entradas||0) - (+melhor.saidas||0)) * 100) / 100 };
+}
+function cxAvisoSaldoInicial(){
+  const av = document.getElementById('cx-inicial-aviso'), ini = document.getElementById('cx-inicial');
+  if(!av || !ini) return;
+  const ant = cxFinalAnterior((document.getElementById('cx-loja')||{}).value, (document.getElementById('cx-data')||{}).value);
+  if(!ant){ av.textContent = ''; return; }
+  const digitado = num(ini.value) || 0, dif = Math.round((digitado - ant.final) * 100) / 100;
+  if(Math.abs(dif) <= 0.009){ av.style.color = 'var(--good)'; av.textContent = '✓ Saldo inicial igual ao final de ' + ant.data.slice(0,5) + ' (' + BRL(ant.final) + ').'; }
+  else { av.style.color = 'var(--critical)'; av.textContent = '⚠ O último fechamento (' + ant.data.slice(0,5) + ') terminou em ' + BRL(ant.final) + '. Você digitou ' + BRL(digitado) + ' (diferença ' + (dif > 0 ? '+' : '−') + BRL(Math.abs(dif)) + ').'; }
+}
+function cxPreencheInicial(){
+  const ini = document.getElementById('cx-inicial'); if(!ini) return;
+  const ant = cxFinalAnterior((document.getElementById('cx-loja')||{}).value, (document.getElementById('cx-data')||{}).value);
+  if(ant && (ini.value === '' || ini.dataset.auto === '1')){ ini.value = ant.final; ini.dataset.auto = '1'; }
+  cxAvisoSaldoInicial();
+}
+(function(){
+  const ini = document.getElementById('cx-inicial'); if(!ini) return;
+  ini.addEventListener('input', ()=>{ ini.dataset.auto = '0'; cxAvisoSaldoInicial(); });
+  ['cx-loja','cx-data'].forEach(id=>{ const e = document.getElementById(id); if(e){ e.addEventListener('change', cxPreencheInicial); e.addEventListener('input', cxPreencheInicial); } });
+})();
 let cxGravando = false;
 /* Confere no banco, e não só na memória desta aba: o dia pode ter sido fechado
    em outro computador, e aí a lista local ainda não sabe disso. */
@@ -9678,6 +9714,12 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
     if(sobra < -0.01 && !confirm('Os boletos marcados somam ' + BRL(cxBolSoma) + ', mais que as saídas do dia (' + BRL(cxSaidasVal) + ').\n\nRegistrar mesmo assim?')) return;
   }
   const cxObs = [cxBolMarcados.length ? 'Baixa: ' + cxBolMarcados.map(b=>String(b.descricao||'').replace(/\s*·.*$/,'').trim() + (b.loja!==cxLoja ? ' (' + b.loja + ')' : '') + ' ' + BRL(b.valor)).join('; ') : '', cxObsDigitada].filter(Boolean).join(' | ');
+  /* saldo inicial diferente do final do ultimo fechamento: pede confirmacao */
+  { const ant = cxFinalAnterior(cxLoja, cxData); const digitado = num(document.getElementById('cx-inicial').value) || 0;
+    if(ant && Math.abs(digitado - ant.final) > 0.009){
+      const dif = Math.round((digitado - ant.final) * 100) / 100;
+      if(!confirm('O saldo inicial digitado (' + BRL(digitado) + ') é diferente do saldo final do último fechamento de ' + cxLoja + ' (' + ant.data.slice(0,5) + ': ' + BRL(ant.final) + ').\n\nDiferença: ' + (dif > 0 ? '+' : '−') + BRL(Math.abs(dif)) + '.\n\nSe a diferença é real (troco, retirada ou saída sem registro), anote em "Saídas" ou na descrição. Se foi erro de digitação, cancele e corrija.\n\nRegistrar mesmo assim?')) return;
+    } }
   /* o fechamento e um por dia e por loja: avisa antes de duplicar */
   const jaTem = CAIXA_DIARIO.find(c=> c.data===cxData && c.loja===cxLoja)
              || await cxJaFechado(cxData, cxLoja);
@@ -9722,6 +9764,8 @@ document.getElementById('form-caixa').addEventListener('submit', async e=>{
   cxRenderBoletosBox();               // os boletos baixados saem da lista
   if(av) av.textContent = _msg;      // o reset limpa o aviso; devolve a confirmacao
   cxDataHoje();
+  { const _i = document.getElementById('cx-inicial'); if(_i) _i.dataset.auto = ''; }
+  cxPreencheInicial();
   renderCaixa(); renderDesempenho();
 });
 document.getElementById('form-fixa').addEventListener('submit', async e=>{
