@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 16:19";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 18:48";</script>
       </div>
     </div>
 
@@ -3838,6 +3838,8 @@ function confCodigoHtml(p){
   else if(confCodDiferem(p)) r += ` · <span style="color:var(--critical);">códigos diferentes: sugestão de código único <strong>${esc(confCodSugerido(p))}</strong> (confirme na conferência)</span>`;
   return r + '</div>';
 }
+const CONF_SEM_EXC = { exc_motivo: null, exc_por: null, ita_exc_ok: null, ov_exc_ok: null };   // qualquer mudanca de valor derruba a excecao
+const confExcecaoAceita = p => !!(p.ita_exc_ok && p.ov_exc_ok && Math.abs((+p.ita_preco||0) - (+p.ov_preco||0)) >= 0.005);
 const CONF_EDIT = new Set();   // 'id|loja' das conferencias que estao sendo editadas
 const confLiberadosHoje = () => (CONF||[]).filter(p => String(p.lote_data||'').slice(0,10) === confHoje()).length;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
@@ -3855,7 +3857,7 @@ function confStatus(p){
   const a = !!p.ita_em, b = !!p.ov_em;
   if(!a && !b) return 'pendente';
   if(!a || !b) return 'aguardando';
-  if(Math.abs((+p.ita_preco||0) - (+p.ov_preco||0)) >= 0.005) return 'divergente';
+  if(Math.abs((+p.ita_preco||0) - (+p.ov_preco||0)) >= 0.005 && !(p.ita_exc_ok && p.ov_exc_ok)) return 'divergente';   // preco diferente so passa por excecao aceita pelas duas lojas
   return (p.ita_computec && p.ov_computec) ? 'concluido' : 'acordado';
 }
 function confLoteAtual(){
@@ -3902,7 +3904,7 @@ async function confGravar(id, campos){
   campos = Object.assign({}, campos, { status: novo.status, atualizado_em: new Date().toISOString() });
   if(novo.status === 'divergente' || novo.status === 'pendente' || novo.status === 'aguardando'){ campos.preco_final = null; campos.acordado_em = null; campos.acordado_por = null; }
   else if(novo.status === 'acordado' || novo.status === 'concluido'){
-    campos.preco_final = +novo.ita_preco;
+    campos.preco_final = confExcecaoAceita(novo) ? null : +novo.ita_preco;
     if(!p.acordado_em){ campos.acordado_em = new Date().toISOString(); campos.acordado_por = nomeDoUsuario(); }
   }
   const {error} = await window.TN.sb.from('conferencia_produtos').update(campos).eq('id', id);
@@ -3916,9 +3918,25 @@ async function confConfirmar(id, loja, v){
   campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
   campos[pre+'_rep_ajuste'] = v.rep || null;
   campos[pre+'_validades'] = v.val || [];
+  Object.assign(campos, CONF_SEM_EXC);
   if(v.cod){ campos.cod_unico = v.cod; campos.cod_unico_por = nomeDoUsuario(); }
   CONF_EDIT.delete(id + '|' + loja);
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;   // valor mudou: as marcacoes do Computec valem de novo
+  if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
+}
+async function confExcecao(id, loja, acao){
+  const p = CONF.find(x => x.id === id); if(!p) return;
+  const pre = confPre(loja), campos = {};
+  if(acao === 'cancelar'){ Object.assign(campos, CONF_SEM_EXC); }
+  else if(acao === 'propor'){
+    const motivo = (prompt('Exceção: as lojas vão manter preços de venda diferentes (Itaipulândia ' + BRL(p.ita_preco) + ' × Ouro Verde ' + BRL(p.ov_preco) + ').\n\nEscreva o motivo (a outra loja precisa concordar):') || '').trim();
+    if(motivo.length < 4) return;
+    Object.assign(campos, CONF_SEM_EXC); campos.exc_motivo = motivo.slice(0, 300); campos.exc_por = nomeDoUsuario(); campos[pre+'_exc_ok'] = new Date().toISOString();
+  } else if(acao === 'aceitar'){
+    if(!confirm(loja + ' concorda em manter preços diferentes?\n\nItaipulândia ' + BRL(p.ita_preco) + ' × Ouro Verde ' + BRL(p.ov_preco) + '\nMotivo: ' + (p.exc_motivo||''))) return;
+    campos[pre+'_exc_ok'] = new Date().toISOString();
+  }
+  campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
 async function confExcluir(id, loja){
@@ -3927,13 +3945,14 @@ async function confExcluir(id, loja){
   const pre = confPre(loja), campos = {};
   ['_qtd','_custo','_preco','_por','_em','_rep_ajuste','_validades'].forEach(k => campos[pre+k] = null);
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
+  Object.assign(campos, CONF_SEM_EXC);
   campos.obs = ((p.obs ? p.obs + ' | ' : '') + 'Conferência de ' + loja + ' excluída por ' + nomeDoUsuario() + ' em ' + new Date().toLocaleDateString('pt-BR')).slice(0, 600);
   CONF_EDIT.delete(id + '|' + loja);
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
 async function confRefazer(id, loja){
   const pre = confPre(loja), campos = {};
-  campos[pre+'_em'] = null; campos[pre+'_por'] = null;
+  campos[pre+'_em'] = null; campos[pre+'_por'] = null; Object.assign(campos, CONF_SEM_EXC);
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
@@ -4011,7 +4030,7 @@ function confColuna(p, loja){
   if(st === 'acordado' || st === 'concluido'){
     const mc = p[pre+'_computec'];
     if(mc) comp = `<div style="margin-top:6px;">Computec: ✓ <strong>${mc === 'sim' ? 'alterado' : 'não precisava alterar'}</strong> em ${fmtData(p[pre+'_computec_em'])}</div>`;
-    else if(editavel) comp = `<div style="margin-top:8px;padding:6px;border:1px dashed var(--critical);border-radius:6px;"><div class="hint" style="font-size:11.5px;margin-bottom:4px;"><strong>O valor de venda ${BRL(p.preco_final)} foi alterado no sistema Computec desta loja?</strong></div>
+    else if(editavel) comp = `<div style="margin-top:8px;padding:6px;border:1px dashed var(--critical);border-radius:6px;"><div class="hint" style="font-size:11.5px;margin-bottom:4px;"><strong>O valor de venda ${BRL(confExcecaoAceita(p) ? p[pre+'_preco'] : p.preco_final)} foi alterado no sistema Computec desta loja?</strong></div>
       <button class="btn primary" data-conf-comp="${esc(p.id)}" data-conf-loja="${esc(loja)}" data-conf-v="sim" style="padding:2px 8px;font-size:11.5px;">Sim, já alterei</button>
       <button class="btn ghost" data-conf-comp="${esc(p.id)}" data-conf-loja="${esc(loja)}" data-conf-v="nao_precisa" style="padding:2px 8px;font-size:11.5px;">Não precisa (já estava igual)</button></div>`;
     else comp = '<div class="hint" style="margin-top:6px;">Computec: aguardando marcação desta loja</div>';
@@ -4042,7 +4061,13 @@ function renderConferencia(){
         ${p.ant_em ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Conferência anterior (${new Date(p.ant_em).toLocaleDateString('pt-BR')}): venda acordada ${BRL(p.ant_preco)}</div>` : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">${confColuna(p, 'Itaipulândia')}${confColuna(p, 'Ouro Verde')}</div>
         ${st === 'divergente' ? `<div style="margin-top:8px;padding:8px;background:rgba(208,59,59,0.08);border-radius:6px;font-size:12.5px;"><strong>Valores de venda diferentes:</strong> Itaipulândia ${BRL(p.ita_preco)} × Ouro Verde ${BRL(p.ov_preco)} (diferença ${BRL(Math.abs((+p.ita_preco)-(+p.ov_preco)))}). As duas lojas precisam chegar ao mesmo valor.
-          ${CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => { const o = CONF_LOJAS.find(x=>x!==l); return `<button class="btn ghost" data-conf-aceitar="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin-left:6px;">${esc(l)} aceita ${BRL(p[confPre(o)+'_preco'])}</button>`; }).join('')}</div>` : ''}
+          ${CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => { const o = CONF_LOJAS.find(x=>x!==l); return `<button class="btn ghost" data-conf-aceitar="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin-left:6px;">${esc(l)} aceita ${BRL(p[confPre(o)+'_preco'])}</button>`; }).join('')}
+          <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.2);"><strong>Caso excepcional — manter preços diferentes:</strong> só vale se as duas lojas concordarem.
+          ${p.exc_motivo ? `<div style="margin-top:4px;">Proposto por <strong>${esc(p.exc_por||'')}</strong>: “${esc(p.exc_motivo)}”<br>${CONF_LOJAS.map(l => `${esc(l)}: ${p[confPre(l)+'_exc_ok'] ? '✓ concorda' : 'aguardando'}`).join(' · ')}</div>
+            ${CONF_LOJAS.filter(l => confPodeEditar(l) && !p[confPre(l)+'_exc_ok']).map(l => `<button class="btn primary" data-conf-exc="aceitar" data-conf-id="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin:4px 6px 0 0;">${esc(l)} concorda com preços diferentes</button>`).join('')}
+            ${CONF_LOJAS.some(l => confPodeEditar(l)) ? `<button class="btn ghost" data-conf-exc="cancelar" data-conf-id="${esc(p.id)}" data-conf-loja="${esc(CONF_LOJAS.find(l => confPodeEditar(l)))}" style="padding:2px 8px;font-size:11.5px;margin-top:4px;">cancelar exceção</button>` : ''}`
+          : CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => `<button class="btn ghost" data-conf-exc="propor" data-conf-id="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin:4px 6px 0 0;">${esc(l)}: propor exceção</button>`).join('')}</div></div>` : ''}
+        ${confExcecaoAceita(p) ? `<div class="hint" style="font-size:11.5px;margin-top:6px;">Exceção aceita pelas duas lojas: preços diferentes (Itaipulândia ${BRL(p.ita_preco)} × Ouro Verde ${BRL(p.ov_preco)}). Motivo: ${esc(p.exc_motivo||'')}</div>` : ''}
         ${p.obs ? `<div class="hint" style="font-size:11.5px;margin-top:6px;">${esc(p.obs)}</div>` : ''}</div>`; }).join('')}
     ${(typeof ehMaster === 'function' && ehMaster() && abertos.length) ? '<div style="margin-top:6px;"><button class="btn ghost" id="conf-liberar" style="padding:3px 10px;font-size:12px;">Master: liberar o próximo lote mesmo com pendências</button></div>' : ''}
     ${CONF_ERRO ? `<p class="hint" style="color:var(--critical);">${esc(CONF_ERRO)}</p>` : ''}</details></div>`;
@@ -4066,6 +4091,7 @@ function renderConferencia(){
     b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco, rep, val: vals, cod });
   });
   box.querySelectorAll('[data-conf-vmais]').forEach(b=> b.onclick = ()=>{ const col = b.closest('div[style*="border:1px solid"]'); col.querySelector('[data-conf-vlist]').insertAdjacentHTML('beforeend', CONF_LINHA_VAL); });
+  box.querySelectorAll('[data-conf-exc]').forEach(b=> b.onclick = ()=>{ b.disabled = true; confExcecao(b.dataset.confId, b.dataset.confLoja, b.dataset.confExc); });
   box.querySelectorAll('[data-conf-editar]').forEach(b=> b.onclick = ()=>{ CONF_EDIT.add(b.dataset.confEditar + '|' + b.dataset.confLoja); renderConferencia(); });
   box.querySelectorAll('[data-conf-cancelar]').forEach(b=> b.onclick = ()=>{ CONF_EDIT.delete(b.dataset.confCancelar + '|' + b.dataset.confLoja); renderConferencia(); });
   box.querySelectorAll('[data-conf-excluir]').forEach(b=> b.onclick = ()=> confExcluir(b.dataset.confExcluir, b.dataset.confLoja));
@@ -4075,7 +4101,7 @@ function renderConferencia(){
     const p = CONF.find(x => x.id === b.dataset.confAceitar); if(!p) return;
     const loja = b.dataset.confLoja, pre = confPre(loja), preO = confPre(CONF_LOJAS.find(l=>l!==loja));
     if(!confirm(loja + ' passa a vender por ' + BRL(p[preO+'_preco']) + '?')) return;
-    const campos = {}; campos[pre+'_preco'] = p[preO+'_preco']; campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
+    const campos = {}; campos[pre+'_preco'] = p[preO+'_preco']; campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString(); Object.assign(campos, CONF_SEM_EXC);
     campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
     if(await confGravar(p.id, campos)){ renderConferencia(); renderConfHome(); }
   });
