@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:51";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:58";</script>
       </div>
     </div>
 
@@ -3862,6 +3862,21 @@ async function confComputec(id, loja, valor){
   campos[pre+'_computec'] = valor; campos[pre+'_computec_em'] = new Date().toISOString();
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
+/* Adianta o proximo lote no mesmo dia: so quando o lote atual esta todo concluido e ainda ha produtos na fila */
+const confPodeAdiantar = () => !!CONF && confMinhaLoja() !== null && confLoteAtual().length > 0
+  && confLoteAtual().every(confFechado) && CONF.some(p => !p.lote_data);
+async function confAdiantar(){
+  if(confOcupado) return; confOcupado = true;
+  try{
+    await confRecarregar();                                   // confere de novo: a outra socia pode ter adiantado primeiro
+    if(!confPodeAdiantar()){ renderConferencia(); renderConfHome(); return; }
+    const prox = CONF.filter(p => !p.lote_data).sort((a,b)=>a.ordem-b.ordem).slice(0, CONF_LOTE);
+    const {error} = await window.TN.sb.from('conferencia_produtos').update({ lote_data: confHoje() }).in('id', prox.map(p=>p.id)).is('lote_data', null);
+    if(error){ alert('Não consegui liberar os próximos produtos: ' + error.message); return; }
+    await confRecarregar();
+  } finally { confOcupado = false; }
+  renderConferencia(); renderConfHome();
+}
 async function confLiberar(){
   const abertos = confLoteAtual().filter(p => !confFechado(p));
   if(!abertos.length) return;
@@ -3923,11 +3938,12 @@ function renderConferencia(){
   const minha = confMinhaLoja();
   let faixa;
   if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : 'Nenhum lote aberto agora.';
-  else if(!abertos.length) faixa = '✓ Lote de hoje concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã.';
+  else if(!abertos.length) faixa = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã' + (confPodeAdiantar() ? ', ou clique abaixo para adiantar agora.' : '.');
   else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
   box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde <span class="hint" style="font-weight:400;">· relatório ${esc(CONF_RODADA)}</span></summary>
     <p class="hint" style="margin:6px 0 10px;">${faixa}<br><span style="font-size:11.5px;">Concluídos no total: ${totalFech} de ${CONF.length} · na fila: ${fila}</span></p>
-    ${lote.map(p => { const st = confStatus(p);
+    ${confPodeAdiantar() ? `<div style="margin:0 0 10px;"><button class="btn primary" id="conf-adiantar" style="padding:5px 14px;">Liberar mais ${Math.min(CONF_LOTE, fila)} produtos agora</button></div>` : ''}
+    ${lote.slice().sort((a,b)=> (confFechado(a)?1:0)-(confFechado(b)?1:0) || a.ordem-b.ordem).map(p => { const st = confStatus(p);
       return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)}</div><div>${confChip(st)}</div></div>
         ${p.parecido ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Nome parecido na outra loja: ${esc(p.parecido)}</div>` : ''}
         ${p.ant_em ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Conferência anterior (${new Date(p.ant_em).toLocaleDateString('pt-BR')}): venda acordada ${BRL(p.ant_preco)}</div>` : ''}
@@ -3958,6 +3974,7 @@ function renderConferencia(){
     if(await confGravar(p.id, campos)){ renderConferencia(); renderConfHome(); }
   });
   const bl = document.getElementById('conf-liberar'); if(bl) bl.onclick = confLiberar;
+  const ba = document.getElementById('conf-adiantar'); if(ba) ba.onclick = ()=>{ ba.disabled = true; confAdiantar(); };
 }
 function renderConfHome(){
   const box = document.getElementById('conf-home'); if(!box) return;
@@ -3968,15 +3985,16 @@ function renderConfHome(){
   const feitos = lojaMinha ? lote.filter(p => p[confPre(lojaMinha)+'_em']).length : lote.filter(p => p.ita_em && p.ov_em).length;
   let msg;
   if(!lote.length) msg = 'Nenhum lote aberto agora.';
-  else if(!abertos.length) msg = '✓ Lote de hoje concluído. Os próximos ' + CONF_LOTE + ' aparecem amanhã.';
+  else if(!abertos.length) msg = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' aparecem amanhã' + (confPodeAdiantar() ? ', ou você pode adiantar agora.' : '.');
   else {
     const falta = lojaMinha ? lote.length - feitos : abertos.length;
     const outra = lojaMinha ? CONF_LOJAS.find(l => l !== lojaMinha) : null;
     const aguardaOutra = outra ? lote.filter(p => !p[confPre(outra)+'_em']).length : 0;
     msg = (lote.length - abertos.length) + ' de ' + lote.length + ' concluídos' + (lojaMinha ? ' · você conferiu ' + feitos + ' de ' + lote.length + (aguardaOutra ? ' · aguardando ' + outra + ' em ' + aguardaOutra : '') : '');
   }
-  box.innerHTML = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><div class="strong">Conferência diária de produtos (${CONF_LOTE} por dia)</div><div class="hint">${msg}</div></div><button class="btn primary" id="conf-home-abrir" style="padding:4px 12px;">Abrir conferência</button></div>`;
+  box.innerHTML = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><div class="strong">Conferência diária de produtos (${CONF_LOTE} por dia)</div><div class="hint">${msg}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">${confPodeAdiantar() ? '<button class="btn ghost" id="conf-home-adiantar" style="padding:4px 12px;">Liberar mais ' + CONF_LOTE + ' agora</button>' : ''}<button class="btn primary" id="conf-home-abrir" style="padding:4px 12px;">Abrir conferência</button></div></div>`;
   const b = document.getElementById('conf-home-abrir'); if(b) b.onclick = ()=>{ if(typeof setView === 'function') setView('estoque'); };
+  const ha = document.getElementById('conf-home-adiantar'); if(ha) ha.onclick = ()=>{ ha.disabled = true; confAdiantar().then(()=>{ if(typeof setView === 'function') setView('estoque'); }); };
 }
 
 /* Painel unico: mercadoria + moveis e equipamentos, acima das abas */
