@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 18:48";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 19:13";</script>
       </div>
     </div>
 
@@ -4127,6 +4127,35 @@ function renderConfHome(){
   box.innerHTML = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><div class="strong">Conferência diária de produtos (${CONF_LOTE} por dia)</div><div class="hint">${msg}</div>${confAtrasoHtml()}${confValidadesAlertaHtml()}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${confPodeAdiantar() ? '<button class="btn ghost" id="conf-home-adiantar" style="padding:4px 12px;">Liberar mais ' + CONF_LOTE + ' agora</button>' : ''}<button class="btn primary" id="conf-home-abrir" style="padding:4px 12px;">Abrir conferência</button></div></div>`;
   const b = document.getElementById('conf-home-abrir'); if(b) b.onclick = ()=>{ if(typeof setView === 'function') setView('estoque'); };
   const ha = document.getElementById('conf-home-adiantar'); if(ha) ha.onclick = ()=>{ ha.disabled = true; confAdiantar().then(()=>{ if(typeof setView === 'function') setView('estoque'); }); };
+}
+
+/* Pop-up da conferencia diaria: uma vez por dia, depois da meta do dia e das tarefas (e antes da mensagem de motivacao) */
+const confPopChave = () => 'tn_confpop_' + (TN_EMAIL || 'x');
+function confPopVisto(){ try{ return localStorage.getItem(confPopChave()) === confHoje(); }catch(_){ return false; } }
+function confPopMarcar(){ try{ localStorage.setItem(confPopChave(), confHoje()); }catch(_){} }
+function mostrarConfPopup(){
+  if(document.getElementById('tn-conf-pop') || document.getElementById('tn-metadia') || document.getElementById('tn-novidades')) return;
+  if(!esSocia()){ mostrarMotivacao(); return; }
+  if(CONF === null) return;          // ainda carregando: tnAfterLogin chama de novo quando terminar
+  const lote = confLoteAtual(), abertos = lote.filter(p => !confFechado(p));
+  const atraso = confAtrasoHtml(), val = confValidadesAlertaHtml();
+  if(confPopVisto() || (!abertos.length && !atraso && !val)){ mostrarMotivacao(); return; }
+  confPopMarcar();
+  const lojaDe = (p, l) => p[confPre(l)+'_em'] ? '✓' : '—';
+  const itens = abertos.slice().sort((a,b) => a.ordem - b.ordem).map(p => `<li style="margin-bottom:6px;"><strong>${esc(p.produto)}</strong> <span class="hint" style="font-size:11.5px;">· Itaipulândia ${lojaDe(p,'Itaipulândia')} · Ouro Verde ${lojaDe(p,'Ouro Verde')}</span><br>${confChip(confStatus(p))}</li>`).join('');
+  const div = document.createElement('div');
+  div.id = 'tn-conf-pop';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+  div.innerHTML = `<div style="background:var(--surface-card);color:var(--text-primary);max-width:480px;width:100%;padding:24px;border-radius:18px;box-shadow:0 14px 50px rgba(0,0,0,.4);text-align:left;">
+    <div style="font-size:32px;text-align:center;margin-bottom:2px;">📋</div>
+    <div class="strong" style="font-size:18px;text-align:center;margin-bottom:10px;">Conferência diária de produtos</div>
+    ${atraso}${val}
+    ${abertos.length ? `<div class="strong" style="font-size:13px;margin:8px 0 6px;">Hoje (${lote.length - abertos.length} de ${lote.length} concluídos)</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.45;">${itens}</ul>` : ''}
+    <button class="btn primary" id="tn-conf-pop-abrir" style="width:100%;margin-top:14px;padding:10px;">Abrir conferência</button>
+    <button class="btn ghost" id="tn-conf-pop-fechar" style="width:100%;margin-top:8px;">Depois</button></div>`;
+  document.body.appendChild(div);
+  document.getElementById('tn-conf-pop-abrir').onclick = ()=>{ div.remove(); if(typeof setView === 'function') setView('estoque'); mostrarMotivacao(); };
+  document.getElementById('tn-conf-pop-fechar').onclick = ()=>{ div.remove(); mostrarMotivacao(); };
 }
 
 /* Painel unico: mercadoria + moveis e equipamentos, acima das abas */
@@ -10450,7 +10479,7 @@ function dadosMotivacao(){
 }
 function mostrarMotivacao(){
   if(document.getElementById('tn-motiv')) return;
-  if(document.getElementById('tn-metadia') || document.getElementById('tn-novidades')) return;
+  if(document.getElementById('tn-metadia') || document.getElementById('tn-novidades') || document.getElementById('tn-conf-pop')) return;
   const nome = nomeDoUsuario().trim().toLowerCase();
   /* Andreia e Vanessa recebem a mensagem do dia; o master tambem, para acompanhar
      e poder mandar ele mesmo quando precisar. */
@@ -10548,7 +10577,7 @@ function mostrarNovidades(){
   const artes = artesNovas();
   const linkNovo = linkMaterialNovo();
   const tarefas = tarefasParaAvisar(nome);
-  if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); mostrarMotivacao(); return; }
+  if(!artes.length && !linkNovo && !tarefas.length){ marcarNovidadesVistas(); mostrarConfPopup(); return; }
   const hojeMs = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
   const quando = t => {
     const dt = parseBR(t.prazo); if(!dt) return '';
@@ -10576,7 +10605,7 @@ function mostrarNovidades(){
     <button class="btn primary" id="tn-nov-ok" style="width:100%;">Vi tudo</button>
   </div>`;
   document.body.appendChild(div);
-  const fechar = aba => { marcarNovidadesVistas(); div.remove(); if(aba) setView(aba); else mostrarMotivacao(); };
+  const fechar = aba => { marcarNovidadesVistas(); div.remove(); if(aba) setView(aba); else mostrarConfPopup(); };
   document.getElementById('tn-nov-ok').onclick = ()=> fechar(null);
   const bIg = document.getElementById('tn-nov-ig'); if(bIg) bIg.onclick = ()=> fechar('instagram');
   const bTk = document.getElementById('tn-nov-tk'); if(bTk) bTk.onclick = ()=> fechar('equipe');
@@ -11292,7 +11321,7 @@ async function tnAfterLogin(sb){
   await tnLoadAll(sb);
   tnCarregarAcessos();
   await tnCarregarConfig();
-  if(esSocia()) confCarregar();
+  if(esSocia()) confCarregar().then(() => mostrarConfPopup());
   await tnCarregarPautas();
   tnCarregarWhatsapp();
   tnCarregarCorrecoes();
@@ -11301,7 +11330,7 @@ async function tnAfterLogin(sb){
   iniciarLembreteDiario();
   mostrarMetaDoDia();
   mostrarNovidades();
-  mostrarMotivacao();
+  mostrarConfPopup();
   tnVerificarAcessoCasa();
   toastLiberadoEm = Date.now() + 4000;   // gravacao automatica da abertura nao conta
 }
