@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 16:07";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 16:13";</script>
       </div>
     </div>
 
@@ -3796,9 +3796,9 @@ function confFila(){
   return (CONF||[]).filter(p => !p.lote_data).sort((a,b) => rank(a)-rank(b) || par(b)-par(a) || confDiferenca(b)-confDiferenca(a) || a.ordem-b.ordem);
 }
 const confDiaUtil = () => { const d = TODAY.getDay(); return d >= 1 && d <= 5; };   // novo lote so de segunda a sexta
-/* Atraso: produtos liberados em dias anteriores que ainda nao foram concluidos. Aviso so para quem confere (Andreia, Vanessa e o master). */
+/* Atraso: produtos liberados em dias anteriores que ainda nao foram concluidos. Aviso para todas as socias (Andreia, Vanessa, master e Jandrei, que so acompanha). */
 function confAtraso(){
-  if(!CONF || confMinhaLoja() === null) return null;
+  if(!CONF || !esSocia()) return null;
   const hoje = confHoje();
   const l = CONF.filter(p => p.lote_data && String(p.lote_data).slice(0,10) < hoje && !confFechado(p));
   if(!l.length) return null;
@@ -3815,7 +3815,7 @@ const CONF_LINHA_VAL = '<div data-conf-vrow style="display:grid;grid-template-co
 const confFmtData = iso => { const m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3]+'/'+m[2]+'/'+m[1] : ''; };
 /* Validades conferidas pelas lojas que ja venceram ou vencem em breve. Aviso so para quem confere. */
 function confValidadesAlertaHtml(){
-  if(!CONF || confMinhaLoja() === null) return '';
+  if(!CONF || !esSocia()) return '';
   const hoje = new Date(confHoje() + 'T00:00:00'), itens = [];
   CONF.forEach(p => CONF_LOJAS.forEach(l => { const v = p[confPre(l)+'_validades']; if(Array.isArray(v)) v.forEach(x => { if(x && x.v){ const dias = Math.round((new Date(x.v + 'T00:00:00') - hoje) / 86400000); if(dias <= CONF_VAL_DIAS) itens.push({ p: p.produto, l, q: x.q, v: x.v, dias }); } }); }));
   if(!itens.length) return '';
@@ -3824,6 +3824,7 @@ function confValidadesAlertaHtml(){
   const linha = i => `${esc(i.p)} (${esc(i.l)}, ${(+i.q).toLocaleString('pt-BR',{maximumFractionDigits:3})} un): <strong>${i.dias < 0 ? 'venceu há ' + (-i.dias) + ' dia' + (i.dias < -1 ? 's' : '') : (i.dias === 0 ? 'vence hoje' : 'vence em ' + i.dias + ' dia' + (i.dias > 1 ? 's' : ''))}</strong> · ${confFmtData(i.v)}`;
   return `<div style="margin:6px 0;padding:8px 10px;background:rgba(250,178,25,0.16);border-left:3px solid #e0a000;border-radius:6px;font-size:13px;"><strong>⏳ Validades conferidas: ${itens.length} lote${itens.length>1?'s':''} ${venc ? '(' + venc + ' vencido' + (venc>1?'s':'') + ') ' : ''}para ficar de olho</strong><br><span style="font-size:12px;">${itens.slice(0,8).map(linha).join('<br>')}${itens.length > 8 ? '<br>+ ' + (itens.length-8) + ' outros' : ''}</span></div>`;
 }
+const CONF_EDIT = new Set();   // 'id|loja' das conferencias que estao sendo editadas
 const confLiberadosHoje = () => (CONF||[]).filter(p => String(p.lote_data||'').slice(0,10) === confHoje()).length;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
 let CONF = null, CONF_ERRO = '', CONF_RESP = {}, CONF_RODADA = '', confPedido = false, confOcupado = false;
@@ -3901,7 +3902,18 @@ async function confConfirmar(id, loja, v){
   campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
   campos[pre+'_rep_ajuste'] = v.rep || null;
   campos[pre+'_validades'] = v.val || [];
+  CONF_EDIT.delete(id + '|' + loja);
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;   // valor mudou: as marcacoes do Computec valem de novo
+  if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
+}
+async function confExcluir(id, loja){
+  const p = CONF.find(x => x.id === id); if(!p) return;
+  if(!confirm('Excluir a conferência de ' + loja + ' do produto "' + p.produto + '"?\n\nO produto volta a ficar pendente para esta loja (quantidade, valores e validades informados serão apagados). Fica registrado quem excluiu.')) return;
+  const pre = confPre(loja), campos = {};
+  ['_qtd','_custo','_preco','_por','_em','_rep_ajuste','_validades'].forEach(k => campos[pre+k] = null);
+  campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
+  campos.obs = ((p.obs ? p.obs + ' | ' : '') + 'Conferência de ' + loja + ' excluída por ' + nomeDoUsuario() + ' em ' + new Date().toLocaleDateString('pt-BR')).slice(0, 600);
+  CONF_EDIT.delete(id + '|' + loja);
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
 async function confRefazer(id, loja){
@@ -3956,23 +3968,28 @@ function confColuna(p, loja){
   const repN = +p['rep_'+pre] || 0;
   const repAviso = repN > 1 ? `<div style="margin:0 0 6px;padding:5px 7px;background:rgba(250,178,25,0.16);border-radius:6px;font-size:12px;">⚠ Este produto aparece <strong>${repN} vezes</strong> no relatório desta loja (linhas repetidas ou códigos com o mesmo nome).</div>` : '';
   let corpo = '';
-  if(em){
+  const editando = CONF_EDIT.has(p.id + '|' + loja);
+  if(em && !editando){
     corpo = `<div>✓ <strong>${esc(p[pre+'_por']||'')}</strong> em ${fmtData(em)}: contou <strong>${(+p[pre+'_qtd']).toLocaleString('pt-BR',{maximumFractionDigits:3})}</strong> · compra <strong>${BRL(p[pre+'_custo'])}</strong> · venda <strong>${BRL(p[pre+'_preco'])}</strong></div>`;
     const vl = p[pre+'_validades'];
     if(Array.isArray(vl)) corpo += `<div style="font-size:12px;margin-top:3px;">${vl.length ? 'Validades: ' + vl.map(x => (+x.q).toLocaleString('pt-BR',{maximumFractionDigits:3}) + ' un · <strong>' + confFmtData(x.v) + '</strong>').join(' | ') : 'Sem validade (informado)'}</div>`;
     if(repN > 1 && p[pre+'_rep_ajuste']) corpo += `<div class="hint" style="font-size:11.5px;margin-top:3px;">Ajuste das linhas repetidas: ${esc(p[pre+'_rep_ajuste'])}</div>`;
-    if(editavel && st !== 'concluido' && st !== 'liberado') corpo += `<button class="btn ghost" data-conf-refazer="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:2px 8px;font-size:11.5px;margin-top:4px;">corrigir minha conferência</button>`;
+    if(editavel && st !== 'liberado') corpo += `<div style="margin-top:4px;"><button class="btn ghost" data-conf-editar="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:2px 8px;font-size:11.5px;">Editar</button> <button class="btn ghost" data-conf-excluir="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:2px 8px;font-size:11.5px;color:var(--critical);">Excluir conferência</button></div>`;
   } else if(editavel && st !== 'liberado'){
-    const dv = (cod ? p['custo_'+pre] : p['custo_'+preO]), dp = (cod ? p['preco_'+pre] : p['preco_'+preO]);
+    const ed = !!em;   // edicao: vem preenchido com o que a loja ja informou
+    const dv = ed ? p[pre+'_custo'] : (cod ? p['custo_'+pre] : p['custo_'+preO]), dp = ed ? p[pre+'_preco'] : (cod ? p['preco_'+pre] : p['preco_'+preO]);
+    const vl0 = ed ? p[pre+'_validades'] : null;
+    const linhasVal = (Array.isArray(vl0) && vl0.length) ? vl0.map(x => CONF_LINHA_VAL.replace('data-conf-vq placeholder', 'data-conf-vq value="' + esc(x.q) + '" placeholder').replace('data-conf-vd style', 'data-conf-vd value="' + esc(x.v||'') + '" style')).join('') : CONF_LINHA_VAL;
+    const semV = ed && Array.isArray(vl0) && !vl0.length && (+p[pre+'_qtd']) > 0;
     corpo = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;">
-      <label class="hint" style="font-size:11px;">Quantidade contada<input type="number" step="0.001" min="0" data-conf-f="qtd" placeholder="0" style="width:100%;box-sizing:border-box;"></label>
+      <label class="hint" style="font-size:11px;">Quantidade contada<input type="number" step="0.001" min="0" data-conf-f="qtd" placeholder="0" value="${ed && p[pre+'_qtd']!=null ? esc(p[pre+'_qtd']) : ''}" style="width:100%;box-sizing:border-box;"></label>
       <label class="hint" style="font-size:11px;">Valor de compra<input type="number" step="0.01" min="0" data-conf-f="custo" value="${dv!=null?esc(dv):''}" style="width:100%;box-sizing:border-box;"></label>
       <label class="hint" style="font-size:11px;">Valor de venda<input type="number" step="0.01" min="0" data-conf-f="preco" value="${dp!=null?esc(dp):''}" style="width:100%;box-sizing:border-box;"></label></div>
-      ${repN > 1 ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Ajuste das ${repN} linhas repetidas (obrigatório)</strong><input type="text" data-conf-f="rep" maxlength="200" placeholder="Ex.: é um produto só, manter 1 linha · ou: são produtos diferentes (qual é qual)" style="width:100%;box-sizing:border-box;"></label>` : ''}
-      <div class="hint" style="font-size:11px;margin-top:6px;"><strong>Validade (obrigatória)</strong> — se o produto tem mais de uma validade, adicione uma linha para cada uma.<div data-conf-vlist>${CONF_LINHA_VAL}</div>
+      ${repN > 1 ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Ajuste das ${repN} linhas repetidas (obrigatório)</strong><input type="text" data-conf-f="rep" maxlength="200" value="${ed ? esc(p[pre+'_rep_ajuste']||'') : ''}" placeholder="Ex.: é um produto só, manter 1 linha · ou: são produtos diferentes (qual é qual)" style="width:100%;box-sizing:border-box;"></label>` : ''}
+      <div class="hint" style="font-size:11px;margin-top:6px;"><strong>Validade (obrigatória)</strong> — se o produto tem mais de uma validade, adicione uma linha para cada uma.<div data-conf-vlist>${linhasVal}</div>
         <button type="button" class="btn ghost" data-conf-vmais style="padding:1px 8px;font-size:11px;margin-top:4px;">+ outra validade</button>
-        <label style="margin-left:8px;"><input type="checkbox" data-conf-semval> produto sem validade</label></div>
-      <button class="btn primary" data-conf-ok="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">Confirmar minha conferência</button>`;
+        <label style="margin-left:8px;"><input type="checkbox" data-conf-semval${semV ? ' checked' : ''}> produto sem validade</label></div>
+      <button class="btn primary" data-conf-ok="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">${ed ? 'Salvar alteração' : 'Confirmar minha conferência'}</button>${ed ? ` <button class="btn ghost" data-conf-cancelar="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">Cancelar</button>` : ''}`;
   } else corpo = '<span class="hint">' + (confMinhaLoja() === null ? 'ainda não conferido nesta loja' : 'aguardando a conferência desta loja') + '</span>';
   let comp = '';
   if(st === 'acordado' || st === 'concluido'){
@@ -4030,6 +4047,9 @@ function renderConferencia(){
     b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco, rep, val: vals });
   });
   box.querySelectorAll('[data-conf-vmais]').forEach(b=> b.onclick = ()=>{ const col = b.closest('div[style*="border:1px solid"]'); col.querySelector('[data-conf-vlist]').insertAdjacentHTML('beforeend', CONF_LINHA_VAL); });
+  box.querySelectorAll('[data-conf-editar]').forEach(b=> b.onclick = ()=>{ CONF_EDIT.add(b.dataset.confEditar + '|' + b.dataset.confLoja); renderConferencia(); });
+  box.querySelectorAll('[data-conf-cancelar]').forEach(b=> b.onclick = ()=>{ CONF_EDIT.delete(b.dataset.confCancelar + '|' + b.dataset.confLoja); renderConferencia(); });
+  box.querySelectorAll('[data-conf-excluir]').forEach(b=> b.onclick = ()=> confExcluir(b.dataset.confExcluir, b.dataset.confLoja));
   box.querySelectorAll('[data-conf-refazer]').forEach(b=> b.onclick = ()=> confRefazer(b.dataset.confRefazer, b.dataset.confLoja));
   box.querySelectorAll('[data-conf-comp]').forEach(b=> b.onclick = ()=> { b.disabled = true; confComputec(b.dataset.confComp, b.dataset.confLoja, b.dataset.confV); });
   box.querySelectorAll('[data-conf-aceitar]').forEach(b=> b.onclick = async ()=>{
