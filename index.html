@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 11:05";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 12:17";</script>
       </div>
     </div>
 
@@ -3939,7 +3939,7 @@ function confColuna(p, loja){
       <label class="hint" style="font-size:11px;">Valor de venda<input type="number" step="0.01" min="0" data-conf-f="preco" value="${dp!=null?esc(dp):''}" style="width:100%;box-sizing:border-box;"></label></div>
       ${repN > 1 ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Ajuste das ${repN} linhas repetidas (obrigatório)</strong><input type="text" data-conf-f="rep" maxlength="200" placeholder="Ex.: é um produto só, manter 1 linha · ou: são produtos diferentes (qual é qual)" style="width:100%;box-sizing:border-box;"></label>` : ''}
       <button class="btn primary" data-conf-ok="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">Confirmar minha conferência</button>`;
-  } else corpo = '<span class="hint">aguardando a conferência desta loja</span>';
+  } else corpo = '<span class="hint">' + (confMinhaLoja() === null ? 'ainda não conferido nesta loja' : 'aguardando a conferência desta loja') + '</span>';
   let comp = '';
   if(st === 'acordado' || st === 'concluido'){
     const mc = p[pre+'_computec'];
@@ -3961,7 +3961,7 @@ function renderConferencia(){
   const fila = CONF.filter(p => !p.lote_data).length, totalFech = CONF.filter(confFechado).length;
   const minha = confMinhaLoja();
   let faixa;
-  if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : (confDiaUtil() ? 'Nenhum lote aberto agora.' : 'Fim de semana: a conferência volta na segunda-feira.');
+  if(!lote.length) faixa = minha === null ? 'Você acompanha a conferência em modo de visualização (sem comandos).' : (confDiaUtil() ? 'Nenhum lote aberto agora.' : 'Fim de semana: a conferência volta na segunda-feira.');
   else if(!abertos.length) faixa = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã' + (confPodeAdiantar() ? ', ou clique abaixo para adiantar agora.' : (confLiberadosHoje() >= CONF_MAX_DIA ? ' (hoje já foram liberados os ' + CONF_MAX_DIA + ' do dia).' : '.'));
   else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
   box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde <span class="hint" style="font-weight:400;">· relatório ${esc(CONF_RODADA)}</span></summary>
