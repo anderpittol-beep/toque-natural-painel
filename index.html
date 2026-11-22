@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:58";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 11:01";</script>
       </div>
     </div>
 
@@ -3774,6 +3774,28 @@ function renderInvFiscal(){
    marcacoes o produto fica CONCLUIDO, e o proximo lote de 5 so abre quando o atual estiver todo
    concluido. Produto que so existe numa loja aparece para as duas. */
 const CONF_LOTE = 5;
+const CONF_MAX_DIA = 20;                       // teto de produtos liberados por dia (4 lotes de 5), somando as duas lojas
+const CONF_CATEGORIAS = ['Temperos'];          // categorias na ordem de prioridade; o resto vem depois
+const confNorm = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const CONF_RE_TEMPERO = /(^|[^A-Z])(TEMPERO|PIMENTA|OREGANO|CANELA|CRAVO|CURRY|NOZ MOSCADA|COLORAU|PAPRICA|PAPRIKA|CURCUMA|ACAFRAO|COMINHO|ALHO|CEBOLA|SALSA|SALSINHA|CEBOLINHA|MANJERICAO|LOURO|TOMILHO|ALECRIM|COENTRO|ERVA DOCE|GENGIBRE|MOSTARDA|LEMON PEPPER|CHIMICHURRI|CHIMICHURRY|PROVENCAL|SALVIA|MANJERONA|ESTRAGAO|CARDAMOMO|URUCUM|GARAM|MASSALA|FUNCHO|FLOR DE SAL|FUMACA|ZAATAR|SAL GROSSO|SAL ROSA|SAL DO HIMALAIA|SAL MARINHO|SAL LIGHT|SAL RUBRO|ANIS ESTRELADO|HORTELA)([^A-Z]|$)/;
+const CONF_RE_NAO_TEMPERO = /WHEY|^CHA |^CHA$|CHAS |CASTANHA|BATATA|MILHO|MACA SECA|BANANA|PROPOLIS|CONDRIGEN|COLAGENO|BISCOITO|BARRA|AMENDOIM|PROTEIN|OLEO|CAPS|SUCO|SABONETE|SHAMPOO|CREME|TINTURA|SEMENTE DE|FARINHA|GRANOLA|MIX |BOLACHA|BALA|CHOCOLATE|KIT |PASTA DE|SNACK|PIPOCA|AZEITE|VINAGRE|MEL |XAROPE|GELEIA|SUPLEMENTO|CAFE/;
+/* categoria pelo NOME do produto (o inventario fiscal nao traz categoria) */
+function confCategoria(p){ const n = confNorm(p.produto); return (CONF_RE_TEMPERO.test(n) && !CONF_RE_NAO_TEMPERO.test(n)) ? 'Temperos' : 'Outros'; }
+/* quanto as duas lojas divergem: diferenca entre a margem (venda - compra) de cada loja.
+   Ex.: Ouro Verde compra 50 e vende 300 (margem 250); Itaipulandia compra 150 e vende 200 (margem 50) -> 200.
+   Produto que so existe numa loja usa a propria margem. */
+function confDiferenca(p){
+  const mI = p.cod_ita ? (+p.preco_ita||0) - (+p.custo_ita||0) : null, mO = p.cod_ov ? (+p.preco_ov||0) - (+p.custo_ov||0) : null;
+  if(mI != null && mO != null) return Math.abs(mI - mO);
+  return Math.abs(mI != null ? mI : (mO || 0));
+}
+/* fila dos produtos ainda nao liberados: categoria prioritaria, depois os que existem nas duas lojas, depois a maior diferenca */
+function confFila(){
+  const rank = p => { const i = CONF_CATEGORIAS.indexOf(confCategoria(p)); return i < 0 ? CONF_CATEGORIAS.length : i; };
+  const par = p => (p.cod_ita && p.cod_ov) ? 1 : 0;           // quem existe nas duas lojas vem antes de quem so existe numa
+  return (CONF||[]).filter(p => !p.lote_data).sort((a,b) => rank(a)-rank(b) || par(b)-par(a) || confDiferenca(b)-confDiferenca(a) || a.ordem-b.ordem);
+}
+const confLiberadosHoje = () => (CONF||[]).filter(p => String(p.lote_data||'').slice(0,10) === confHoje()).length;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
 let CONF = null, CONF_ERRO = '', CONF_RESP = {}, CONF_RODADA = '', confPedido = false, confOcupado = false;
 const confPre = l => l === 'Itaipulândia' ? 'ita' : 'ov';
@@ -3817,7 +3839,7 @@ async function confAbrirDia(){
   const sb = window.TN.sb;
   const ins = await sb.from('conferencia_dias').insert({ data: hoje, criado_por: nomeDoUsuario() });
   if(ins.error){ await confRecarregar(); return; }                   // a outra socia abriu o dia primeiro
-  const prox = CONF.filter(p => !p.lote_data).sort((a,b)=>a.ordem-b.ordem).slice(0, CONF_LOTE);
+  const prox = confFila().slice(0, CONF_LOTE);
   if(!prox.length) return;
   const up = await sb.from('conferencia_produtos').update({ lote_data: hoje }).in('id', prox.map(p=>p.id));
   if(up.error){ CONF_ERRO = up.error.message; return; }
@@ -3864,13 +3886,13 @@ async function confComputec(id, loja, valor){
 }
 /* Adianta o proximo lote no mesmo dia: so quando o lote atual esta todo concluido e ainda ha produtos na fila */
 const confPodeAdiantar = () => !!CONF && confMinhaLoja() !== null && confLoteAtual().length > 0
-  && confLoteAtual().every(confFechado) && CONF.some(p => !p.lote_data);
+  && confLoteAtual().every(confFechado) && CONF.some(p => !p.lote_data) && confLiberadosHoje() < CONF_MAX_DIA;
 async function confAdiantar(){
   if(confOcupado) return; confOcupado = true;
   try{
     await confRecarregar();                                   // confere de novo: a outra socia pode ter adiantado primeiro
     if(!confPodeAdiantar()){ renderConferencia(); renderConfHome(); return; }
-    const prox = CONF.filter(p => !p.lote_data).sort((a,b)=>a.ordem-b.ordem).slice(0, CONF_LOTE);
+    const prox = confFila().slice(0, Math.min(CONF_LOTE, CONF_MAX_DIA - confLiberadosHoje()));
     const {error} = await window.TN.sb.from('conferencia_produtos').update({ lote_data: confHoje() }).in('id', prox.map(p=>p.id)).is('lote_data', null);
     if(error){ alert('Não consegui liberar os próximos produtos: ' + error.message); return; }
     await confRecarregar();
@@ -3938,13 +3960,13 @@ function renderConferencia(){
   const minha = confMinhaLoja();
   let faixa;
   if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : 'Nenhum lote aberto agora.';
-  else if(!abertos.length) faixa = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã' + (confPodeAdiantar() ? ', ou clique abaixo para adiantar agora.' : '.');
+  else if(!abertos.length) faixa = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã' + (confPodeAdiantar() ? ', ou clique abaixo para adiantar agora.' : (confLiberadosHoje() >= CONF_MAX_DIA ? ' (hoje já foram liberados os ' + CONF_MAX_DIA + ' do dia).' : '.'));
   else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
   box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde <span class="hint" style="font-weight:400;">· relatório ${esc(CONF_RODADA)}</span></summary>
     <p class="hint" style="margin:6px 0 10px;">${faixa}<br><span style="font-size:11.5px;">Concluídos no total: ${totalFech} de ${CONF.length} · na fila: ${fila}</span></p>
-    ${confPodeAdiantar() ? `<div style="margin:0 0 10px;"><button class="btn primary" id="conf-adiantar" style="padding:5px 14px;">Liberar mais ${Math.min(CONF_LOTE, fila)} produtos agora</button></div>` : ''}
+    ${confPodeAdiantar() ? `<div style="margin:0 0 10px;"><button class="btn primary" id="conf-adiantar" style="padding:5px 14px;">Liberar mais ${Math.min(CONF_LOTE, fila, CONF_MAX_DIA - confLiberadosHoje())} produtos agora</button> <span class="hint" style="font-size:11.5px;">hoje: ${confLiberadosHoje()} de ${CONF_MAX_DIA} (máximo por dia)</span></div>` : ''}
     ${lote.slice().sort((a,b)=> (confFechado(a)?1:0)-(confFechado(b)?1:0) || a.ordem-b.ordem).map(p => { const st = confStatus(p);
-      return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)}</div><div>${confChip(st)}</div></div>
+      return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)} <span class="hint" style="font-weight:400;font-size:11.5px;">· ${esc(confCategoria(p))} · diferença entre as lojas ${BRL(confDiferenca(p))}</span></div><div>${confChip(st)}</div></div>
         ${p.parecido ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Nome parecido na outra loja: ${esc(p.parecido)}</div>` : ''}
         ${p.ant_em ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Conferência anterior (${new Date(p.ant_em).toLocaleDateString('pt-BR')}): venda acordada ${BRL(p.ant_preco)}</div>` : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">${confColuna(p, 'Itaipulândia')}${confColuna(p, 'Ouro Verde')}</div>
