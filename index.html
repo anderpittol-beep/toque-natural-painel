@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="19/11/2026, 14:43";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:47";</script>
       </div>
     </div>
 
@@ -438,6 +438,7 @@ window.TN_CONFIG = {
 
       <!-- VISÃO GERAL -->
       <section class="view active" id="view-visao-geral">
+        <div id="conf-home" style="margin-bottom:12px;display:none;"></div>
         <div class="section-block">
           <div class="grid grid-3" id="kpi-cards"></div>
         </div>
@@ -845,6 +846,7 @@ window.TN_CONFIG = {
         <div class="grid grid-4" id="est-kpis" style="margin-bottom:16px;"></div>
         <div id="est-toledo" style="margin-bottom:16px;"></div>
         <div id="est-resumo" style="margin-bottom:16px;overflow-x:auto;"></div>
+        <div id="conf-diaria" style="margin-bottom:16px;display:none;"></div>
         <div class="card" style="margin-bottom:16px;" id="est-lancar-card">
           <details class="add-form">
             <summary id="es-resumo-form">Lançar estoque (lote)</summary>
@@ -3762,6 +3764,207 @@ function renderInvFiscal(){
   if(f) f.onchange = ()=>{ invFiscalFiltro = f.value; box.dataset.aberto = '1'; renderInvFiscal(); };
 }
 
+/* ---------- Conferencia diaria de produtos: 5 por dia, Itaipulandia x Ouro Verde ----------
+   Cada socia confere a propria loja (quantidade, valor de compra, valor de venda). O produto
+   so fica ACORDADO quando as duas lojas informam o MESMO valor de venda. Depois de acordado,
+   cada socia marca se alterou o valor no sistema oficial da loja (Computec). So com as duas
+   marcacoes o produto fica CONCLUIDO, e o proximo lote de 5 so abre quando o atual estiver todo
+   concluido. Produto que so existe numa loja aparece para as duas. */
+const CONF_LOTE = 5;
+const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
+let CONF = null, CONF_ERRO = '', CONF_RESP = {}, confPedido = false, confOcupado = false;
+const confPre = l => l === 'Itaipulândia' ? 'ita' : 'ov';
+const confHoje = () => TODAY.getFullYear() + '-' + String(TODAY.getMonth()+1).padStart(2,'0') + '-' + String(TODAY.getDate()).padStart(2,'0');
+const confFechado = p => p.status === 'concluido' || p.status === 'liberado';
+function confMinhaLoja(){
+  if(typeof ehMaster === 'function' && ehMaster()) return 'ambas';
+  return CONF_RESP[String(TN_EMAIL||'').trim().toLowerCase()] || null;
+}
+const confPodeEditar = loja => { const m = confMinhaLoja(); return m === 'ambas' || m === loja; };
+function confStatus(p){
+  if(p.status === 'liberado') return 'liberado';
+  const a = !!p.ita_em, b = !!p.ov_em;
+  if(!a && !b) return 'pendente';
+  if(!a || !b) return 'aguardando';
+  if(Math.abs((+p.ita_preco||0) - (+p.ov_preco||0)) >= 0.005) return 'divergente';
+  return (p.ita_computec && p.ov_computec) ? 'concluido' : 'acordado';
+}
+function confLoteAtual(){
+  const hoje = confHoje();
+  return (CONF||[]).filter(p => p.lote_data && (!confFechado(p) || String(p.lote_data).slice(0,10) === hoje)).sort((a,b)=>a.ordem-b.ordem);
+}
+async function confRecarregar(){
+  let todos = [], de = 0;
+  while(true){
+    const {data, error} = await window.TN.sb.from('conferencia_produtos').select('*').order('ordem').range(de, de + 999);
+    if(error){ CONF_ERRO = error.message; return false; }
+    todos = todos.concat(data||[]);
+    if(!data || data.length < 1000) break;
+    de += 1000;
+  }
+  CONF = todos; CONF_ERRO = ''; return true;
+}
+async function confAbrirDia(){
+  if(!CONF || !CONF.length || confMinhaLoja() === null) return;     // so quem confere abre o dia
+  const hoje = confHoje();
+  if(CONF.some(p => p.lote_data && !confFechado(p))) return;         // lote em aberto bloqueia o seguinte
+  if(CONF.some(p => String(p.lote_data||'').slice(0,10) === hoje)) return;   // hoje ja teve lote
+  const sb = window.TN.sb;
+  const ins = await sb.from('conferencia_dias').insert({ data: hoje, criado_por: nomeDoUsuario() });
+  if(ins.error){ await confRecarregar(); return; }                   // a outra socia abriu o dia primeiro
+  const prox = CONF.filter(p => !p.lote_data).sort((a,b)=>a.ordem-b.ordem).slice(0, CONF_LOTE);
+  if(!prox.length) return;
+  const up = await sb.from('conferencia_produtos').update({ lote_data: hoje }).in('id', prox.map(p=>p.id));
+  if(up.error){ CONF_ERRO = up.error.message; return; }
+  await confRecarregar();
+}
+async function confCarregar(){
+  try{ await confRecarregar(); if(CONF) await confAbrirDia(); }
+  catch(e){ CONF = CONF || []; CONF_ERRO = String(e); }
+  renderConferencia(); renderConfHome();
+}
+async function confGravar(id, campos){
+  const p = CONF.find(x => x.id === id); if(!p) return false;
+  const novo = Object.assign({}, p, campos);
+  novo.status = confStatus(novo);
+  campos = Object.assign({}, campos, { status: novo.status, atualizado_em: new Date().toISOString() });
+  if(novo.status === 'divergente' || novo.status === 'pendente' || novo.status === 'aguardando'){ campos.preco_final = null; campos.acordado_em = null; campos.acordado_por = null; }
+  else if(novo.status === 'acordado' || novo.status === 'concluido'){
+    campos.preco_final = +novo.ita_preco;
+    if(!p.acordado_em){ campos.acordado_em = new Date().toISOString(); campos.acordado_por = nomeDoUsuario(); }
+  }
+  const {error} = await window.TN.sb.from('conferencia_produtos').update(campos).eq('id', id);
+  if(error){ alert('Não consegui gravar: ' + error.message); return false; }
+  Object.assign(p, campos); return true;
+}
+async function confConfirmar(id, loja, v){
+  const pre = confPre(loja);
+  const campos = {};
+  campos[pre+'_qtd'] = v.qtd; campos[pre+'_custo'] = v.custo; campos[pre+'_preco'] = v.preco;
+  campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
+  campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;   // valor mudou: as marcacoes do Computec valem de novo
+  if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
+}
+async function confRefazer(id, loja){
+  const pre = confPre(loja), campos = {};
+  campos[pre+'_em'] = null; campos[pre+'_por'] = null;
+  campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
+  if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
+}
+async function confComputec(id, loja, valor){
+  const pre = confPre(loja), campos = {};
+  campos[pre+'_computec'] = valor; campos[pre+'_computec_em'] = new Date().toISOString();
+  if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
+}
+async function confLiberar(){
+  const abertos = confLoteAtual().filter(p => !confFechado(p));
+  if(!abertos.length) return;
+  const motivo = (prompt('Liberar o próximo lote mesmo com ' + abertos.length + ' produto(s) sem acordo?\n\nEscreva o motivo (fica registrado):') || '').trim();
+  if(motivo.length < 4) return;
+  for(const p of abertos){ await confGravar(p.id, { status: 'liberado', obs: 'Liberado por ' + nomeDoUsuario() + ': ' + motivo }); }
+  await confCarregar();
+}
+const confChip = s => ({
+  pendente:   '<span class="badge b-muted"><span class="dot"></span>pendente</span>',
+  aguardando: '<span class="badge b-warning"><span class="dot"></span>aguardando a outra loja</span>',
+  divergente: '<span class="badge b-critical"><span class="dot"></span>preço divergente</span>',
+  acordado:   '<span class="badge b-warning"><span class="dot"></span>acordado · falta o Computec</span>',
+  concluido:  '<span class="badge b-good"><span class="dot"></span>concluído</span>',
+  liberado:   '<span class="badge b-muted"><span class="dot"></span>liberado pelo master</span>' }[s] || '');
+function confColuna(p, loja){
+  const pre = confPre(loja), outraLoja = CONF_LOJAS.find(l => l !== loja), preO = confPre(outraLoja);
+  const cod = p['cod_'+pre], editavel = confPodeEditar(loja), em = p[pre+'_em'], st = confStatus(p);
+  const fmtData = iso => iso ? new Date(iso).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '';
+  const un = p['un_'+pre] ? ' ' + p['un_'+pre] : '';
+  const sis = cod ? `Sistema: compra <strong>${BRL(p['custo_'+pre])}</strong> · venda <strong>${BRL(p['preco_'+pre])}</strong> · saldo <strong>${(+p['saldo_'+pre]).toLocaleString('pt-BR',{maximumFractionDigits:3})}${esc(un)}</strong>`
+                  : '<span style="color:var(--critical);">Não cadastrado nesta loja no inventário</span>';
+  let corpo = '';
+  if(em){
+    corpo = `<div>✓ <strong>${esc(p[pre+'_por']||'')}</strong> em ${fmtData(em)}: contou <strong>${(+p[pre+'_qtd']).toLocaleString('pt-BR',{maximumFractionDigits:3})}</strong> · compra <strong>${BRL(p[pre+'_custo'])}</strong> · venda <strong>${BRL(p[pre+'_preco'])}</strong></div>`;
+    if(editavel && st !== 'concluido' && st !== 'liberado') corpo += `<button class="btn ghost" data-conf-refazer="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:2px 8px;font-size:11.5px;margin-top:4px;">corrigir minha conferência</button>`;
+  } else if(editavel && st !== 'liberado'){
+    const dv = (cod ? p['custo_'+pre] : p['custo_'+preO]), dp = (cod ? p['preco_'+pre] : p['preco_'+preO]);
+    corpo = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;">
+      <label class="hint" style="font-size:11px;">Quantidade contada<input type="number" step="0.001" min="0" data-conf-f="qtd" placeholder="0" style="width:100%;box-sizing:border-box;"></label>
+      <label class="hint" style="font-size:11px;">Valor de compra<input type="number" step="0.01" min="0" data-conf-f="custo" value="${dv!=null?esc(dv):''}" style="width:100%;box-sizing:border-box;"></label>
+      <label class="hint" style="font-size:11px;">Valor de venda<input type="number" step="0.01" min="0" data-conf-f="preco" value="${dp!=null?esc(dp):''}" style="width:100%;box-sizing:border-box;"></label></div>
+      <button class="btn primary" data-conf-ok="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">Confirmar minha conferência</button>`;
+  } else corpo = '<span class="hint">aguardando a conferência desta loja</span>';
+  let comp = '';
+  if(st === 'acordado' || st === 'concluido'){
+    const mc = p[pre+'_computec'];
+    if(mc) comp = `<div style="margin-top:6px;">Computec: ✓ <strong>${mc === 'sim' ? 'alterado' : 'não precisava alterar'}</strong> em ${fmtData(p[pre+'_computec_em'])}</div>`;
+    else if(editavel) comp = `<div style="margin-top:8px;padding:6px;border:1px dashed var(--critical);border-radius:6px;"><div class="hint" style="font-size:11.5px;margin-bottom:4px;"><strong>O valor de venda ${BRL(p.preco_final)} foi alterado no sistema Computec desta loja?</strong></div>
+      <button class="btn primary" data-conf-comp="${esc(p.id)}" data-conf-loja="${esc(loja)}" data-conf-v="sim" style="padding:2px 8px;font-size:11.5px;">Sim, já alterei</button>
+      <button class="btn ghost" data-conf-comp="${esc(p.id)}" data-conf-loja="${esc(loja)}" data-conf-v="nao_precisa" style="padding:2px 8px;font-size:11.5px;">Não precisa (já estava igual)</button></div>`;
+    else comp = '<div class="hint" style="margin-top:6px;">Computec: aguardando marcação desta loja</div>';
+  }
+  return `<div style="padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;"><div class="strong" style="margin-bottom:4px;">${esc(loja)}${confMinhaLoja()===loja?' <span class="hint">(você)</span>':''}</div>
+    <div class="hint" style="margin-bottom:6px;font-size:12px;">${sis}</div>${corpo}${comp}</div>`;
+}
+function renderConferencia(){
+  const box = document.getElementById('conf-diaria'); if(!box) return;
+  if(!esSocia() || CONF === null){ box.style.display = 'none'; return; }
+  if(!CONF.length){ box.style.display = CONF_ERRO ? '' : 'none'; box.innerHTML = CONF_ERRO ? `<div class="card hint" style="color:var(--critical);">Conferência diária: ${esc(CONF_ERRO)}</div>` : ''; return; }
+  box.style.display = '';
+  const lote = confLoteAtual(), abertos = lote.filter(p => !confFechado(p)), fechados = lote.length - abertos.length;
+  const fila = CONF.filter(p => !p.lote_data).length, totalFech = CONF.filter(confFechado).length;
+  const minha = confMinhaLoja();
+  let faixa;
+  if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : 'Nenhum lote aberto agora.';
+  else if(!abertos.length) faixa = '✓ Lote de hoje concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã.';
+  else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
+  box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde</summary>
+    <p class="hint" style="margin:6px 0 10px;">${faixa}<br><span style="font-size:11.5px;">Concluídos no total: ${totalFech} de ${CONF.length} · na fila: ${fila}</span></p>
+    ${lote.map(p => { const st = confStatus(p);
+      return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)}</div><div>${confChip(st)}</div></div>
+        ${p.parecido ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Nome parecido na outra loja: ${esc(p.parecido)}</div>` : ''}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">${confColuna(p, 'Itaipulândia')}${confColuna(p, 'Ouro Verde')}</div>
+        ${st === 'divergente' ? `<div style="margin-top:8px;padding:8px;background:rgba(208,59,59,0.08);border-radius:6px;font-size:12.5px;"><strong>Valores de venda diferentes:</strong> Itaipulândia ${BRL(p.ita_preco)} × Ouro Verde ${BRL(p.ov_preco)} (diferença ${BRL(Math.abs((+p.ita_preco)-(+p.ov_preco)))}). As duas lojas precisam chegar ao mesmo valor.
+          ${CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => { const o = CONF_LOJAS.find(x=>x!==l); return `<button class="btn ghost" data-conf-aceitar="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin-left:6px;">${esc(l)} aceita ${BRL(p[confPre(o)+'_preco'])}</button>`; }).join('')}</div>` : ''}
+        ${p.obs ? `<div class="hint" style="font-size:11.5px;margin-top:6px;">${esc(p.obs)}</div>` : ''}</div>`; }).join('')}
+    ${(typeof ehMaster === 'function' && ehMaster() && abertos.length) ? '<div style="margin-top:6px;"><button class="btn ghost" id="conf-liberar" style="padding:3px 10px;font-size:12px;">Master: liberar o próximo lote mesmo com pendências</button></div>' : ''}
+    ${CONF_ERRO ? `<p class="hint" style="color:var(--critical);">${esc(CONF_ERRO)}</p>` : ''}</details></div>`;
+  box.querySelectorAll('[data-conf-ok]').forEach(b=> b.onclick = async ()=>{
+    const card = b.closest('div[style*="border:1px solid"]'), val = k => { const el = card.querySelector('[data-conf-f="'+k+'"]'); return el ? el.value : ''; };
+    const qtd = num(val('qtd')), custo = num(val('custo')), preco = num(val('preco'));
+    if(val('qtd') === '' || qtd == null || qtd < 0){ alert('Informe a quantidade contada (use 0 se não tem na loja).'); return; }
+    if(custo == null || custo < 0){ alert('Informe o valor de compra.'); return; }
+    if(preco == null || !(preco > 0)){ alert('Informe o valor de venda.'); return; }
+    b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco });
+  });
+  box.querySelectorAll('[data-conf-refazer]').forEach(b=> b.onclick = ()=> confRefazer(b.dataset.confRefazer, b.dataset.confLoja));
+  box.querySelectorAll('[data-conf-comp]').forEach(b=> b.onclick = ()=> { b.disabled = true; confComputec(b.dataset.confComp, b.dataset.confLoja, b.dataset.confV); });
+  box.querySelectorAll('[data-conf-aceitar]').forEach(b=> b.onclick = async ()=>{
+    const p = CONF.find(x => x.id === b.dataset.confAceitar); if(!p) return;
+    const loja = b.dataset.confLoja, pre = confPre(loja), preO = confPre(CONF_LOJAS.find(l=>l!==loja));
+    if(!confirm(loja + ' passa a vender por ' + BRL(p[preO+'_preco']) + '?')) return;
+    const campos = {}; campos[pre+'_preco'] = p[preO+'_preco']; campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
+    campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;
+    if(await confGravar(p.id, campos)){ renderConferencia(); renderConfHome(); }
+  });
+  const bl = document.getElementById('conf-liberar'); if(bl) bl.onclick = confLiberar;
+}
+function renderConfHome(){
+  const box = document.getElementById('conf-home'); if(!box) return;
+  if(!esSocia() || !CONF || !CONF.length){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  const lote = confLoteAtual(), abertos = lote.filter(p => !confFechado(p));
+  const minha = confMinhaLoja(), lojaMinha = (minha && minha !== 'ambas') ? minha : null;
+  const feitos = lojaMinha ? lote.filter(p => p[confPre(lojaMinha)+'_em']).length : lote.filter(p => p.ita_em && p.ov_em).length;
+  let msg;
+  if(!lote.length) msg = 'Nenhum lote aberto agora.';
+  else if(!abertos.length) msg = '✓ Lote de hoje concluído. Os próximos ' + CONF_LOTE + ' aparecem amanhã.';
+  else {
+    const falta = lojaMinha ? lote.length - feitos : abertos.length;
+    const outra = lojaMinha ? CONF_LOJAS.find(l => l !== lojaMinha) : null;
+    const aguardaOutra = outra ? lote.filter(p => !p[confPre(outra)+'_em']).length : 0;
+    msg = (lote.length - abertos.length) + ' de ' + lote.length + ' concluídos' + (lojaMinha ? ' · você conferiu ' + feitos + ' de ' + lote.length + (aguardaOutra ? ' · aguardando ' + outra + ' em ' + aguardaOutra : '') : '');
+  }
+  box.innerHTML = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><div class="strong">Conferência diária de produtos (${CONF_LOTE} por dia)</div><div class="hint">${msg}</div></div><button class="btn primary" id="conf-home-abrir" style="padding:4px 12px;">Abrir conferência</button></div>`;
+  const b = document.getElementById('conf-home-abrir'); if(b) b.onclick = ()=>{ if(typeof setView === 'function') setView('estoque'); };
+}
+
 /* Painel unico: mercadoria + moveis e equipamentos, acima das abas */
 function esPainelTotal(){
   const box = document.getElementById('est-total'); if(!box) return;
@@ -4385,6 +4588,7 @@ function renderEstoque(){
   const btnUsados = document.getElementById('es-ver-usados');
   if(btnUsados) btnUsados.onclick = ()=>{ const z = document.getElementById('es-zerados'); if(z){ z.checked = !z.checked; renderEstoque(); } };
   if(socia && !invFiscalPedido && window.TN && window.TN.sb){ invFiscalPedido = true; invFiscalCarregar(); } else renderInvFiscal();
+  renderConferencia();
 }
 
 /* ============ RENDER: CLIENTES ============ */
@@ -5076,6 +5280,9 @@ async function tnCarregarConfig(){
     const {data} = await window.TN.sb.from('config_painel').select('chave,valor');
     (data||[]).forEach(r=>{
       if(r.chave==='ig_padrao_link') IG_PADRAO_LINK = r.valor||'';
+      if(r.chave==='conferencia_responsaveis'){
+        try{ const o = JSON.parse(r.valor||'{}'); CONF_RESP = {}; Object.keys(o||{}).forEach(k=>{ CONF_RESP[String(k).trim().toLowerCase()] = o[k]; }); }catch(_){}
+      }
       if(r.chave==='estoque_operadores'){
         try{ ESTOQUE_OPERADORES = (JSON.parse(r.valor||'[]')||[]).map(x=>String(x).trim().toLowerCase()).filter(Boolean); }catch(_){}
         try{ renderEstoque(); }catch(_){}
@@ -10920,7 +11127,8 @@ async function tnAfterLogin(sb){
   }catch(_){}
   await tnLoadAll(sb);
   tnCarregarAcessos();
-  tnCarregarConfig();
+  await tnCarregarConfig();
+  if(esSocia()) confCarregar();
   await tnCarregarPautas();
   tnCarregarWhatsapp();
   tnCarregarCorrecoes();
