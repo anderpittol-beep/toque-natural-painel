@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 16:13";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 16:19";</script>
       </div>
     </div>
 
@@ -3824,6 +3824,20 @@ function confValidadesAlertaHtml(){
   const linha = i => `${esc(i.p)} (${esc(i.l)}, ${(+i.q).toLocaleString('pt-BR',{maximumFractionDigits:3})} un): <strong>${i.dias < 0 ? 'venceu há ' + (-i.dias) + ' dia' + (i.dias < -1 ? 's' : '') : (i.dias === 0 ? 'vence hoje' : 'vence em ' + i.dias + ' dia' + (i.dias > 1 ? 's' : ''))}</strong> · ${confFmtData(i.v)}`;
   return `<div style="margin:6px 0;padding:8px 10px;background:rgba(250,178,25,0.16);border-left:3px solid #e0a000;border-radius:6px;font-size:13px;"><strong>⏳ Validades conferidas: ${itens.length} lote${itens.length>1?'s':''} ${venc ? '(' + venc + ' vencido' + (venc>1?'s':'') + ') ' : ''}para ficar de olho</strong><br><span style="font-size:12px;">${itens.slice(0,8).map(linha).join('<br>')}${itens.length > 8 ? '<br>+ ' + (itens.length-8) + ' outros' : ''}</span></div>`;
 }
+/* As lojas usam so o CODIGO como referencia: se o mesmo nome tem codigos diferentes, sugere um unico (o menor = cadastrado primeiro). */
+const confCodDiferem = p => !!(p.cod_ita && p.cod_ov && String(p.cod_ita).trim() !== String(p.cod_ov).trim());
+function confCodSugerido(p){
+  if(p.cod_unico) return p.cod_unico;
+  const c = [p.cod_ita, p.cod_ov].filter(Boolean).map(x => String(x).trim()).sort();
+  return c[0] || '';
+}
+function confCodigoHtml(p){
+  const partes = CONF_LOJAS.map(l => { const c = p['cod_'+confPre(l)]; return esc(l) + ': <strong>' + (c ? esc(c) : 'sem código') + '</strong>'; }).join(' · ');
+  let r = `<div class="hint" style="font-size:12px;margin-bottom:6px;">Código — ${partes}`;
+  if(p.cod_unico) r += ` · <span style="color:var(--good);">código único adotado: <strong>${esc(p.cod_unico)}</strong>${p.cod_unico_por ? ' (' + esc(p.cod_unico_por) + ')' : ''}</span>`;
+  else if(confCodDiferem(p)) r += ` · <span style="color:var(--critical);">códigos diferentes: sugestão de código único <strong>${esc(confCodSugerido(p))}</strong> (confirme na conferência)</span>`;
+  return r + '</div>';
+}
 const CONF_EDIT = new Set();   // 'id|loja' das conferencias que estao sendo editadas
 const confLiberadosHoje = () => (CONF||[]).filter(p => String(p.lote_data||'').slice(0,10) === confHoje()).length;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
@@ -3902,6 +3916,7 @@ async function confConfirmar(id, loja, v){
   campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
   campos[pre+'_rep_ajuste'] = v.rep || null;
   campos[pre+'_validades'] = v.val || [];
+  if(v.cod){ campos.cod_unico = v.cod; campos.cod_unico_por = nomeDoUsuario(); }
   CONF_EDIT.delete(id + '|' + loja);
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;   // valor mudou: as marcacoes do Computec valem de novo
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
@@ -3986,6 +4001,7 @@ function confColuna(p, loja){
       <label class="hint" style="font-size:11px;">Valor de compra<input type="number" step="0.01" min="0" data-conf-f="custo" value="${dv!=null?esc(dv):''}" style="width:100%;box-sizing:border-box;"></label>
       <label class="hint" style="font-size:11px;">Valor de venda<input type="number" step="0.01" min="0" data-conf-f="preco" value="${dp!=null?esc(dp):''}" style="width:100%;box-sizing:border-box;"></label></div>
       ${repN > 1 ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Ajuste das ${repN} linhas repetidas (obrigatório)</strong><input type="text" data-conf-f="rep" maxlength="200" value="${ed ? esc(p[pre+'_rep_ajuste']||'') : ''}" placeholder="Ex.: é um produto só, manter 1 linha · ou: são produtos diferentes (qual é qual)" style="width:100%;box-sizing:border-box;"></label>` : ''}
+      ${confCodDiferem(p) ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Código único do produto (obrigatório)</strong> — Itaipulândia ${esc(p.cod_ita)} × Ouro Verde ${esc(p.cod_ov)}. Sugestão: ${esc(confCodSugerido(p))}<input type="text" data-conf-f="cod" maxlength="20" value="${esc(confCodSugerido(p))}" style="width:100%;box-sizing:border-box;"></label>` : ''}
       <div class="hint" style="font-size:11px;margin-top:6px;"><strong>Validade (obrigatória)</strong> — se o produto tem mais de uma validade, adicione uma linha para cada uma.<div data-conf-vlist>${linhasVal}</div>
         <button type="button" class="btn ghost" data-conf-vmais style="padding:1px 8px;font-size:11px;margin-top:4px;">+ outra validade</button>
         <label style="margin-left:8px;"><input type="checkbox" data-conf-semval${semV ? ' checked' : ''}> produto sem validade</label></div>
@@ -4021,6 +4037,7 @@ function renderConferencia(){
     ${confPodeAdiantar() ? `<div style="margin:0 0 10px;"><button class="btn primary" id="conf-adiantar" style="padding:5px 14px;">Liberar mais ${Math.min(CONF_LOTE, fila, CONF_MAX_DIA - confLiberadosHoje())} produtos agora</button> <span class="hint" style="font-size:11.5px;">hoje: ${confLiberadosHoje()} de ${CONF_MAX_DIA} (máximo por dia)</span></div>` : ''}
     ${lote.slice().sort((a,b)=> (confFechado(a)?1:0)-(confFechado(b)?1:0) || a.ordem-b.ordem).map(p => { const st = confStatus(p);
       return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)} <span class="hint" style="font-weight:400;font-size:11.5px;">· ${esc(confCategoria(p))} · diferença entre as lojas ${BRL(confDiferenca(p))}</span></div><div>${confChip(st)}</div></div>
+        ${confCodigoHtml(p)}
         ${p.parecido ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Nome parecido na outra loja: ${esc(p.parecido)}</div>` : ''}
         ${p.ant_em ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Conferência anterior (${new Date(p.ant_em).toLocaleDateString('pt-BR')}): venda acordada ${BRL(p.ant_preco)}</div>` : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">${confColuna(p, 'Itaipulândia')}${confColuna(p, 'Ouro Verde')}</div>
@@ -4037,6 +4054,8 @@ function renderConferencia(){
     if(preco == null || !(preco > 0)){ alert('Informe o valor de venda.'); return; }
     const repEl = card.querySelector('[data-conf-f="rep"]'), rep = repEl ? repEl.value.trim() : '';
     if(repEl && rep.length < 4){ alert('Este produto aparece repetido no relatório. Escreva como deve ser ajustado (ex.: "é um produto só, manter 1 linha").'); repEl.focus(); return; }
+    const codEl = card.querySelector('[data-conf-f="cod"]'), cod = codEl ? codEl.value.trim() : '';
+    if(codEl && cod.length < 1){ alert('Este produto tem códigos diferentes nas duas lojas. Informe o código único que as lojas vão usar.'); codEl.focus(); return; }
     const semVal = card.querySelector('[data-conf-semval]').checked, vals = [];
     if(!semVal && qtd > 0){
       card.querySelectorAll('[data-conf-vrow]').forEach(r => { const q = num(r.querySelector('[data-conf-vq]').value), d = r.querySelector('[data-conf-vd]').value; if(d || (q != null && q > 0)) vals.push({ q, v: d || null }); });
@@ -4044,7 +4063,7 @@ function renderConferencia(){
       const soma = vals.reduce((a,x) => a + x.q, 0);
       if(Math.abs(soma - qtd) > 0.0005 && !confirm('A soma das validades (' + soma.toLocaleString('pt-BR') + ') é diferente da quantidade contada (' + qtd.toLocaleString('pt-BR') + '). Confirmar assim mesmo?')) return;
     }
-    b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco, rep, val: vals });
+    b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco, rep, val: vals, cod });
   });
   box.querySelectorAll('[data-conf-vmais]').forEach(b=> b.onclick = ()=>{ const col = b.closest('div[style*="border:1px solid"]'); col.querySelector('[data-conf-vlist]').insertAdjacentHTML('beforeend', CONF_LINHA_VAL); });
   box.querySelectorAll('[data-conf-editar]').forEach(b=> b.onclick = ()=>{ CONF_EDIT.add(b.dataset.confEditar + '|' + b.dataset.confLoja); renderConferencia(); });
