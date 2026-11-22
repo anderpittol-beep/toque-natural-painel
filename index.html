@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:47";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 10:51";</script>
       </div>
     </div>
 
@@ -3697,7 +3697,10 @@ function renderInvFiscal(){
   const aberto = !!(box.querySelector('details') && box.querySelector('details').open) || box.dataset.aberto === '1';
   const lojasInv = [...new Set(INV_FISCAL.map(r=>r.loja))];
   if(!lojasInv.includes(invFiscalLoja)) invFiscalLoja = lojasInv[0];
-  const todas = INV_FISCAL.filter(r=>r.loja === invFiscalLoja);
+  /* sempre o relatorio mais recente da loja: relatorios antigos ficam guardados, mas nao se misturam na tela */
+  const doLoja = INV_FISCAL.filter(r=>r.loja === invFiscalLoja);
+  const ultimaRef = doLoja.reduce((m,r)=> String(r.data_ref) > m ? String(r.data_ref) : m, '');
+  const todas = doLoja.filter(r=>String(r.data_ref) === ultimaRef);
   const loja = invFiscalLoja, dataRef = todas[0].data_ref;
   const dt = String(dataRef).split('-').reverse().join('/');
   const temPreco = todas.some(r=>r.preco_venda != null);
@@ -3772,7 +3775,7 @@ function renderInvFiscal(){
    concluido. Produto que so existe numa loja aparece para as duas. */
 const CONF_LOTE = 5;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
-let CONF = null, CONF_ERRO = '', CONF_RESP = {}, confPedido = false, confOcupado = false;
+let CONF = null, CONF_ERRO = '', CONF_RESP = {}, CONF_RODADA = '', confPedido = false, confOcupado = false;
 const confPre = l => l === 'Itaipulândia' ? 'ita' : 'ov';
 const confHoje = () => TODAY.getFullYear() + '-' + String(TODAY.getMonth()+1).padStart(2,'0') + '-' + String(TODAY.getDate()).padStart(2,'0');
 const confFechado = p => p.status === 'concluido' || p.status === 'liberado';
@@ -3802,7 +3805,9 @@ async function confRecarregar(){
     if(!data || data.length < 1000) break;
     de += 1000;
   }
-  CONF = todos; CONF_ERRO = ''; return true;
+  /* cada relatorio novo vira uma "rodada"; a tela trabalha na mais recente e as anteriores ficam de historico */
+  CONF_RODADA = todos.reduce((m,p)=> String(p.rodada||'') > m ? String(p.rodada||'') : m, '');
+  CONF = todos.filter(p => String(p.rodada||'') === CONF_RODADA); CONF_ERRO = ''; return true;
 }
 async function confAbrirDia(){
   if(!CONF || !CONF.length || confMinhaLoja() === null) return;     // so quem confere abre o dia
@@ -3842,6 +3847,7 @@ async function confConfirmar(id, loja, v){
   const campos = {};
   campos[pre+'_qtd'] = v.qtd; campos[pre+'_custo'] = v.custo; campos[pre+'_preco'] = v.preco;
   campos[pre+'_por'] = nomeDoUsuario(); campos[pre+'_em'] = new Date().toISOString();
+  campos[pre+'_rep_ajuste'] = v.rep || null;
   campos.ita_computec = null; campos.ita_computec_em = null; campos.ov_computec = null; campos.ov_computec_em = null;   // valor mudou: as marcacoes do Computec valem de novo
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
@@ -3878,9 +3884,13 @@ function confColuna(p, loja){
   const un = p['un_'+pre] ? ' ' + p['un_'+pre] : '';
   const sis = cod ? `Sistema: compra <strong>${BRL(p['custo_'+pre])}</strong> · venda <strong>${BRL(p['preco_'+pre])}</strong> · saldo <strong>${(+p['saldo_'+pre]).toLocaleString('pt-BR',{maximumFractionDigits:3})}${esc(un)}</strong>`
                   : '<span style="color:var(--critical);">Não cadastrado nesta loja no inventário</span>';
+  /* produto repetido no relatorio desta loja: a socia precisa dizer como ajustar */
+  const repN = +p['rep_'+pre] || 0;
+  const repAviso = repN > 1 ? `<div style="margin:0 0 6px;padding:5px 7px;background:rgba(250,178,25,0.16);border-radius:6px;font-size:12px;">⚠ Este produto aparece <strong>${repN} vezes</strong> no relatório desta loja (linhas repetidas ou códigos com o mesmo nome).</div>` : '';
   let corpo = '';
   if(em){
     corpo = `<div>✓ <strong>${esc(p[pre+'_por']||'')}</strong> em ${fmtData(em)}: contou <strong>${(+p[pre+'_qtd']).toLocaleString('pt-BR',{maximumFractionDigits:3})}</strong> · compra <strong>${BRL(p[pre+'_custo'])}</strong> · venda <strong>${BRL(p[pre+'_preco'])}</strong></div>`;
+    if(repN > 1 && p[pre+'_rep_ajuste']) corpo += `<div class="hint" style="font-size:11.5px;margin-top:3px;">Ajuste das linhas repetidas: ${esc(p[pre+'_rep_ajuste'])}</div>`;
     if(editavel && st !== 'concluido' && st !== 'liberado') corpo += `<button class="btn ghost" data-conf-refazer="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:2px 8px;font-size:11.5px;margin-top:4px;">corrigir minha conferência</button>`;
   } else if(editavel && st !== 'liberado'){
     const dv = (cod ? p['custo_'+pre] : p['custo_'+preO]), dp = (cod ? p['preco_'+pre] : p['preco_'+preO]);
@@ -3888,6 +3898,7 @@ function confColuna(p, loja){
       <label class="hint" style="font-size:11px;">Quantidade contada<input type="number" step="0.001" min="0" data-conf-f="qtd" placeholder="0" style="width:100%;box-sizing:border-box;"></label>
       <label class="hint" style="font-size:11px;">Valor de compra<input type="number" step="0.01" min="0" data-conf-f="custo" value="${dv!=null?esc(dv):''}" style="width:100%;box-sizing:border-box;"></label>
       <label class="hint" style="font-size:11px;">Valor de venda<input type="number" step="0.01" min="0" data-conf-f="preco" value="${dp!=null?esc(dp):''}" style="width:100%;box-sizing:border-box;"></label></div>
+      ${repN > 1 ? `<label class="hint" style="font-size:11px;display:block;margin-top:6px;"><strong>Ajuste das ${repN} linhas repetidas (obrigatório)</strong><input type="text" data-conf-f="rep" maxlength="200" placeholder="Ex.: é um produto só, manter 1 linha · ou: são produtos diferentes (qual é qual)" style="width:100%;box-sizing:border-box;"></label>` : ''}
       <button class="btn primary" data-conf-ok="${esc(p.id)}" data-conf-loja="${esc(loja)}" style="padding:3px 10px;font-size:12px;margin-top:6px;">Confirmar minha conferência</button>`;
   } else corpo = '<span class="hint">aguardando a conferência desta loja</span>';
   let comp = '';
@@ -3900,7 +3911,7 @@ function confColuna(p, loja){
     else comp = '<div class="hint" style="margin-top:6px;">Computec: aguardando marcação desta loja</div>';
   }
   return `<div style="padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;"><div class="strong" style="margin-bottom:4px;">${esc(loja)}${confMinhaLoja()===loja?' <span class="hint">(você)</span>':''}</div>
-    <div class="hint" style="margin-bottom:6px;font-size:12px;">${sis}</div>${corpo}${comp}</div>`;
+    <div class="hint" style="margin-bottom:6px;font-size:12px;">${sis}</div>${repAviso}${corpo}${comp}</div>`;
 }
 function renderConferencia(){
   const box = document.getElementById('conf-diaria'); if(!box) return;
@@ -3914,11 +3925,12 @@ function renderConferencia(){
   if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : 'Nenhum lote aberto agora.';
   else if(!abertos.length) faixa = '✓ Lote de hoje concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã.';
   else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
-  box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde</summary>
+  box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde <span class="hint" style="font-weight:400;">· relatório ${esc(CONF_RODADA)}</span></summary>
     <p class="hint" style="margin:6px 0 10px;">${faixa}<br><span style="font-size:11.5px;">Concluídos no total: ${totalFech} de ${CONF.length} · na fila: ${fila}</span></p>
     ${lote.map(p => { const st = confStatus(p);
       return `<div class="card" style="margin-bottom:10px;border:1px solid rgba(0,0,0,0.10);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><div class="strong">${esc(p.produto)}</div><div>${confChip(st)}</div></div>
         ${p.parecido ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Nome parecido na outra loja: ${esc(p.parecido)}</div>` : ''}
+        ${p.ant_em ? `<div class="hint" style="font-size:11.5px;margin-bottom:6px;">Conferência anterior (${new Date(p.ant_em).toLocaleDateString('pt-BR')}): venda acordada ${BRL(p.ant_preco)}</div>` : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">${confColuna(p, 'Itaipulândia')}${confColuna(p, 'Ouro Verde')}</div>
         ${st === 'divergente' ? `<div style="margin-top:8px;padding:8px;background:rgba(208,59,59,0.08);border-radius:6px;font-size:12.5px;"><strong>Valores de venda diferentes:</strong> Itaipulândia ${BRL(p.ita_preco)} × Ouro Verde ${BRL(p.ov_preco)} (diferença ${BRL(Math.abs((+p.ita_preco)-(+p.ov_preco)))}). As duas lojas precisam chegar ao mesmo valor.
           ${CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => { const o = CONF_LOJAS.find(x=>x!==l); return `<button class="btn ghost" data-conf-aceitar="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin-left:6px;">${esc(l)} aceita ${BRL(p[confPre(o)+'_preco'])}</button>`; }).join('')}</div>` : ''}
@@ -3931,7 +3943,9 @@ function renderConferencia(){
     if(val('qtd') === '' || qtd == null || qtd < 0){ alert('Informe a quantidade contada (use 0 se não tem na loja).'); return; }
     if(custo == null || custo < 0){ alert('Informe o valor de compra.'); return; }
     if(preco == null || !(preco > 0)){ alert('Informe o valor de venda.'); return; }
-    b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco });
+    const repEl = card.querySelector('[data-conf-f="rep"]'), rep = repEl ? repEl.value.trim() : '';
+    if(repEl && rep.length < 4){ alert('Este produto aparece repetido no relatório. Escreva como deve ser ajustado (ex.: "é um produto só, manter 1 linha").'); repEl.focus(); return; }
+    b.disabled = true; await confConfirmar(b.dataset.confOk, b.dataset.confLoja, { qtd, custo, preco, rep });
   });
   box.querySelectorAll('[data-conf-refazer]').forEach(b=> b.onclick = ()=> confRefazer(b.dataset.confRefazer, b.dataset.confLoja));
   box.querySelectorAll('[data-conf-comp]').forEach(b=> b.onclick = ()=> { b.disabled = true; confComputec(b.dataset.confComp, b.dataset.confLoja, b.dataset.confV); });
