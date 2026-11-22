@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 11:01";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 11:05";</script>
       </div>
     </div>
 
@@ -3795,6 +3795,7 @@ function confFila(){
   const par = p => (p.cod_ita && p.cod_ov) ? 1 : 0;           // quem existe nas duas lojas vem antes de quem so existe numa
   return (CONF||[]).filter(p => !p.lote_data).sort((a,b) => rank(a)-rank(b) || par(b)-par(a) || confDiferenca(b)-confDiferenca(a) || a.ordem-b.ordem);
 }
+const confDiaUtil = () => { const d = TODAY.getDay(); return d >= 1 && d <= 5; };   // novo lote so de segunda a sexta
 const confLiberadosHoje = () => (CONF||[]).filter(p => String(p.lote_data||'').slice(0,10) === confHoje()).length;
 const CONF_LOJAS = ['Itaipulândia', 'Ouro Verde'];
 let CONF = null, CONF_ERRO = '', CONF_RESP = {}, CONF_RODADA = '', confPedido = false, confOcupado = false;
@@ -3833,6 +3834,7 @@ async function confRecarregar(){
 }
 async function confAbrirDia(){
   if(!CONF || !CONF.length || confMinhaLoja() === null) return;     // so quem confere abre o dia
+  if(!confDiaUtil()) return;                                         // sabado e domingo nao abrem lote novo
   const hoje = confHoje();
   if(CONF.some(p => p.lote_data && !confFechado(p))) return;         // lote em aberto bloqueia o seguinte
   if(CONF.some(p => String(p.lote_data||'').slice(0,10) === hoje)) return;   // hoje ja teve lote
@@ -3885,7 +3887,7 @@ async function confComputec(id, loja, valor){
   if(await confGravar(id, campos)){ renderConferencia(); renderConfHome(); }
 }
 /* Adianta o proximo lote no mesmo dia: so quando o lote atual esta todo concluido e ainda ha produtos na fila */
-const confPodeAdiantar = () => !!CONF && confMinhaLoja() !== null && confLoteAtual().length > 0
+const confPodeAdiantar = () => !!CONF && confDiaUtil() && confMinhaLoja() !== null && confLoteAtual().length > 0
   && confLoteAtual().every(confFechado) && CONF.some(p => !p.lote_data) && confLiberadosHoje() < CONF_MAX_DIA;
 async function confAdiantar(){
   if(confOcupado) return; confOcupado = true;
@@ -3959,7 +3961,7 @@ function renderConferencia(){
   const fila = CONF.filter(p => !p.lote_data).length, totalFech = CONF.filter(confFechado).length;
   const minha = confMinhaLoja();
   let faixa;
-  if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : 'Nenhum lote aberto agora.';
+  if(!lote.length) faixa = minha === null ? 'Seu usuário não está ligado a uma loja nesta conferência. Peça ao master para cadastrar.' : (confDiaUtil() ? 'Nenhum lote aberto agora.' : 'Fim de semana: a conferência volta na segunda-feira.');
   else if(!abertos.length) faixa = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' produtos aparecem amanhã' + (confPodeAdiantar() ? ', ou clique abaixo para adiantar agora.' : (confLiberadosHoje() >= CONF_MAX_DIA ? ' (hoje já foram liberados os ' + CONF_MAX_DIA + ' do dia).' : '.'));
   else faixa = fechados + ' de ' + lote.length + ' concluídos. O próximo lote só abre quando todos estiverem <strong>acordados no preço</strong> e <strong>alterados no Computec</strong> nas duas lojas.';
   box.innerHTML = `<div class="card"><details open><summary class="strong" style="cursor:pointer;">Conferência diária de produtos — ${CONF_LOTE} por dia · Itaipulândia × Ouro Verde <span class="hint" style="font-weight:400;">· relatório ${esc(CONF_RODADA)}</span></summary>
@@ -4006,7 +4008,7 @@ function renderConfHome(){
   const minha = confMinhaLoja(), lojaMinha = (minha && minha !== 'ambas') ? minha : null;
   const feitos = lojaMinha ? lote.filter(p => p[confPre(lojaMinha)+'_em']).length : lote.filter(p => p.ita_em && p.ov_em).length;
   let msg;
-  if(!lote.length) msg = 'Nenhum lote aberto agora.';
+  if(!lote.length) msg = confDiaUtil() ? 'Nenhum lote aberto agora.' : 'Fim de semana: a conferência volta na segunda-feira.';
   else if(!abertos.length) msg = '✓ Lote concluído. Os próximos ' + CONF_LOTE + ' aparecem amanhã' + (confPodeAdiantar() ? ', ou você pode adiantar agora.' : '.');
   else {
     const falta = lojaMinha ? lote.length - feitos : abertos.length;
