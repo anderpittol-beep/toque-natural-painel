@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="22/11/2026, 19:13";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:43";</script>
       </div>
     </div>
 
@@ -440,7 +440,7 @@ window.TN_CONFIG = {
       <section class="view active" id="view-visao-geral">
         <div id="conf-home" style="margin-bottom:12px;display:none;"></div>
         <div class="section-block">
-          <div class="grid grid-3" id="kpi-cards"></div>
+          <div class="grid grid-4" id="kpi-cards"></div>
         </div>
         <div class="section-block">
           <h2 class="section-title">Receitas x despesas</h2>
@@ -2334,9 +2334,10 @@ function renderVisaoGeral(){
     {label:'Faturamento ('+periodoLabel()+')', value: BRL(receita), accent:''},
     {label:'Despesas ('+periodoLabel()+')', value: BRL(despesa), accent:''},
     {label:'Lucro ('+periodoLabel()+')', value: BRL(lucro), accent: lucro>=0?'accent-good':'accent-critical'},
+    {label:'Margem de lucro ('+periodoLabel()+')', value: receita>0 ? (lucro/receita*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—', accent: lucro>=0?'accent-good':'accent-critical', sub:'lucro ÷ faturamento'},
   ];
   document.getElementById('kpi-cards').innerHTML = kpis.map(k=>`
-    <div class="card stat-tile ${k.accent}"><div class="label">${k.label}</div><div class="value">${k.value}</div></div>
+    <div class="card stat-tile ${k.accent}"><div class="label">${k.label}</div><div class="value">${k.value}</div>${k.sub?`<div class="label" style="margin-top:2px">${k.sub}</div>`:''}</div>
   `).join('');
 
   /* A faixa de alertas saiu da tela enquanto os cadastros de produto, estoque e
