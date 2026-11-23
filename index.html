@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 11:05";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 11:27";</script>
       </div>
     </div>
 
@@ -6093,7 +6093,7 @@ function renderHistoricoFolha(){
       <div style="overflow-x:auto;margin-top:6px;">
       <table class="table" style="font-size:12.5px;">
         <thead><tr><th>Competência</th><th>Pessoas</th><th>Comissões</th><th>Horas extras</th>
-          <th>Total da folha</th><th>13º + férias</th><th>Custo total</th>
+          <th>Total da folha</th><th>13º + férias</th><th>Custo total</th><th title="lucro ÷ faturamento da competência (lojas selecionadas)">Margem do mês</th>
           <th>Pagamento</th><th>Última edição</th><th></th></tr></thead>
         <tbody>${meses.map(m=>{
           const rotulo = (MES_ABREV[m.mes]||m.mes) + '/' + String(m.ano).slice(2);
@@ -6108,6 +6108,7 @@ function renderHistoricoFolha(){
             <td class="strong">${BRL(m.folha)}</td>
             <td>${BRL(m.prov)}</td>
             <td class="strong">${BRL(m.folha + m.prov)}</td>
+            <td>${(()=>{ const j=(FINANCEIRO.meses||[]).indexOf(rotulo); if(j<0) return '—'; let r=0,d=0; selStores().forEach(l=>{ if(FINANCEIRO[l]){ r+=FINANCEIRO[l].receita[j]||0; d+=FINANCEIRO[l].despesa[j]||0; } }); return pctMargem(r-d,r); })()}</td>
             <td style="white-space:nowrap;">${tudoPago
               ? `<span class="badge b-good"><span class="dot"></span>pago</span> <span class="hint">${esc(dia(m.pagoEm) || previsto)}</span>`
               : `<span class="hint">previsto ${esc(previsto)} · ${m.pagos} de ${m.pessoas} pagos</span>`}</td>
