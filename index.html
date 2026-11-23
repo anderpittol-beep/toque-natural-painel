@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:47";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:49";</script>
       </div>
     </div>
 
@@ -2371,9 +2371,9 @@ function renderFinanceiro(){
   ], v=>BRL(v), lojas) + (lojas.length>1 ? storeLegend() : '');
 
   document.getElementById('tbl-financeiro').innerHTML = `
-    <table><thead><tr><th>Mês</th><th>Receita</th><th>Despesa</th><th>Lucro</th></tr></thead>
+    <table><thead><tr><th>Mês</th><th>Receita</th><th>Despesa</th><th>Lucro</th><th>Margem</th></tr></thead>
     <tbody>${meses.map((m,i)=>{const parc = (FINANCEIRO.parcialPorMes||{})[m];
-      return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(parc)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td></tr>`;}).join('')}</tbody></table>
+      return `<tr><td class="strong">${m}${parc?' <span class="badge b-warning" style="vertical-align:middle;"><span class="dot"></span>parcial até '+esc(parc)+'</span>':''}</td><td>${BRL(receita[i])}</td><td>${BRL(despesa[i])}</td><td>${BRL(receita[i]-despesa[i])}</td><td>${pctMargem(receita[i]-despesa[i],receita[i])}</td></tr>`;}).join('')}</tbody></table>
   `;
 }
 
@@ -2613,9 +2613,9 @@ function renderProjecao(){
     `<div class="bars-labels">${labelsRow}</div>`;
 
   document.getElementById('tbl-projecao').innerHTML = `
-    <table><thead><tr><th>Mês</th><th>Tipo</th><th>Receita</th><th>Despesa</th><th>Lucro</th></tr></thead><tbody>
-    ${realLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td>real</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].despesa[i],0))}</td><td>${BRL(realLucro[i])}</td></tr>`).join('')}
-    ${projLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td><em>projeção</em></td><td>${BRL(projReceita[i])}</td><td>${BRL(projDespesa[i])}</td><td>${BRL(projLucro[i])}</td></tr>`).join('')}
+    <table><thead><tr><th>Mês</th><th>Tipo</th><th>Receita</th><th>Despesa</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>
+    ${realLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td>real</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].despesa[i],0))}</td><td>${BRL(realLucro[i])}</td><td>${pctMargem(realLucro[i],lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td></tr>`).join('')}
+    ${projLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td><em>projeção</em></td><td>${BRL(projReceita[i])}</td><td>${BRL(projDespesa[i])}</td><td>${BRL(projLucro[i])}</td><td>${pctMargem(projLucro[i],projReceita[i])}</td></tr>`).join('')}
     </tbody></table>`;
 }
 
