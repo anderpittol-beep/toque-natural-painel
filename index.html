@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:56";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:58";</script>
       </div>
     </div>
 
@@ -2628,7 +2628,7 @@ function renderStoreShare(){
   const raw = selStores().map(l=>{
     const r = somaMeses(l,'receita');
     const d = somaMeses(l,'despesa');
-    return { loja:l, valor: metric==='lucro' ? (r-d) : r };
+    return { loja:l, valor: metric==='lucro' ? (r-d) : r, margem: pctMargem(r-d,r), neg2:(r-d)<0 };
   });
   // para a pizza usamos apenas valores positivos; negativos são listados à parte
   const pos = raw.filter(x=>x.valor>0);
@@ -2654,6 +2654,7 @@ function renderStoreShare(){
       <span style="flex:1;color:var(--text-primary);font-size:13px;">${esc(x.loja)}</span>
       <span style="font-weight:600;font-size:13px;color:${neg?'var(--critical)':'var(--text-primary)'};">${neg?'prejuízo':p.toFixed(1).replace('.',',')+'%'}</span>
       <span style="width:110px;text-align:right;font-size:12px;color:var(--text-secondary);">${BRL(x.valor)}</span>
+      <span style="width:100px;text-align:right;font-size:12px;color:${x.neg2?'var(--critical)':'var(--text-secondary)'};" title="lucro ÷ faturamento no período">margem ${x.margem}</span>
     </div>`;
   }).join('') + (metric==='lucro' && raw.some(x=>x.valor<0) ? `<p class="hint" style="margin-top:6px;">Lojas em prejuízo não entram na fatia da pizza (percentual só faz sentido sobre valores positivos).</p>` : '');
 }
