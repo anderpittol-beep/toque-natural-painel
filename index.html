@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:45";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:47";</script>
       </div>
     </div>
 
@@ -2347,7 +2347,7 @@ function renderVisaoGeral(){
   // lucro por loja (empilhado quando Todas)
   const idx = mesesIdx(), meses = mesesLabels();
   document.getElementById('chart-lucro-mini').innerHTML =
-    renderStackedChart(meses, [{name:'Lucro', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[j]-FINANCEIRO[l].despesa[j]); return o;}}], v=>BRL(v), lojas)
+    renderStackedChart(meses, [{name:'Lucro', data:(i)=>{const o={}; const j=idx[i]; lojas.forEach(l=>o[l]=FINANCEIRO[l].receita[j]-FINANCEIRO[l].despesa[j]); return o;}}], v=>BRL(v), lojas, (i)=>{ const j=idx[i]; let r=0,d=0; lojas.forEach(l=>{ r+=FINANCEIRO[l].receita[j]||0; d+=FINANCEIRO[l].despesa[j]||0; }); return 'margem '+pctMargem(r-d,r); })
     + (lojas.length>1 ? storeLegend() : '');
 }
 function storeLegend(){
@@ -2658,7 +2658,7 @@ function renderStoreShare(){
 
 /* Barras empilhadas por loja (cor de cada loja, proporcional à participação).
    groups: [{name, data:(i)=>({loja:valor})}]  · lojas: lista de lojas a exibir */
-function renderStackedChart(labels, groups, fmt, lojas){
+function renderStackedChart(labels, groups, fmt, lojas, extra){
   const H=190;
   let maxPos=1, maxNeg=0;
   const data = labels.map((lab,i)=> groups.map(g=>{
@@ -2685,7 +2685,7 @@ function renderStackedChart(labels, groups, fmt, lojas){
   const groupsHtml = data.map(stacks=>`<div class="bar-group" style="height:${H}px;gap:6px;">${stacks.map(stackHtml).join('')}</div>`).join('');
   const zeroLine = (maxNeg<0)? `<div style="position:absolute;left:0;right:0;top:${zeroPx}px;height:1px;background:var(--baseline);"></div>`:'';
   const pad = groups.length>1?'padding-bottom:18px;':'';
-  const labelsRow = labels.map(l=>`<span>${esc(l)}</span>`).join('');
+  const labelsRow = labels.map((l,i)=>`<span>${esc(l)}${extra?'<br><b style="color:var(--text);font-weight:600">'+esc(extra(i))+'</b>':''}</span>`).join('');
   return `<div class="bars-wrap" style="height:${H}px;align-items:stretch;${pad}border-bottom:${maxNeg<0?'none':'1px solid var(--baseline)'};position:relative;">${zeroLine}${groupsHtml}</div><div class="bars-labels" style="${groups.length>1?'margin-top:14px;':''}">${labelsRow}</div>`;
 }
 
