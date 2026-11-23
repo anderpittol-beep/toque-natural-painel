@@ -431,7 +431,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 13:59";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 14:44";</script>
       </div>
     </div>
 
@@ -3984,9 +3984,9 @@ async function confAdiantar(){
   } finally { confOcupado = false; }
   renderConferencia(); renderConfHome();
 }
-const confMasterPodeLiberar = () => !!CONF && typeof ehMaster === 'function' && ehMaster() && confDiaUtil()
+const confMasterPodeLiberar = () => !!CONF && ((typeof ehMaster === 'function' && ehMaster()) || confMinhaLoja() !== null) && confDiaUtil()
   && CONF.some(p => !p.lote_data) && confLiberadosHoje() < CONF_MAX_DIA;
-/* Master: libera mais um lote mesmo com pendencias. Nada e marcado como resolvido:
+/* Master e socias (Andreia/Vanessa; Jandrei so acompanha): libera mais um lote mesmo com pendencias. Nada e marcado como resolvido:
    os produtos pendentes continuam na tela, e os novos entram junto (teto de 20 por dia vale). */
 async function confLiberar(){
   if(confOcupado) return; confOcupado = true;
@@ -4088,7 +4088,7 @@ function renderConferencia(){
           : CONF_LOJAS.filter(l => confPodeEditar(l)).map(l => `<button class="btn ghost" data-conf-exc="propor" data-conf-id="${esc(p.id)}" data-conf-loja="${esc(l)}" style="padding:2px 8px;font-size:11.5px;margin:4px 6px 0 0;">${esc(l)}: propor exceção</button>`).join('')}</div></div>` : ''}
         ${confExcecaoAceita(p) ? `<div class="hint" style="font-size:11.5px;margin-top:6px;">Exceção aceita pelas duas lojas: preços diferentes (Itaipulândia ${BRL(p.ita_preco)} × Ouro Verde ${BRL(p.ov_preco)}). Motivo: ${esc(p.exc_motivo||'')}</div>` : ''}
         ${p.obs ? `<div class="hint" style="font-size:11.5px;margin-top:6px;">${esc(p.obs)}</div>` : ''}</div>`; }).join('')}
-    ${confMasterPodeLiberar() ? '<div style="margin-top:6px;"><button class="btn ghost" id="conf-liberar" style="padding:3px 10px;font-size:12px;">Master: liberar mais ' + Math.min(CONF_LOTE, CONF_MAX_DIA - confLiberadosHoje()) + ' produtos mesmo com pendências</button> <span class="hint" style="font-size:11.5px;">as pendências continuam na tela · hoje: ' + confLiberadosHoje() + ' de ' + CONF_MAX_DIA + '</span></div>' : ''}
+    ${confMasterPodeLiberar() ? '<div style="margin-top:6px;"><button class="btn ghost" id="conf-liberar" style="padding:3px 10px;font-size:12px;">Liberar mais ' + Math.min(CONF_LOTE, CONF_MAX_DIA - confLiberadosHoje()) + ' produtos mesmo com pendências</button> <span class="hint" style="font-size:11.5px;">as pendências continuam na tela · hoje: ' + confLiberadosHoje() + ' de ' + CONF_MAX_DIA + '</span></div>' : ''}
     ${CONF_ERRO ? `<p class="hint" style="color:var(--critical);">${esc(CONF_ERRO)}</p>` : ''}</details></div>`;
   box.querySelectorAll('[data-conf-ok]').forEach(b=> b.onclick = async ()=>{
     const card = b.closest('div[style*="border:1px solid"]'), val = k => { const el = card.querySelector('[data-conf-f="'+k+'"]'); return el ? el.value : ''; };
