@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:49";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:56";</script>
       </div>
     </div>
 
@@ -2562,6 +2562,7 @@ function renderProjecao(){
   // meses reais: só os fechados entram no gráfico como realizado
   const realIdx = fechados;
   const realLabels = realIdx.map(i=>FINANCEIRO.meses[i]);
+  const realReceita = realIdx.map(i=> lojas.reduce((a,l)=> a + (FINANCEIRO[l].receita[i]||0),0));
   const realLucro = realIdx.map(i=> lojas.reduce((a,l)=> a + ((FINANCEIRO[l].receita[i]||0)-(FINANCEIRO[l].despesa[i]||0)),0));
 
   /* A projeção começa no mês seguinte ao último fechado — nada de rótulo fixo,
@@ -2603,18 +2604,19 @@ function renderProjecao(){
     const op = isProj[i] ? 0.42 : 1;
     return `<div class="bar-group" style="position:relative;height:${H}px;">
       <div class="bar-seg" style="position:absolute;top:${top}px;height:${Math.max(h,2)}px;width:20px;background:var(--store-accent);opacity:${op};border-radius:4px;"
-        data-name="${esc(labels[i])}${isProj[i]?' (projeção)':''}" data-val="${esc(BRL(v))}"></div>
+        data-name="${esc(labels[i])}${isProj[i]?' (projeção)':''}" data-val="${esc(BRL(v))} · margem ${esc(pctMargem(v,i<realReceita.length?realReceita[i]:projReceita[i-realReceita.length]))}"></div>
     </div>`;
   }).join('');
   const zeroLine = `<div style="position:absolute;left:0;right:0;top:${zero}px;height:1px;background:var(--baseline);"></div>`;
-  const labelsRow = labels.map((l,i)=>`<span style="${isProj[i]?'color:var(--text-muted);font-style:italic;':''}">${esc(l)}</span>`).join('');
+  const margens = realLucro.map((v,i)=>pctMargem(v,realReceita[i])).concat(projLucro.map((v,i)=>pctMargem(v,projReceita[i])));
+  const labelsRow = labels.map((l,i)=>`<span style="${isProj[i]?'color:var(--text-muted);font-style:italic;':''}">${esc(l)}<br><b style="font-weight:600;font-style:normal;">${margens[i]}</b></span>`).join('');
   document.getElementById('chart-projecao').innerHTML =
     `<div class="bars-wrap" style="height:${H}px;align-items:stretch;border-bottom:none;position:relative;">${zeroLine}${bars}</div>`+
     `<div class="bars-labels">${labelsRow}</div>`;
 
   document.getElementById('tbl-projecao').innerHTML = `
     <table><thead><tr><th>Mês</th><th>Tipo</th><th>Receita</th><th>Despesa</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>
-    ${realLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td>real</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].despesa[i],0))}</td><td>${BRL(realLucro[i])}</td><td>${pctMargem(realLucro[i],lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td></tr>`).join('')}
+    ${realLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td>real</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].receita[i],0))}</td><td>${BRL(lojas.reduce((a,l)=>a+FINANCEIRO[l].despesa[i],0))}</td><td>${BRL(realLucro[i])}</td><td>${pctMargem(realLucro[i],realReceita[i])}</td></tr>`).join('')}
     ${projLabels.map((m,i)=>`<tr><td class="strong">${m}</td><td><em>projeção</em></td><td>${BRL(projReceita[i])}</td><td>${BRL(projDespesa[i])}</td><td>${BRL(projLucro[i])}</td><td>${pctMargem(projLucro[i],projReceita[i])}</td></tr>`).join('')}
     </tbody></table>`;
 }
