@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:43";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 10:45";</script>
       </div>
     </div>
 
@@ -2321,6 +2321,7 @@ function renderMesFiltro(){
     btnN.onclick = ()=>{ mesesSel=[]; salvarPrefs(); renderAll(); };
   }
 }
+function pctMargem(l,r){ return r>0 ? (l/r*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'; }
 function renderVisaoGeral(){
   const s = currentStore();
   const prods = filteredProducts();
@@ -2549,12 +2550,12 @@ function renderProjecao(){
   const mesesJanela = idxJanela.map(i=>FINANCEIRO.meses[i]).join(', ');
   const medRows = STORES.map(l=>{
     const mr=mediaJanela(l,'receita'), md=mediaJanela(l,'despesa');
-    return `<tr><td class="strong"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${STORE_PIE_COLOR[l]};margin-right:7px;"></span>${esc(l)}</td><td>${BRL(mr)}</td><td>${BRL(md)}</td><td>${BRL(mr-md)}</td></tr>`;
+    return `<tr><td class="strong"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${STORE_PIE_COLOR[l]};margin-right:7px;"></span>${esc(l)}</td><td>${BRL(mr)}</td><td>${BRL(md)}</td><td>${BRL(mr-md)}</td><td>${pctMargem(mr-md,mr)}</td></tr>`;
   }).join('');
   const totMR=STORES.reduce((a,l)=>a+mediaJanela(l,'receita'),0), totMD=STORES.reduce((a,l)=>a+mediaJanela(l,'despesa'),0);
   document.getElementById('tbl-media').innerHTML = `
-    <thead><tr><th>Loja</th><th>Receita média/mês</th><th>Despesa média/mês</th><th>Líquido médio/mês</th></tr></thead>
-    <tbody>${medRows}<tr><td class="strong">Rede (todas)</td><td class="strong">${BRL(totMR)}</td><td class="strong">${BRL(totMD)}</td><td class="strong">${BRL(totMR-totMD)}</td></tr></tbody>`;
+    <thead><tr><th>Loja</th><th>Receita média/mês</th><th>Despesa média/mês</th><th>Líquido médio/mês</th><th>Margem (% do faturado)</th></tr></thead>
+    <tbody>${medRows}<tr><td class="strong">Rede (todas)</td><td class="strong">${BRL(totMR)}</td><td class="strong">${BRL(totMD)}</td><td class="strong">${BRL(totMR-totMD)}</td><td class="strong">${pctMargem(totMR-totMD,totMR)}</td></tr></tbody>`;
   document.getElementById('media-janela-label').textContent = jLabel + ' · meses: ' + (mesesJanela || '—') +
     (ignorados.length ? ' · fora da conta: ' + ignorados.join(', ') : '');
 
