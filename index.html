@@ -430,7 +430,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 11:27";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 12:35";</script>
       </div>
     </div>
 
@@ -4621,6 +4621,7 @@ function renderEstoque(){
         <td>${p.preco==null?'—':BRL(p.preco)}</td><td class="strong" title="${esQtd(p.estoque,'un')} × ${p.preco==null?'sem valor':BRL(p.preco)}">${p.preco==null?'<em>sem valor</em>':BRL(total)}</td>
         <td>${BRL(p.recuperado)}${p.vendido>0?`<div class="hint" style="font-size:11px;">${esR3(p.vendido).toLocaleString('pt-BR')} vendido(s)</div>`:''}</td>
         <td>${p.custo==null?'—':BRL(esValor(p.qtdInicial, p.unidade, p.custo))}</td>
+        <td>${esMargemTxt(p.custo, p.preco)}</td>
         <td style="white-space:nowrap;text-align:right;">
           <button class="btn ghost" data-es="baixa" data-id="${esc(p.id)}" title="Registrar venda" style="padding:2px 7px;" ${p.estoque>0?'':'disabled'}>💰</button>
           <button class="btn ghost" data-es="editar" data-id="${esc(p.id)}" title="Corrigir item" style="padding:2px 6px;">✏️</button>
@@ -4630,10 +4631,10 @@ function renderEstoque(){
         <td>${esc(p.loja)}</td><td class="strong">${esR3(p.estoque).toLocaleString('pt-BR')}</td>
         <td><span class="badge ${badgeClass(ES_BADGE[s.chave])}"><span class="dot"></span>${ES_ROTULO[s.chave]}</span></td><td>${esFmtLancado(p)}</td>${val}</tr>`;
     }).join('');
-    const rodape = (socia && linhas.length) ? `<tr><td colspan="6" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tVenda)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tAval)}</td><td></td></tr>` : '';
+    const rodape = (socia && linhas.length) ? `<tr><td colspan="6" class="strong" style="text-align:right;">Total do que está na tela</td><td class="strong">${BRL(tVenda)}</td><td class="strong">${BRL(tRec)}</td><td class="strong">${BRL(tAval)}</td><td></td><td></td></tr>` : '';
     document.getElementById('tbl-estoque').innerHTML = `
-      <thead><tr><th>Item</th><th>Local</th><th>Quantidade</th><th>Situação</th><th>Lançado em</th>${socia?'<th>Valor de venda (un.)</th><th>Valor total</th><th>Já recebido</th><th>Pago ou avaliado</th><th></th>':''}</tr></thead>
-      <tbody>${corpo || `<tr><td colspan="${socia?10:5}" class="hint">${daAba.length ? 'Nenhum item com esse filtro.' : 'Nenhuma mobília lançada ainda. Use “Lançar mobília ou equipamento”.'}</td></tr>`}${rodape}</tbody>`;
+      <thead><tr><th>Item</th><th>Local</th><th>Quantidade</th><th>Situação</th><th>Lançado em</th>${socia?'<th>Valor de venda (un.)</th><th>Valor total</th><th>Já recebido</th><th>Pago ou avaliado</th><th title="Margem = (preço − custo) ÷ preço">Margem</th><th></th>':''}</tr></thead>
+      <tbody>${corpo || `<tr><td colspan="${socia?11:5}" class="hint">${daAba.length ? 'Nenhum item com esse filtro.' : 'Nenhuma mobília lançada ainda. Use “Lançar mobília ou equipamento”.'}</td></tr>`}${rodape}</tbody>`;
     return;
   }
 
