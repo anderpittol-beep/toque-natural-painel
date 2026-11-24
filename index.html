@@ -431,7 +431,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="23/11/2026, 14:44";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="24/11/2026, 09:09";</script>
       </div>
     </div>
 
@@ -1142,7 +1142,7 @@ window.TN_CONFIG = {
       <section class="view" id="view-pedidos">
         <h2 class="section-title">Pedidos &amp; entregas</h2>
         <p class="section-desc">Fluxo do pedido: chega pelo WhatsApp → entra aqui → equipe separa/monta → define o entregador que faz a coleta → sai para entrega. Arraste o pedido pelas etapas com os botões de cada cartão. Filtra pela loja selecionada no topo.</p>
-        <div class="grid grid-4" id="pedidos-kpis" style="margin-bottom:16px;"></div>
+        <div class="grid grid-5" id="pedidos-kpis" style="margin-bottom:16px;"></div>
         <div class="card" style="margin-bottom:16px;">
           <details class="add-form">
             <summary>Novo pedido</summary>
@@ -1157,6 +1157,7 @@ window.TN_CONFIG = {
               <input type="text" id="pd-itens" placeholder="Itens do pedido" required style="grid-column:1/-1;">
               <input type="text" id="pd-endereco" placeholder="Endereço de entrega" style="grid-column:1/-1;">
               <input type="number" id="pd-valor" placeholder="Valor (R$)" step="0.01" min="0">
+              <input type="number" id="pd-custo" placeholder="Custo (R$) — opcional, para a margem" step="0.01" min="0">
               <select id="pd-entregador"></select>
               <button class="btn primary" type="submit">Adicionar pedido</button>
             </form>
@@ -5953,6 +5954,7 @@ function renderPedidos(){
     <div class="card stat-tile accent-warning"><div class="label">Em separação</div><div class="value">${cnt('separacao')}</div></div>
     <div class="card stat-tile"><div class="label">Em rota de entrega</div><div class="value">${cnt('rota')}</div></div>
     <div class="card stat-tile"><div class="label">Valor a caminho (pronto+rota)</div><div class="value">${BRL(valorRota)}</div></div>
+    <div class="card stat-tile"><div class="label">Margem média dos pedidos</div><div class="value">${(()=>{ const c=list.filter(p=>p.custo!=null && p.valor>0); const v=c.reduce((a,p)=>a+p.valor,0), k=c.reduce((a,p)=>a+p.custo,0); return c.length ? pctMargem(v-k,v) : '—'; })()}</div><div class="hint">${(()=>{ const n=list.filter(p=>p.custo!=null && p.valor>0).length; return n ? n+' de '+list.length+' pedido(s) com custo' : 'informe o custo no pedido'; })()}</div></div>
   `;
   const entOpts = (sel)=> ENTREGADORES.map(e=>`<option ${e===sel?'selected':''}>${esc(e)}</option>`).join('');
   document.getElementById('pedidos-kanban').innerHTML = PEDIDO_ETAPAS.map(et=>{
@@ -5969,7 +5971,8 @@ function renderPedidos(){
             <input type="text" data-pe="itens" value="${esc(p.itens||'')}" placeholder="Itens" style="width:100%;margin-bottom:4px;">
             <input type="text" data-pe="telefone" value="${esc(p.telefone||'')}" placeholder="WhatsApp" style="width:100%;margin-bottom:4px;">
             <input type="text" data-pe="endereco" value="${esc(p.endereco||'')}" placeholder="Endereço" style="width:100%;margin-bottom:4px;">
-            <input type="number" data-pe="valor" value="${+p.valor||0}" step="0.01" placeholder="Valor" style="width:100%;margin-bottom:6px;">
+            <input type="number" data-pe="valor" value="${+p.valor||0}" step="0.01" placeholder="Valor" style="width:100%;margin-bottom:4px;">
+            <input type="number" data-pe="custo" value="${p.custo==null?'':+p.custo}" step="0.01" placeholder="Custo (opcional)" style="width:100%;margin-bottom:6px;">
             <select data-pe="loja" style="width:100%;margin-bottom:6px;">${STORES.map(l=>`<option ${l===p.loja?'selected':''}>${esc(l)}</option>`).join('')}</select>
             <div style="display:flex;gap:6px;">
               <button class="btn primary" data-pedsalvar="${p.id}" style="padding:3px 9px;font-size:11.5px;">salvar</button>
@@ -5987,6 +5990,7 @@ function renderPedidos(){
           </div>
           <div>${esc(p.itens)}</div>
           <div class="meta">${p.valor?BRL(p.valor):'—'} · ${esc(p.telefone||'')}</div>
+          <div class="meta" title="(valor − custo) ÷ valor">Margem: ${(p.custo!=null && p.valor>0) ? '<strong style="color:'+((p.valor-p.custo)<0?'var(--critical)':'var(--good)')+';">'+pctMargem(p.valor-p.custo,p.valor)+'</strong> <span class="hint">(custo '+BRL(p.custo)+')</span>' : '<span class="hint">— sem custo informado</span>'}</div>
           ${p.endereco?`<div class="meta">📍 ${esc(p.endereco)}</div>`:''}
           <div style="margin-top:7px;">
             <label class="hint" style="display:block;margin-bottom:3px;">Entregador</label>
@@ -6025,9 +6029,9 @@ function renderPedidos(){
       const v = k => { const el = card.querySelector('[data-pe="'+k+'"]'); return el ? el.value.trim() : ''; };
       if(!v('cliente') || !v('itens')) return alert('Cliente e itens não podem ficar vazios.');
       Object.assign(p, { cliente:v('cliente'), itens:v('itens'), telefone:v('telefone'),
-                         endereco:v('endereco'), valor:num(v('valor'))||0, loja:v('loja') });
+                         endereco:v('endereco'), valor:num(v('valor'))||0, custo:(v('custo')===''?null:(num(v('custo'))||0)), loja:v('loja') });
       if(p.id) await tnUpdate('pedidos', {id:p.id},
-        {cliente:p.cliente, itens:p.itens, telefone:p.telefone, endereco:p.endereco, valor:p.valor, loja:p.loja});
+        {cliente:p.cliente, itens:p.itens, telefone:p.telefone, endereco:p.endereco, valor:p.valor, custo:p.custo, loja:p.loja});
       pedidoEditando = null; renderPedidos();
     };
   });
@@ -9779,7 +9783,7 @@ function waVirarPedido(conv){
   põe('pd-telefone', conv.telefone || '');
   const selLoja = document.getElementById('pd-loja');
   if(selLoja && conv.loja) selLoja.value = conv.loja;
-  põe('pd-itens', ''); põe('pd-endereco', ''); põe('pd-valor', '');
+  põe('pd-itens', ''); põe('pd-endereco', ''); põe('pd-valor', ''); põe('pd-custo', '');
   f.scrollIntoView({behavior:'smooth', block:'center'});
   const itens = document.getElementById('pd-itens');
   if(itens) setTimeout(()=>itens.focus(), 400);
@@ -11035,7 +11039,7 @@ document.getElementById('form-pedido').addEventListener('submit', async e=>{
   const v = id => (document.getElementById(id)||{}).value || '';
   const reg = {
     cliente: v('pd-cliente'), telefone: v('pd-telefone'), loja: v('pd-loja'),
-    itens: v('pd-itens'), valor: num(v('pd-valor')) || 0,
+    itens: v('pd-itens'), valor: num(v('pd-valor')) || 0, custo: v('pd-custo')==='' ? null : (num(v('pd-custo')) || 0),
     endereco: v('pd-endereco'), entregador: v('pd-entregador'), status: 'novo',
   };
   const salvo = await tnInsertRet('pedidos', reg);
@@ -11320,7 +11324,7 @@ async function tnLoadAll(sb){
   try{ tnReplaceArray(VENDAS_DIARIAS,res.vendas_diarias,r=>({data:r.data,colab:r.colaborador,loja:r.loja,valor:+r.valor})); }catch(e){}
   try{ tnReplaceArray(CAIXA_DIARIO,res.caixa_diario,r=>({id:r.id,data:r.data,loja:r.loja,vendas:+r.vendas,inicial:+r.saldo_inicial||0,entradas:+r.entradas||0,saidas:+r.saidas||0,obs:r.saidas_obs||'',final:+r.saldo_final||0,conta:+r.saldo_conta||0,criado_em:r.criado_em,atualizado_em:r.atualizado_em})); }catch(e){}   /* entradas vinha lendo saldo_final */
   try{ tnReplaceArray(PARCERIAS,res.parcerias,r=>({nome:r.nome,categoria:r.categoria,loja:r.loja,contato:r.contato,desconto:r.desconto,status:r.status,renovacao:r.renovacao,obs:r.obs})); }catch(e){}
-  try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
+  try{ tnReplaceArray(PEDIDOS,res.pedidos,r=>({id:r.id,cliente:r.cliente,telefone:r.telefone,loja:r.loja,itens:r.itens,endereco:r.endereco,valor:+r.valor,custo:(r.custo==null?null:+r.custo),entregador:r.entregador,status:r.status})); PEDIDO_SEQ=PEDIDOS.reduce((m,p)=>Math.max(m,+p.id||0),PEDIDO_SEQ); }catch(e){}
   try{ tnReplaceArray(FEEDBACKS,res.feedbacks,r=>({colaborador:r.colaborador,tipo:r.tipo,texto:r.texto,data:r.data})); }catch(e){}
   try{ tnReplaceArray(TAREFAS,res.tarefas,r=>({id:r.id,tipo:r.tipo||'tarefa',area:r.area||'Outros',colaborador:r.colaborador,loja:r.loja||'',titulo:r.titulo,prazo:r.prazo,prioridade:r.prioridade,status:r.status,detalhe:r.detalhe||'',criado_em:r.criado_em||null})); }catch(e){}
   const lu=(res.sync_meta||[]).find(r=>r.chave==='last_update');
