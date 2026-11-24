@@ -431,7 +431,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="24/11/2026, 09:09";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="24/11/2026, 09:16";</script>
       </div>
     </div>
 
@@ -6627,7 +6627,7 @@ let pagosAnterioresAberto = false;
    a caixa de seleção abre o detalhe. De Set/26 em diante tudo é lançado no painel. */
 const planilhaAberta = {};
 function ehDaPlanilha(x){ return String(x && x.origem || '') === 'planilha'; }
-function linhaPlanilha(chave, rotulo, itens, colsAntes, temAcoes){
+function linhaPlanilha(chave, rotulo, itens, colsAntes, temAcoes, celExtra){
   const total = itens.reduce((a,x)=>a+(+x.valor||0),0);
   return `<tr>
     <td colspan="${colsAntes}">
@@ -6638,6 +6638,7 @@ function linhaPlanilha(chave, rotulo, itens, colsAntes, temAcoes){
       </label>
     </td>
     <td class="strong">${BRL(total)}</td>
+    ${celExtra||''}
     ${temAcoes?'<td></td>':''}
   </tr>`;
 }
@@ -7788,15 +7789,30 @@ function renderCaixa(){
   const ehFuturo = k => grupos[k].ord > ordAtual && grupos[k].ord !== 999999;
   const totAberto = abertos.reduce((a,b)=>a+(+b.valor||0),0);
   const hojeMs = TODAY.getTime();
+  /* peso do boleto sobre o faturado: margem de um boleto isolado nao existe (nao tem receita),
+     entao mostra quanto ele consome do faturamento mensal da loja (media dos ultimos 3 meses
+     fechados com receita, sem o mes em curso). 'Todas' usa a soma das lojas. */
+  const rotAtual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
+  const recMensalRef = loja => {
+    const ms = (FINANCEIRO.meses||[]); const lj = (loja==='Todas' || !FINANCEIRO[loja]) ? STORES : [loja];
+    const vals = [];
+    for(let i=ms.length-1; i>=0 && vals.length<3; i--){
+      if(ms[i]===rotAtual) continue;
+      const r = lj.reduce((a,l)=>a+((FINANCEIRO[l]&&FINANCEIRO[l].receita[i])||0),0);
+      if(r>0) vals.push(r);
+    }
+    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  };
+  const pesoTxt = b => { const r = recMensalRef(b.loja); return r>0 ? ((+b.valor||0)/r*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'; };
   document.getElementById('tbl-apagar').innerHTML = `
-    <thead><tr><th>Vencimento</th><th>Descrição</th><th>Loja</th><th>Valor</th>${socia2?'<th></th>':''}</tr></thead>
+    <thead><tr><th>Vencimento</th><th>Descrição</th><th>Loja</th><th>Valor</th><th title="Quanto este boleto consome do faturamento mensal da loja (média dos últimos 3 meses fechados) — se não fosse pago, a margem subiria esse tanto">% do faturado</th>${socia2?'<th></th>':''}</tr></thead>
     <tbody>${ordenados.map(k=>{
       const soma = grupos[k].itens.reduce((a,b)=>a+(+b.valor||0),0);
       const ordem = grupos[k].itens.sort((a,b)=>(parseBR(a.data)||0)-(parseBR(b.data)||0));
       const dePlan = ordem.filter(ehDaPlanilha);
       const chaveP = 'bl-apagar-'+k;
       const resumoP = dePlan.length
-        ? linhaPlanilha(chaveP, 'A pagar da planilha', dePlan, 3, socia2) : '';
+        ? linhaPlanilha(chaveP, 'A pagar da planilha', dePlan, 3, socia2, '<td></td>') : '';
       const futuro = ehFuturo(k);
       const aberto = !futuro || !!apagarMesAberto[k];
       const linhas = !aberto ? '' : resumoP + ((dePlan.length && !planilhaAberta[chaveP]) ? ordem.filter(b=>!ehDaPlanilha(b)) : ordem).map(b=>{
@@ -7807,6 +7823,7 @@ function renderCaixa(){
           <td class="strong">${esc(b.descricao)}</td>
           <td>${esc(b.loja)}</td>
           <td>${BRL(b.valor)}</td>
+          <td class="hint">${pesoTxt(b)}</td>
           ${socia2?`<td style="text-align:right;white-space:nowrap;">${ehDaPlanilha(b)?'<span class="hint">planilha</span>':`
             <button class="btn ghost" data-blpagar="${esc(b.id||'')}" data-bldesc="${esc(b.descricao)}" title="Marcar como pago" style="padding:2px 6px;">✓ pago</button>
             <button class="btn ghost" data-bleditar="${esc(b.id||b.descricao)}" title="Editar" style="padding:2px 6px;">✏️</button>
@@ -7816,10 +7833,10 @@ function renderCaixa(){
       const conta = !futuro || aberto ? '' :
         ` <span class="hint">· ${ordem.length} ${ordem.length===1?'boleto':'boletos'}</span>`;
       return `<tr${futuro?` data-apmes="${esc(k)}" style="cursor:pointer;"`:''}>
-          <td colspan="${socia2?5:4}" style="background:var(--surface-2,transparent);">
+          <td colspan="${socia2?6:5}" style="background:var(--surface-2,transparent);">
           ${seta}<strong>${esc(k)}</strong> <span class="hint">· ${BRL(soma)}</span>${conta}</td></tr>` + linhas;
-    }).join('') || `<tr><td colspan="${socia2?5:4}" class="hint">Nada em aberto.</td></tr>`}
-    ${abertos.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total a pagar</td><td class="strong">${BRL(totAberto)}</td>${socia2?'<td></td>':''}</tr>`:''}</tbody>`;
+    }).join('') || `<tr><td colspan="${socia2?6:5}" class="hint">Nada em aberto.</td></tr>`}
+    ${abertos.length?`<tr><td colspan="3" class="strong" style="text-align:right;">Total a pagar</td><td class="strong">${BRL(totAberto)}</td><td class="strong hint">${(()=>{ const r=recMensalRef('Todas'); return r>0 ? (totAberto/r*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'% (todas as lojas)' : '—'; })()}</td>${socia2?'<td></td>':''}</tr>`:''}</tbody>`;
 
   document.querySelectorAll('[data-apmes]').forEach(tr=>{
     tr.onclick = ()=>{ const k = tr.dataset.apmes;
