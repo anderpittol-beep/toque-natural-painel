@@ -431,7 +431,7 @@ window.TN_CONFIG = {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <img id="store-logo" class="store-logo" alt="Toque Natural">
-        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="24/11/2026, 09:16";</script>
+        <span id="last-update" class="hint" style="font-size:11px;white-space:nowrap;">Última atualização: —</span><script>/*TN_VERSAO*/var TN_VERSAO="24/11/2026, 09:29";</script>
       </div>
     </div>
 
@@ -6656,6 +6656,16 @@ function dataNoPainel(iso){
   return a > FIXAS_CORTE.ano || (a === FIXAS_CORTE.ano && m >= FIXAS_CORTE.mes);
 }
 function cpCompetencia(){ return MES_ABREV[cpMes] + '/' + String(cpAno).slice(2); }
+/* Faturamento de referencia da loja para pesar compras: o do mes escolhido; se ainda nao tem, a media dos 3 ultimos meses fechados com receita */
+function recFatRef(loja){
+  const ms = (FINANCEIRO.meses||[]); const L = FINANCEIRO[loja]; if(!L) return 0;
+  const k = ms.indexOf(cpCompetencia());
+  if(k>=0 && (L.receita[k]||0)>0) return L.receita[k];
+  const atual = MES_ABREV[TODAY.getMonth()+1] + '/' + String(TODAY.getFullYear()).slice(2);
+  const vals=[]; for(let q=ms.length-1; q>=0 && vals.length<3; q--){ if(ms[q]===atual) continue; if((L.receita[q]||0)>0) vals.push(L.receita[q]); }
+  return vals.length ? vals.reduce((a,c)=>a+c,0)/vals.length : 0;
+}
+function pesoCompra(valor, loja){ const r = recFatRef(loja); return r>0 ? ((+valor||0)/r*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'; }
 function cpGerenciavel(){ return cpAno > FIXAS_CORTE.ano || (cpAno===FIXAS_CORTE.ano && cpMes >= FIXAS_CORTE.mes); }
 function comprasDaCompetencia(ano, mes){ return COMPRAS.filter(c=> +c.ano===ano && +c.mes===mes); }
 function dataBR(iso){ if(!iso) return '—'; const p=String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
@@ -6733,11 +6743,11 @@ function renderCompras(){
   const tb = document.getElementById('tbl-compras');
   if(!tb) return;
   tb.innerHTML = `
-    <thead><tr><th>Data</th><th>Fornecedor</th><th>NF</th><th>Loja</th><th>Parc.</th><th>Valor da NF</th>${podeEd?'<th></th>':''}</tr></thead>
+    <thead><tr><th>Data</th><th>Fornecedor</th><th>NF</th><th>Loja</th><th>Parc.</th><th>Valor da NF</th><th title="Quanto esta nota pesa sobre o faturamento da loja no mês (se o mês ainda não tem faturamento, usa a média dos últimos 3 meses fechados). Quanto menor, maior sobra para a margem.">% do faturado</th>${podeEd?'<th></th>':''}</tr></thead>
     <tbody>${(()=>{
       const dePlanilha = lista.filter(ehDaPlanilha);
       const cabecalho  = dePlanilha.length
-        ? linhaPlanilha('compras', 'Compras da planilha ('+cpCompetencia()+')', dePlanilha, 5, podeEd) : '';
+        ? linhaPlanilha('compras', 'Compras da planilha ('+cpCompetencia()+')', dePlanilha, 5, podeEd, '<td></td>') : '';
       const visiveis   = (dePlanilha.length && !planilhaAberta['compras'])
         ? lista.filter(c=>!ehDaPlanilha(c)) : lista;
       /* Fica a vista so o ultimo dia lancado — e o que se confere no dia. O
@@ -6751,7 +6761,7 @@ function renderCompras(){
       const somaAntes = antes.reduce((a2,c)=> a2 + (+c.valor||0), 0);
       const linhaMais = antes.length
         ? `<tr class="clickable" data-cpantes="1" style="cursor:pointer;">
-             <td colspan="${podeEd?7:6}" class="hint" style="padding:7px 8px;">
+             <td colspan="${podeEd?8:7}" class="hint" style="padding:7px 8px;">
                ${abreAntes?'▾':'▸'} ${antes.length} compra${antes.length>1?'s':''} anterior${antes.length>1?'es':''} no mês · ${BRL(somaAntes)}
              </td></tr>`
         : '';
@@ -6764,13 +6774,14 @@ function renderCompras(){
           <td><select data-ce="loja">${lojasOpt.map(l=>`<option ${l===c.loja?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
           <td><input type="number" data-ce="parcelas" value="${+c.parcelas||1}" min="1" style="width:56px;"></td>
           <td><input type="number" data-ce="valor" value="${+c.valor||0}" step="0.01" style="width:108px;"></td>
+          <td></td>
           <td style="white-space:nowrap;"><button class="btn primary" data-cpsalvar="1" style="padding:2px 8px;">salvar</button>
               <button class="btn ghost" data-cpcancelar="1" style="padding:2px 8px;">cancelar</button></td>
         </tr>`;
       }
       if(editavel(c) && compraDividindo && c.id===compraDividindo){
         const total = +c.valor||0;
-        return `<tr><td colspan="${podeEd?7:6}" style="background:rgba(245,236,214,.05);">
+        return `<tr><td colspan="${podeEd?8:7}" style="background:rgba(245,236,214,.05);">
           <div style="padding:8px 4px;">
             <div class="strong" style="font-size:13px;margin-bottom:3px;">Dividir “${esc(c.fornecedor||'')}” — ${BRL(total)}</div>
             <p class="hint" style="margin:0 0 8px;">Quanto desta nota é de cada loja. Os boletos não mudam: continuam inteiros em ${esc(c.loja)}, que foi quem comprou e paga.</p>
@@ -6800,6 +6811,7 @@ function renderCompras(){
         <td>${esc(c.loja)}</td>
         <td>${(+c.parcelas||1)}x</td>
         <td class="strong">${BRL(c.valor)}</td>
+        <td class="hint">${pesoCompra(c.valor, c.loja)}</td>
         ${podeEd?`<td style="white-space:nowrap;text-align:right;">${editavel(c)?`
           <button class="btn ghost" data-cpeditar="${esc(c.id||'')}" title="Editar" style="padding:2px 6px;">✏️</button>
           <button class="btn ghost" data-cpdividir="${esc(c.id||'')}" title="Dividir esta nota entre lojas" style="padding:2px 6px;">➗</button>
@@ -6807,14 +6819,14 @@ function renderCompras(){
       </tr>`;};
       const corpo = doDia.map(linhaCompra).join('') + linhaMais
                   + (abreAntes ? antes.map(linhaCompra).join('') : '');
-      return cabecalho + (corpo || (cabecalho ? '' : `<tr><td colspan="${podeEd?7:6}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`));
+      return cabecalho + (corpo || (cabecalho ? '' : `<tr><td colspan="${podeEd?8:7}" class="hint">Nenhuma compra lançada em ${esc(cpCompetencia())}.</td></tr>`));
     })()}
-    <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td>${podeEd?'<td></td>':''}</tr>
+    <tr><td colspan="5" class="strong" style="text-align:right;">Total de compras do mês</td><td class="strong">${BRL(total)}</td><td class="strong">${(()=>{ const lj=selStores(); let r=0; lj.forEach(l=>{ r+=recFatRef(l); }); return r>0 ? (total/r*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'; })()}</td>${podeEd?'<td></td>':''}</tr>
     ${(()=>{
       const orfas = lista.filter(compraSemSaida);
       if(!orfas.length) return '';
       const soma = orfas.reduce((a,c)=>a+(+c.valor||0),0);
-      return `<tr><td colspan="${podeEd?7:6}" class="hint" style="color:var(--warning);">
+      return `<tr><td colspan="${podeEd?8:7}" class="hint" style="color:var(--warning);">
         ⚠ ${orfas.length} nota(s) sem saída de caixa, somando ${BRL(soma)}: ${esc(orfas.map(c=>c.fornecedor||'—').join(', '))}.
         Entram no lucro mas não aparecem saindo do caixa. Se a loja paga, gere a saída — no cartão da loja, use o modo “Pago no cartão da loja”.</td></tr>`;
     })()}</tbody>`;
